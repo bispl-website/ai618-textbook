@@ -11,8 +11,11 @@ permissions:
   pages: write
   id-token: write
 
+# Per-ref, so a pull request build cancels only its own earlier build. The
+# single `pages` group this used to have meant any pull request push cancelled
+# an in-flight deployment of main.
 concurrency:
-  group: pages
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -36,6 +39,11 @@ jobs:
     needs: build
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    # Deployments queue rather than cancel: a half-finished Pages deploy that
+    # gets killed can leave the published site on a stale commit.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

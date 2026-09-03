@@ -8,7 +8,7 @@ book:
   author: "The students of AI618, edited by Jong Chul Ye"
   date: today
   license: "CC BY 4.0"
-  repo-url: https://github.com/OWNER/ai618-textbook
+  repo-url: https://github.com/bispl-website/ai618-textbook
   repo-actions: [edit, issue]
   downloads: [pdf]
   search: true

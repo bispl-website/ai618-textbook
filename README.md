@@ -1,7 +1,7 @@
 # Generative Models and Unsupervised Learning
 
 An open textbook built from the scribe notes of **KAIST AI618**. One Quarto
-source, rendered to [HTML](https://OWNER.github.io/ai618-textbook/) and PDF.
+source, rendered to [HTML](https://bispl-website.github.io/ai618-textbook/) and PDF.
 
 Licensed **CC BY 4.0** — share and adapt, including commercially, with
 attribution.

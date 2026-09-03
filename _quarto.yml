@@ -1,0 +1,73 @@
+project:
+  type: book
+  output-dir: _book
+
+book:
+  title: "Generative Models and Unsupervised Learning"
+  subtitle: "Lecture notes from KAIST AI618"
+  author: "The students of AI618, edited by Jong Chul Ye"
+  date: today
+  license: "CC BY 4.0"
+  repo-url: https://github.com/OWNER/ai618-textbook
+  repo-actions: [edit, issue]
+  downloads: [pdf]
+  search: true
+  chapters:
+      - index.qmd
+      - chapters/ch01.qmd
+      - chapters/ch02.qmd
+      - chapters/ch03.qmd
+      - chapters/ch04.qmd
+      - chapters/ch05.qmd
+      - chapters/ch06.qmd
+      - chapters/ch07.qmd
+      - chapters/ch08.qmd
+      - chapters/ch09.qmd
+      - chapters/ch10.qmd
+      - chapters/ch11.qmd
+      - chapters/ch12.qmd
+      - chapters/ch13.qmd
+      - chapters/ch14.qmd
+      - chapters/ch15.qmd
+      - chapters/ch16.qmd
+      - chapters/ch17.qmd
+      - chapters/ch18.qmd
+      - chapters/ch19.qmd
+      - chapters/ch20.qmd
+      - chapters/ch21.qmd
+      - chapters/ch22.qmd
+      - chapters/ch23.qmd
+      - chapters/ch24.qmd
+      - chapters/ch25.qmd
+      - chapters/ch26.qmd
+      - chapters/ch27.qmd
+      - chapters/ch28.qmd
+      - references.qmd
+
+bibliography: references.bib
+
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    html-math-method: katex
+    code-copy: true
+  pdf:
+    documentclass: scrbook
+    papersize: a4
+    toc: true
+    toc-depth: 2
+    number-sections: true
+    colorlinks: true
+    keep-tex: false
+    include-in-header:
+      text: |
+        \usepackage{amsmath,amssymb,amsthm}
+        \usepackage{mathtools}
+
+# One source, two formats. Anything that renders in HTML but not in LaTeX --
+# raw HTML, SVG figures, non-ASCII text -- is rejected upstream by the scribe
+# repository's CI, because it is invisible until the PDF build breaks.
+crossref:
+  chapters: true

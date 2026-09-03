@@ -1,0 +1,42 @@
+---
+title: "Preface"
+---
+
+# Preface {.unnumbered}
+
+This book is the lecture notes of **AI618, Generative Models and Unsupervised
+Learning**, a graduate course at KAIST. Every chapter began as a scribe note
+written by a student who attended the lecture, and was then merged, corrected,
+and edited into the chapter you are reading.
+
+## How it was made
+
+Each lecture was written up independently by two or three students. Those notes
+were graded against a published rubric --- coverage, technical correctness,
+exposition, figures, and derivations --- with a language model producing three
+independent readings per note and a human reading every one before any grade
+was recorded. The model's score decided which notes were candidates for a
+chapter; it never decided a grade.
+
+Chapters are **merged, not chosen.** With only a handful of independent
+write-ups of a lecture, the best of them still has gaps, and the grading pass
+produced an explicit list of what each note was missing. The merge starts from
+the strongest note and fills its gaps from the others.
+
+## Reading this book
+
+Chapters follow the lecture order. The notation is consistent within a chapter
+and mostly consistent across chapters; where a chapter departs from earlier
+usage it says so at the start.
+
+## Contributing
+
+Corrections are welcome from anyone, in or out of the course. Open an issue or a
+pull request. If you are reporting a mathematical error, quote the statement and
+say why it is wrong --- that is more useful than a patch.
+
+## License
+
+Licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). You
+may share and adapt this material, including commercially, with attribution.
+The students who wrote these notes are credited in each chapter.

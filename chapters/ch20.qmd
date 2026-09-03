@@ -1,0 +1,10 @@
+---
+title: "Lecture 20 --- TBD"
+---
+
+::: {.callout-note}
+## Not yet written
+This chapter is assembled from the Lecture 20 scribe notes. Run
+`python scripts/promote.py --lecture 20` in the private scribe repository
+to generate the merge worksheet, then write the chapter here.
+:::

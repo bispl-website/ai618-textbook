@@ -1,0 +1,16 @@
+_book/
+.quarto/
+*_files/
+*.tex
+*.log
+*.aux
+*.out
+__pycache__/
+*.pyc
+.venv/
+
+# Merge worksheets are working notes, not published material. Keep them out of
+# the public repository unless you intend to publish student-by-student grading
+# detail.
+drafts/*.md
+!drafts/README.md

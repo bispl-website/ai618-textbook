@@ -1,0 +1,44 @@
+name: build book
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: quarto-dev/quarto-actions/setup@v2
+        with:
+          tinytex: true
+      # Both formats, always. The PDF build is the one that catches raw HTML,
+      # SVG figures and non-ASCII text; building only HTML hides them until
+      # someone tries to print the book.
+      - run: quarto render --to html
+      - run: quarto render --to pdf
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _book
+
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,10 +1,9 @@
 ---
-title: "Lecture 28 --- TBD"
+title: "Alignment: Open Problems and Synthesis"
 ---
 
 ::: {.callout-note}
 ## Not yet written
-This chapter is assembled from the Lecture 28 scribe notes. Run
-`python scripts/promote.py --lecture 28` in the private scribe repository
-to generate the merge worksheet, then write the chapter here.
+Lecture 28 of AI618, given 2026-12-10. This chapter is merged from the scribe
+notes for that lecture; until those are written and graded it stands empty.
 :::

@@ -1,10 +1,9 @@
 ---
-title: "Lecture 14 --- TBD"
+title: "Video and 3D Diffusion"
 ---
 
 ::: {.callout-note}
 ## Not yet written
-This chapter is assembled from the Lecture 14 scribe notes. Run
-`python scripts/promote.py --lecture 14` in the private scribe repository
-to generate the merge worksheet, then write the chapter here.
+Lecture 14 of AI618, given 2026-10-15. This chapter is merged from the scribe
+notes for that lecture; until those are written and graded it stands empty.
 :::

@@ -1,10 +1,9 @@
 ---
-title: "Lecture 04 --- TBD"
+title: "CycleGAN, StyleGAN and Multi-domain GANs"
 ---
 
 ::: {.callout-note}
 ## Not yet written
-This chapter is assembled from the Lecture 04 scribe notes. Run
-`python scripts/promote.py --lecture 04` in the private scribe repository
-to generate the merge worksheet, then write the chapter here.
+Lecture 04 of AI618, given 2026-09-10. This chapter is merged from the scribe
+notes for that lecture; until those are written and graded it stands empty.
 :::

@@ -5,9 +5,66 @@ title: "Preface"
 # Preface {.unnumbered}
 
 This book is the lecture notes of **AI618, Generative Models and Unsupervised
-Learning**, a graduate course at KAIST. Every chapter began as a scribe note
-written by a student who attended the lecture, and was then merged, corrected,
-and edited into the chapter you are reading.
+Learning**, a graduate course taught by Jong Chul Ye at KAIST. Every chapter
+began as a scribe note written by a student who attended the lecture, and was
+then merged, corrected, and edited into the chapter you are reading.
+
+## What the course is for
+
+Generative modelling has accumulated a great many methods in a short time, and
+most treatments of it are surveys: here is a GAN, here is a VAE, here is a
+diffusion model, each introduced on its own terms. The course this book comes
+from is deliberately not that. It puts the emphasis on a **coherent framework
+that gives a unified perspective** on the whole subject, so that the methods
+appear as points in one landscape rather than as a list.
+
+That means the mathematics is not optional background. Probability theory and
+**optimal transport** are developed because they are what makes the unity
+visible --- the same transport problem that defines the Wasserstein distance in
+Chapter 1 returns as the Schrodinger bridge in the diffusion chapters and as
+the straight-line probability path in the flow chapters. Where a method is
+usually presented as a new idea, this book tries to show which older idea it is
+a special case of.
+
+The course also insists on the implementations, from classical GANs through to
+diffusion and flow models, discrete diffusion, and alignment with RLHF. Where a
+chapter states a result, it should also say what you would have to write down to
+run it.
+
+## How the book is organised
+
+Five parts, following the course:
+
+**Optimal Transport, Adversarial and Latent Variable Models.** Monge and
+Kantorovich, duality, Wasserstein distances. Then GANs read through that lens
+--- f-GAN, geometric GAN, W-GAN --- unpaired translation with CycleGAN and its
+optimal transport form, and the StyleGAN and StarGAN families. Then the
+likelihood side: the ELBO, VAE and $\beta$-VAE, normalizing flows. The part closes on
+self-supervised denoising, where Tweedie's formula turns denoising into score
+estimation and opens the door to everything that follows.
+
+**Diffusion Models.** DDPM and its variational bound, score-based models
+through the lens of stochastic differential equations, the probability flow
+ODE. Conditioning and guidance, latent diffusion, Schrodinger bridges,
+acceleration by high-order solvers and consistency models, and the applications
+that made the family matter: editing, inverse problems, video and 3D.
+
+**Flow Models.** Flow matching and its conditional form, rectified flow and
+straightening, the exact relationship to diffusion, and the Kolmogorov
+equations underneath both.
+
+**Discrete Diffusion.** What has to change when the state space is categorical:
+discrete flow matching, diffusion language models, the duality with the
+continuous construction, and the recent large models built on it.
+
+**Alignment with Reinforcement Learning.** RLHF, DPO and GRPO, their transfer
+to diffusion and flow models, and the newer objectives that avoid trajectory
+likelihoods altogether.
+
+The through-line is worth stating once: **a score, a velocity field, and a
+transport map are three ways of writing the same object.** A reader who
+finishes the book should be able to move between them without thinking about
+it.
 
 ## How it was made
 
@@ -25,9 +82,14 @@ the strongest note and fills its gaps from the others.
 
 ## Reading this book
 
-Chapters follow the lecture order. The notation is consistent within a chapter
-and mostly consistent across chapters; where a chapter departs from earlier
-usage it says so at the start.
+Chapters follow the lecture order and the parts above. Notation is consistent
+within a chapter and mostly consistent across chapters; where a chapter departs
+from earlier usage it says so at the start. A chapter still marked *not yet
+written* is one whose scribe notes have not been merged.
+
+The two references the course leans on throughout are Jong Chul Ye's *Geometry
+of Deep Learning* (Springer, 2022) and Lipman et al., *Flow Matching Guide and
+Code* ([arXiv:2412.06264](https://arxiv.org/abs/2412.06264)).
 
 ## Contributing
 

@@ -14,34 +14,44 @@ book:
   search: true
   chapters:
       - index.qmd
-      - chapters/ch01.qmd
-      - chapters/ch02.qmd
-      - chapters/ch03.qmd
-      - chapters/ch04.qmd
-      - chapters/ch05.qmd
-      - chapters/ch06.qmd
-      - chapters/ch07.qmd
-      - chapters/ch08.qmd
-      - chapters/ch09.qmd
-      - chapters/ch10.qmd
-      - chapters/ch11.qmd
-      - chapters/ch12.qmd
-      - chapters/ch13.qmd
-      - chapters/ch14.qmd
-      - chapters/ch15.qmd
-      - chapters/ch16.qmd
-      - chapters/ch17.qmd
-      - chapters/ch18.qmd
-      - chapters/ch19.qmd
-      - chapters/ch20.qmd
-      - chapters/ch21.qmd
-      - chapters/ch22.qmd
-      - chapters/ch23.qmd
-      - chapters/ch24.qmd
-      - chapters/ch25.qmd
-      - chapters/ch26.qmd
-      - chapters/ch27.qmd
-      - chapters/ch28.qmd
+      - part: "Optimal Transport, Adversarial and Latent Variable Models"
+        chapters:
+          - chapters/ch01.qmd
+          - chapters/ch02.qmd
+          - chapters/ch03.qmd
+          - chapters/ch04.qmd
+          - chapters/ch05.qmd
+          - chapters/ch06.qmd
+      - part: "Diffusion Models"
+        chapters:
+          - chapters/ch07.qmd
+          - chapters/ch08.qmd
+          - chapters/ch09.qmd
+          - chapters/ch10.qmd
+          - chapters/ch11.qmd
+          - chapters/ch12.qmd
+          - chapters/ch13.qmd
+          - chapters/ch14.qmd
+      - part: "Flow Models"
+        chapters:
+          - chapters/ch15.qmd
+          - chapters/ch16.qmd
+          - chapters/ch17.qmd
+          - chapters/ch18.qmd
+      - part: "Discrete Diffusion"
+        chapters:
+          - chapters/ch19.qmd
+          - chapters/ch20.qmd
+          - chapters/ch21.qmd
+          - chapters/ch22.qmd
+          - chapters/ch23.qmd
+          - chapters/ch24.qmd
+      - part: "Alignment with Reinforcement Learning"
+        chapters:
+          - chapters/ch25.qmd
+          - chapters/ch26.qmd
+          - chapters/ch27.qmd
+          - chapters/ch28.qmd
       - references.qmd
 
 bibliography: references.bib

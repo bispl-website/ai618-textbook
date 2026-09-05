@@ -1,10 +1,9 @@
 ---
-title: "Lecture 15 --- TBD"
+title: "Flow Matching"
 ---
 
 ::: {.callout-note}
 ## Not yet written
-This chapter is assembled from the Lecture 15 scribe notes. Run
-`python scripts/promote.py --lecture 15` in the private scribe repository
-to generate the merge worksheet, then write the chapter here.
+Lecture 15 of AI618, given 2026-10-27. This chapter is merged from the scribe
+notes for that lecture; until those are written and graded it stands empty.
 :::

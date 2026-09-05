@@ -29,8 +29,19 @@ jobs:
       # Both formats, always. The PDF build is the one that catches raw HTML,
       # SVG figures and non-ASCII text; building only HTML hides them until
       # someone tries to print the book.
-      - run: quarto render --to html
-      - run: quarto render --to pdf
+      #
+      # One render, not one per format. `_quarto.yml` declares html and pdf, and
+      # `quarto render` produces both into _book/ together. Rendering a single
+      # format at a time clears the output directory first, so `--to html`
+      # followed by `--to pdf` leaves _book/ holding the PDF and no index.html,
+      # and Pages serves a 404 from a green build.
+      - run: quarto render
+      - name: check the book actually built
+        run: |
+          test -f _book/index.html || { echo "::error::_book/index.html missing"; ls -R _book; exit 1; }
+          find _book -name '*.pdf' | grep -q . || { echo "::error::no PDF in _book"; exit 1; }
+          echo "html pages: $(find _book -name '*.html' | wc -l)"
+          du -sh _book
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _book

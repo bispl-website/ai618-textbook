@@ -1,7 +1,3 @@
----
-title: "Preface"
----
-
 # Preface {.unnumbered}
 
 This book is the lecture notes of **AI618, Generative Models and Unsupervised

@@ -45,14 +45,12 @@ book:
           - chapters/ch20.qmd
           - chapters/ch21.qmd
           - chapters/ch22.qmd
-          - chapters/ch23.qmd
-          - chapters/ch24.qmd
       - part: "Alignment with Reinforcement Learning"
         chapters:
+          - chapters/ch23.qmd
+          - chapters/ch24.qmd
           - chapters/ch25.qmd
           - chapters/ch26.qmd
-          - chapters/ch27.qmd
-          - chapters/ch28.qmd
       - references.qmd
 
 bibliography: references.bib

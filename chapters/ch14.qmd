@@ -4,6 +4,7 @@ title: "Video and 3D Diffusion"
 
 ::: {.callout-note}
 ## Not yet written
-Lecture 14 of AI618, given 2026-10-15. This chapter is merged from the scribe
-notes for that lecture; until those are written and graded it stands empty.
+Lecture 14 of AI618, given 2026-10-27. This chapter is merged from the
+scribe notes for that lecture; until those are written and graded it stands
+empty.
 :::

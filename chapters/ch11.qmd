@@ -4,6 +4,7 @@ title: "Schrodinger Bridge Problems"
 
 ::: {.callout-note}
 ## Not yet written
-Lecture 11 of AI618, given 2026-10-06. This chapter is merged from the scribe
-notes for that lecture; until those are written and graded it stands empty.
+Lecture 11 of AI618, given 2026-10-08. This chapter is merged from the
+scribe notes for that lecture; until those are written and graded it stands
+empty.
 :::

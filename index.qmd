@@ -64,14 +64,14 @@ it.
 
 ## How it was made
 
-Each lecture was written up independently by two or three students. Those notes
+Each lecture was written up independently by three or four students. Those notes
 were graded against a published rubric --- coverage, technical correctness,
 exposition, figures, and derivations --- with a language model producing three
 independent readings per note and a human reading every one before any grade
 was recorded. The model's score decided which notes were candidates for a
 chapter; it never decided a grade.
 
-Chapters are **merged, not chosen.** With only a handful of independent
+Chapters are **merged, not chosen.** With only a few independent
 write-ups of a lecture, the best of them still has gaps, and the grading pass
 produced an explicit list of what each note was missing. The merge starts from
 the strongest note and fills its gaps from the others.

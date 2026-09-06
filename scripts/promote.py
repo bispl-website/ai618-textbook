@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build a merge worksheet for one chapter from the graded scribe notes.
 
-This does not copy the winner. With only two or three independent write-ups of
+This does not copy the winner. With only three or four independent write-ups of
 a lecture, the best of them still has holes -- and the grading pass already
 produced the hole list, because `coverage_gaps` is a scored criterion. So the
 worksheet starts from the strongest note and tells the editor, section by

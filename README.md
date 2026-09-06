@@ -8,7 +8,7 @@ attribution.
 
 ## Where the chapters come from
 
-Students in AI618 write up one lecture each. Two or three write up the same
+Students in AI618 write up one lecture each. Three or four write up the same
 lecture independently, the notes are graded against a published rubric, and the
 strongest becomes the base for a chapter here. The notes themselves live in a
 separate private repository (`ai618-scribe-2026f`) — private, because students

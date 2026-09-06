@@ -86,7 +86,7 @@ A metric space $\mathcal{X}$ is said to be complete if every Cauchy sequence con
 
 ::: {#def-edfc}
 
-Given two metric spaces $(\mathcal{X}, d_\mathcal{X})$ and $(\mathcal{Y}, d_\mathcal{Y})$, where $d_\mathcal{X}$ denotes the metric on the set $\mathcal{X}$ and $d_\mathcal{Y}$ is the metric on set $\mathcal{Y}$, a function $f:\mathcal{X}\mapsto \mathcal{Y}$ is called Lipschitz continuous if there exists a real constant $K\geq 0$ such that, for all $x_1,x_2\in \mathcal{X}$,
+Given two metric spaces $(\mathcal{X}, d_{\mathcal{X}})$ and $(\mathcal{Y}, d_{\mathcal{Y}})$, where $d_{\mathcal{X}}$ denotes the metric on the set $\mathcal{X}$ and $d_{\mathcal{Y}}$ is the metric on set $\mathcal{Y}$, a function $f:\mathcal{X}\mapsto \mathcal{Y}$ is called Lipschitz continuous if there exists a real constant $K\geq 0$ such that, for all $x_1,x_2\in \mathcal{X}$,
 
 $$
 \begin{aligned}
@@ -129,14 +129,14 @@ In addition, we formally define the inner product and the norm in a vector space
 
 ::: {#def-df13}
 
-Let $\mathcal{V}$ be a vector space over ${\mathbb R}$. A function $\langle\cdot,\cdot\rangle_\mathcal{V}:\mathcal{V}\times\mathcal{V}\mapsto {\mathbb R}$ is an
+Let $\mathcal{V}$ be a vector space over ${\mathbb R}$. A function $\langle\cdot,\cdot\rangle_{\mathcal{V}}:\mathcal{V}\times\mathcal{V}\mapsto {\mathbb R}$ is an
 inner product on $\mathcal{V}$ if:
 
-1.  Linear: $\langle \alpha_1 {\boldsymbol{f}}_1+\alpha_2 {\boldsymbol{f}}_2, {\boldsymbol{g}}\rangle_\mathcal{V}= \alpha_1 \langle {\boldsymbol{f}}_1, {\boldsymbol{g}}\rangle_\mathcal{V}+ \alpha_2 \langle  {\boldsymbol{f}}_2, {\boldsymbol{g}}\rangle_\mathcal{V}$ for all $\alpha_1,\alpha_2\in {\mathbb R}$ and ${\boldsymbol{f}}_1,{\boldsymbol{f}}_2,{\boldsymbol{g}}\in \mathcal{V}$.
+1.  Linear: $\langle \alpha_1 {\boldsymbol{f}}_1+\alpha_2 {\boldsymbol{f}}_2, {\boldsymbol{g}}\rangle_{\mathcal{V}}= \alpha_1 \langle {\boldsymbol{f}}_1, {\boldsymbol{g}}\rangle_{\mathcal{V}}+ \alpha_2 \langle  {\boldsymbol{f}}_2, {\boldsymbol{g}}\rangle_{\mathcal{V}}$ for all $\alpha_1,\alpha_2\in {\mathbb R}$ and ${\boldsymbol{f}}_1,{\boldsymbol{f}}_2,{\boldsymbol{g}}\in \mathcal{V}$.
 
-2.  Symmetric: $\langle  {\boldsymbol{f}}, {\boldsymbol{g}}\rangle_\mathcal{V}= \langle  {\boldsymbol{g}}, {\boldsymbol{f}}\rangle_\mathcal{V}.$
+2.  Symmetric: $\langle  {\boldsymbol{f}}, {\boldsymbol{g}}\rangle_{\mathcal{V}}= \langle  {\boldsymbol{g}}, {\boldsymbol{f}}\rangle_{\mathcal{V}}.$
 
-3.  $\langle  {\boldsymbol{f}}, {\boldsymbol{f}}\rangle_\mathcal{V}\geq 0$ and $\langle  {\boldsymbol{f}}, {\boldsymbol{f}}\rangle_\mathcal{V}= 0$ if and only if ${\boldsymbol{f}}=\mathbf{0}$.
+3.  $\langle  {\boldsymbol{f}}, {\boldsymbol{f}}\rangle_{\mathcal{V}}\geq 0$ and $\langle  {\boldsymbol{f}}, {\boldsymbol{f}}\rangle_{\mathcal{V}}= 0$ if and only if ${\boldsymbol{f}}=\mathbf{0}$.
 
 :::
 
@@ -247,7 +247,7 @@ The following are well-known examples of Hilbert spaces:
 
   $$
   \begin{aligned}
-    \langle {\boldsymbol{x}}, {\boldsymbol{y}}\rangle_\mathcal{H}=\sum_{l=-\infty}^\infty x_l\overline{y_l},  \quad \forall {\boldsymbol{x}},{\boldsymbol{y}}\in \mathcal{H}.
+    \langle {\boldsymbol{x}}, {\boldsymbol{y}}\rangle_{\mathcal{H}}=\sum_{l=-\infty}^\infty x_l\overline{y_l},  \quad \forall {\boldsymbol{x}},{\boldsymbol{y}}\in \mathcal{H}.
     \end{aligned}
   $$ {#eq-l2}
 
@@ -263,7 +263,7 @@ The following are well-known examples of Hilbert spaces:
 
   $$
   \begin{aligned}
-    \langle x, y \rangle_\mathcal{H}=\int x(t)\overline{y(t)} dt.
+    \langle x, y \rangle_{\mathcal{H}}=\int x(t)\overline{y(t)} dt.
     \end{aligned}
   $$ {#eq-L2}
 
@@ -432,14 +432,14 @@ for a subspace $\mathcal{S}\in \mathcal{V}$ and the vector ${\boldsymbol{y}}\in 
 and given by
 
 $$
-\hat{\boldsymbol{y}}= {{\mathcal P}}_\mathcal{S}{\boldsymbol{y}}
+\hat{\boldsymbol{y}}= {{\mathcal P}}_{\mathcal{S}}{\boldsymbol{y}}
 $$
 
-where ${{\mathcal P}}_\mathcal{S}$ is the *projector* associated with the subspace $\mathcal{S}$.
+where ${{\mathcal P}}_{\mathcal{S}}$ is the *projector* associated with the subspace $\mathcal{S}$.
 In particular, if the subspace $\mathcal{S}$ has a basis ${\boldsymbol{B}}$, then the projector for $\mathcal{S}$ is given by
 
 $$
-{{\mathcal P}}_\mathcal{S}= {\boldsymbol{B}}({\boldsymbol{B}}^\top{\boldsymbol{B}})^{-1}{\boldsymbol{B}}^\top.
+{{\mathcal P}}_{\mathcal{S}}= {\boldsymbol{B}}({\boldsymbol{B}}^\top{\boldsymbol{B}})^{-1}{\boldsymbol{B}}^\top.
 $$
 
 The eigen-decomposition of a square matrix is defined as follows.
@@ -793,22 +793,22 @@ $$
 \mathrm{epi}f = \{ ({\boldsymbol{x}},y): {\boldsymbol{x}}\in \mathcal{X}, y \in {\mathbb R}, y\geq f({\boldsymbol{x}}) \}.
 $$
 
-The *indicator function* $\iota_\mathcal{C}: \mathcal{X}\mapsto [-\infty, \infty]$ of $\mathcal{C}\subset \mathcal{X}$ is defined as
+The *indicator function* $\iota_{\mathcal{C}}: \mathcal{X}\mapsto [-\infty, \infty]$ of $\mathcal{C}\subset \mathcal{X}$ is defined as
 
 $$
-\iota_\mathcal{C}({\boldsymbol{x}}) = \left\{ \begin{array}{ll} 0,  & \text{if }{\boldsymbol{x}}\in \mathcal{C}\text{,} \\ \infty, & \text{otherwise.} \end{array} \right.
+\iota_{\mathcal{C}}({\boldsymbol{x}}) = \left\{ \begin{array}{ll} 0,  & \text{if }{\boldsymbol{x}}\in \mathcal{C}\text{,} \\ \infty, & \text{otherwise.} \end{array} \right.
 $$
 
 We often use another definition of the indicator function:
 
 $$
-\chi_\mathcal{C}({\boldsymbol{x}}) = \left\{ \begin{array}{ll} 1,  & \text{if }{\boldsymbol{x}}\in \mathcal{C}\text{,} \\ 0, & \text{otherwise.} \end{array} \right.
+\chi_{\mathcal{C}}({\boldsymbol{x}}) = \left\{ \begin{array}{ll} 1,  & \text{if }{\boldsymbol{x}}\in \mathcal{C}\text{,} \\ 0, & \text{otherwise.} \end{array} \right.
 $$
 
 The *support function* of a set $\mathcal{C}$ is defined as
 
 $$
-S_\mathcal{C}({\boldsymbol{x}}) = \sup\{ \langle {\boldsymbol{x}}, {\boldsymbol{y}}\rangle | {\boldsymbol{y}}\in \mathcal{C}\}.
+S_{\mathcal{C}}({\boldsymbol{x}}) = \sup\{ \langle {\boldsymbol{x}}, {\boldsymbol{y}}\rangle | {\boldsymbol{y}}\in \mathcal{C}\}.
 $$
 
 An *affine function* is denoted by
@@ -874,8 +874,8 @@ summarized in @tbl-convex.
 | quadratic over linear | $x^2/y,  \quad (x,y) \in {\mathbb R}\times {\mathbb R}_{++}$ |  |  |
 | Huber function | $\left\{  \begin{array}{cc} \vert x\vert ^2/2\mu,  & \text{if }\vert x\vert <\mu \\ \vert x\vert  - \mu/2, & \text{if  }\vert x\vert \geq \mu \end{array} \right.$ |  |  |
 | relative entropy | $y\log y -y \log x, \quad  (x,y) \in {\mathbb R}_{++}\times {\mathbb R}_{++}$ |  |  |
-| indicator function | $\iota_\mathcal{C}({\boldsymbol{x}}), \quad \mathcal{C}\text{: convex set}$ |  |  |
-| support function | $S_\mathcal{C}({\boldsymbol{x}}) = \sup\{ \langle {\boldsymbol{x}}, {\boldsymbol{y}}\rangle \vert  {\boldsymbol{y}}\in C \}$ |  |  |
+| indicator function | $\iota_{\mathcal{C}}({\boldsymbol{x}}), \quad \mathcal{C}\text{: convex set}$ |  |  |
+| support function | $S_{\mathcal{C}}({\boldsymbol{x}}) = \sup\{ \langle {\boldsymbol{x}}, {\boldsymbol{y}}\rangle \vert  {\boldsymbol{y}}\in C \}$ |  |  |
 | distance to a set | $d({\boldsymbol{x}},\mathcal{S}) = \inf_{{\boldsymbol{y}}\in \mathcal{S}} \Vert {\boldsymbol{x}}-{\boldsymbol{y}}\Vert$ |  |  |
 | affine function | ${\boldsymbol{T}}{\boldsymbol{x}}+ {\boldsymbol{b}}, \quad {\boldsymbol{x}}\in {\mathbb R}^n.$ |  |  |
 | quadratic function | ${\boldsymbol{x}}^\top {\boldsymbol{Q}}{\boldsymbol{x}}/2, \quad {\boldsymbol{x}}\in {\mathbb R}^n,   {\boldsymbol{Q}}\in {\mathbb S}_+$ |  |  |
@@ -1148,7 +1148,7 @@ Then, the original minimization problem becomes
 
 $$
 \begin{aligned}
- \min\limits_{{\boldsymbol{x}},{\boldsymbol{y}}} & \iota_\mathcal{C}({\boldsymbol{y}})+\frac{1}{2}{\boldsymbol{x}}^\top {\boldsymbol{x}}\\
+ \min\limits_{{\boldsymbol{x}},{\boldsymbol{y}}} & \iota_{\mathcal{C}}({\boldsymbol{y}})+\frac{1}{2}{\boldsymbol{x}}^\top {\boldsymbol{x}}\\
  \text{subject to} & {\boldsymbol{y}}={\boldsymbol{b}}-{\boldsymbol{A}}{\boldsymbol{x}}.
 \end{aligned}
 $$
@@ -1157,8 +1157,8 @@ Therefore, we have
 
 $$
 \begin{aligned}
- \min\limits_{{\boldsymbol{x}}}  \iota_\mathcal{C}({\boldsymbol{b}}-{\boldsymbol{A}}{\boldsymbol{x}})+\frac{1}{2}{\boldsymbol{x}}^\top {\boldsymbol{x}}&\geq  \min_{{\boldsymbol{x}},{\boldsymbol{y}}} \iota_\mathcal{C}({\boldsymbol{y}})+\frac{1}{2}{\boldsymbol{x}}^\top {\boldsymbol{x}}+{\boldsymbol{u}}^\top({\boldsymbol{b}}-{\boldsymbol{A}}{\boldsymbol{x}}-{\boldsymbol{y}}) \\
- &\geq   \min_{{\boldsymbol{y}}} \iota_\mathcal{C}({\boldsymbol{y}})-{\boldsymbol{u}}^\top {\boldsymbol{y}}+ \min_{\boldsymbol{x}}\frac{1}{2}{\boldsymbol{x}}^\top {\boldsymbol{x}}-{\boldsymbol{u}}^\top {\boldsymbol{A}}{\boldsymbol{x}}+{\boldsymbol{u}}^\top {\boldsymbol{b}}\\
+ \min\limits_{{\boldsymbol{x}}}  \iota_{\mathcal{C}}({\boldsymbol{b}}-{\boldsymbol{A}}{\boldsymbol{x}})+\frac{1}{2}{\boldsymbol{x}}^\top {\boldsymbol{x}}&\geq  \min_{{\boldsymbol{x}},{\boldsymbol{y}}} \iota_{\mathcal{C}}({\boldsymbol{y}})+\frac{1}{2}{\boldsymbol{x}}^\top {\boldsymbol{x}}+{\boldsymbol{u}}^\top({\boldsymbol{b}}-{\boldsymbol{A}}{\boldsymbol{x}}-{\boldsymbol{y}}) \\
+ &\geq   \min_{{\boldsymbol{y}}} \iota_{\mathcal{C}}({\boldsymbol{y}})-{\boldsymbol{u}}^\top {\boldsymbol{y}}+ \min_{\boldsymbol{x}}\frac{1}{2}{\boldsymbol{x}}^\top {\boldsymbol{x}}-{\boldsymbol{u}}^\top {\boldsymbol{A}}{\boldsymbol{x}}+{\boldsymbol{u}}^\top {\boldsymbol{b}}\\
  &\geq  \min_{{\boldsymbol{y}}\in \{\boldsymbol{0}\}}-{\boldsymbol{u}}^\top {\boldsymbol{y}}+ \min_{\boldsymbol{x}}\frac{1}{2}{\boldsymbol{x}}^\top {\boldsymbol{x}}-{\boldsymbol{u}}^\top {\boldsymbol{A}}{\boldsymbol{x}}+{\boldsymbol{u}}^\top {\boldsymbol{b}}\\
  &=  -\frac{1}{2}{\boldsymbol{u}}^\top {\boldsymbol{A}}{\boldsymbol{A}}^\top {\boldsymbol{u}}+ {\boldsymbol{u}}^\top {\boldsymbol{b}},
 \end{aligned}

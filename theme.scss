@@ -1,41 +1,27 @@
 /*-- scss:defaults --*/
 
-// Typography for a mathematics textbook read on screen.
+// Typography.
 //
-// Crimson Pro for the reading face: an old-style serif in the Garamond
-// tradition, but drawn as a variable font for screens rather than digitised
-// from metal, so it keeps the literary colour of that tradition without going
-// thin at body size the way a straight Garamond revival does.
+// The reading face is the platform's own interface sans, which is what an
+// unstyled page shows: no webfont to fetch, no flash while it loads, and it
+// looks native on every machine. This replaces a Crimson Pro / Inter pairing
+// that was more bookish but that we liked less next to KaTeX's Computer
+// Modern, where a serif body competes with the mathematics instead of
+// receding behind it.
 //
-// Two consequences of that choice, handled below. Crimson has a small x-height
-// and narrow letterforms, so it needs a larger size than a modern screen serif
-// to read at the same apparent size -- hence 19px rather than 18. And because
-// it is narrow, a measure fixed in rem would run to eighty-odd characters, so
-// the measure is set in `ch`, which counts characters instead of guessing.
-//
-// It is not a superfamily with the sans and mono below, unlike the Source
-// family it replaced. They are neutral enough not to argue with it, and they
-// only appear on furniture -- navigation, tables, code.
-//
-// The furniture sans is Inter, which is drawn for interface text at small
-// sizes -- open apertures, tall x-height, and real tabular figures, which the
-// two navigations need so that chapter numbers line up in a column instead of
-// drifting. Its neutrality is the point: it lets Crimson carry the character
-// and stays out of the way.
-//
-// Serif for everything a reader reads, sans for everything a reader clicks.
+// One family throughout, so navigation and running text do not read as two
+// documents. Only code changes face.
 
-$font-family-serif:      "Crimson Pro", "Source Serif 4", Charter, Georgia, "Times New Roman", serif !default;
-$font-family-sans-serif: "Inter", "Source Sans 3", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !default;
-$font-family-monospace:  "Source Code Pro", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace !default;
-$font-family-base:       $font-family-serif !default;
+$font-family-sans-serif: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif !default;
+$font-family-serif:      $font-family-sans-serif !default;
+$font-family-monospace:  ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace !default;
+$font-family-base:       $font-family-sans-serif !default;
 
-$font-size-root:   19px !default;
-$line-height-base: 1.62 !default;
+$font-size-root:   17px !default;
+$line-height-base: 1.6 !default;
 
 $headings-font-family: $font-family-serif !default;
 $headings-font-weight: 600 !default;
-$font-weight-base:     450 !default;   // Crimson at 400 reads light on screen
 $headings-line-height: 1.25 !default;
 
 // Near-black rather than black: less glare in a long reading session.
@@ -46,21 +32,10 @@ $code-color: #8f3b2f !default;
 /*-- scss:rules --*/
 
 body {
-  font-family: $font-family-serif;
-  font-weight: 450;
-  font-variant-numeric: oldstyle-nums proportional-nums;
+  font-family: $font-family-sans-serif;
   text-rendering: optimizeLegibility;
 }
 
-// Navigation, sidebars, buttons and captions stay sans: they are furniture, and
-// setting them in the reading face makes the page look uniformly grey.
-.navbar, .sidebar, #quarto-sidebar, #quarto-margin-sidebar, .sidebar-navigation,
-.quarto-secondary-nav, .toc-actions, .nav-page, .quarto-title-banner,
-figcaption, .figure-caption, .table-caption, caption, .callout-title-container,
-.quarto-search, footer.footer {
-  font-family: $font-family-sans-serif;
-  font-variant-numeric: normal;
-}
 
 // Chapter openings. Tight tracking on the large sizes, where the default
 // spacing looks loose.
@@ -91,11 +66,7 @@ main.content, #quarto-document-content {
 
 p { margin-bottom: 1.1rem; }
 
-// Lining figures inside tables and maths, oldstyle everywhere else.
-table, .katex, code, pre { font-variant-numeric: normal; }
-
 table {
-  font-family: $font-family-sans-serif;
   font-size: 0.92rem;
 }
 
@@ -200,7 +171,6 @@ $nav-accent: #14507d;
   }
 
   .sidebar-title, .quarto-sidebar-title {
-    font-family: $font-family-serif;
     font-size: 1.06rem;
     font-weight: 600;
     letter-spacing: -0.01em;

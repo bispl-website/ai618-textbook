@@ -4,7 +4,7 @@ title: "LLaDA and MMaDA"
 
 ::: {.callout-note}
 ## Not yet written
-Lecture 22 of AI618, given 2026-11-24. This chapter is merged from the
-scribe notes for that lecture; until those are written and graded it stands
+Lecture 22 of AI618, given 2026-12-01. This chapter is merged from
+the scribe notes for that lecture; until those are written and graded it stands
 empty.
 :::

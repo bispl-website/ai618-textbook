@@ -4,7 +4,7 @@ title: "CycleGAN, StyleGAN and Multi-domain GANs"
 
 ::: {.callout-note}
 ## Not yet written
-Lecture 04 of AI618, given 2026-09-10. This chapter is merged from the
-scribe notes for that lecture; until those are written and graded it stands
+Lecture 04 of AI618, given 2026-09-15. This chapter is merged from
+the scribe notes for that lecture; until those are written and graded it stands
 empty.
 :::

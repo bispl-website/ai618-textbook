@@ -50,7 +50,6 @@ book:
           - chapters/ch23.qmd
           - chapters/ch24.qmd
           - chapters/ch25.qmd
-          - chapters/ch26.qmd
       - references.qmd
 
 bibliography: references.bib

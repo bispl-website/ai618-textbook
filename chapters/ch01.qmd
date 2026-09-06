@@ -4,7 +4,7 @@ title: "Optimal Transport"
 
 ::: {.callout-note}
 ## Not yet written
-Lecture 01 of AI618, given 2026-09-01. This chapter is merged from the
-scribe notes for that lecture; until those are written and graded it stands
+Lecture 01 of AI618, given 2026-09-03. This chapter is merged from
+the scribe notes for that lecture; until those are written and graded it stands
 empty.
 :::

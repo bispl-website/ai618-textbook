@@ -4,7 +4,7 @@ title: "Image Editing and Inverse Problems"
 
 ::: {.callout-note}
 ## Not yet written
-Lecture 13 of AI618, given 2026-10-15. This chapter is merged from the
-scribe notes for that lecture; until those are written and graded it stands
+Lecture 13 of AI618, given 2026-10-29. This chapter is merged from
+the scribe notes for that lecture; until those are written and graded it stands
 empty.
 :::

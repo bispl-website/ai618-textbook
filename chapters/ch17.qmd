@@ -4,7 +4,7 @@ title: "Relation between Flow and Diffusion Models"
 
 ::: {.callout-note}
 ## Not yet written
-Lecture 17 of AI618, given 2026-11-05. This chapter is merged from the
-scribe notes for that lecture; until those are written and graded it stands
+Lecture 17 of AI618, given 2026-11-12. This chapter is merged from
+the scribe notes for that lecture; until those are written and graded it stands
 empty.
 :::

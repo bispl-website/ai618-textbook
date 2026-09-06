@@ -4,7 +4,7 @@ title: "RL Review: RLHF, DPO, DDPO and GRPO"
 
 ::: {.callout-note}
 ## Not yet written
-Lecture 23 of AI618, given 2026-11-26. This chapter is merged from the
-scribe notes for that lecture; until those are written and graded it stands
+Lecture 23 of AI618, given 2026-12-03. This chapter is merged from
+the scribe notes for that lecture; until those are written and graded it stands
 empty.
 :::

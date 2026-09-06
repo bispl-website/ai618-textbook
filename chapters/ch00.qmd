@@ -1,0 +1,8 @@
+# Mathematical Preliminaries {.unnumbered}
+
+::: {.callout-note}
+## Not yet written
+The mathematics the course assumes, so that the lecture chapters can refer to
+it rather than restate it. Merged from the `lec00` note in the scribe
+repository once that note is written and graded.
+:::

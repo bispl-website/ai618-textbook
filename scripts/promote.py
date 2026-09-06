@@ -141,9 +141,18 @@ def seed_chapter(lec: str, records: list[dict], scribe_repo: Path) -> str:
         for g in base["coverage_gaps"]
     ) or "- (none reported)"
 
-    return f"""---
-title: "{title.group(1).strip() if title else f'Lecture {lec[3:]}'}"
----
+    name = title.group(1).strip() if title else f"Lecture {lec[3:]}"
+    # lec00 is the instructor's preliminaries chapter, not one of the
+    # twenty-eight lectures. It sits between the preface and Part I and carries
+    # no number, so that chapter N keeps meaning lecture N for everything after
+    # it. An unnumbered chapter is a heading with `.unnumbered`, not a YAML
+    # title, which is how the preface and the references are written too.
+    if lec == "lec00":
+        head = f"# {name} {{.unnumbered}}\n"
+    else:
+        head = f'---\ntitle: "{name}"\n---\n'
+
+    return head + f"""
 
 <!--
 DRAFT seeded by scripts/promote.py from the highest-scoring {lec} scribe note.

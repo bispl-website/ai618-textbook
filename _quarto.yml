@@ -14,6 +14,7 @@ book:
   search: true
   chapters:
       - index.qmd
+      - chapters/ch00.qmd
       - part: "Optimal Transport, Adversarial and Latent Variable Models"
         chapters:
           - chapters/ch01.qmd

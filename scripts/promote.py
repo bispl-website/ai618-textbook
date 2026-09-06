@@ -30,8 +30,8 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 
 
-def load_grades(scribe_repo: Path, lec: str) -> list[dict]:
-    grade_dir = scribe_repo / "grades" / lec
+def load_grades(grades_repo: Path, lec: str) -> list[dict]:
+    grade_dir = grades_repo / lec
     if not grade_dir.is_dir():
         return []
     records = [json.loads(p.read_text()) for p in sorted(grade_dir.glob("*.json"))]
@@ -192,6 +192,10 @@ def main() -> int:
     ap.add_argument("--lecture", required=True, help="lecture number, e.g. 07")
     ap.add_argument("--scribe-repo", default="../ai618-scribe-2026f",
                     help="path to the private scribe repository")
+    ap.add_argument("--grades-repo", default="../ai618-grades-2026f",
+                    help="path to the private grades repository -- grades are kept "
+                         "out of the scribe repository, which students can read "
+                         "and fork (default: ../ai618-grades-2026f)")
     ap.add_argument("--worksheet-only", action="store_true",
                     help="do not touch chapters/, only write the merge worksheet")
     ap.add_argument("--force", action="store_true",
@@ -204,9 +208,10 @@ def main() -> int:
         print(f"scribe repository not found: {scribe_repo}", file=sys.stderr)
         return 1
 
-    records = load_grades(scribe_repo, lec)
+    grades_repo = Path(args.grades_repo).expanduser().resolve()
+    records = load_grades(grades_repo, lec)
     if not records:
-        print(f"No grades under {scribe_repo}/grades/{lec}. Grade the lecture first "
+        print(f"No grades under {grades_repo}/{lec}. Grade the lecture first "
               "(scripts/grade_submissions.py --lecture "
               f"{args.lecture.zfill(2)}).", file=sys.stderr)
         return 1

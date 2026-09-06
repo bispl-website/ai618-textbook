@@ -2,25 +2,34 @@
 
 // Typography for a mathematics textbook read on screen.
 //
-// Source Serif 4 / Source Sans 3 / Source Code Pro are one superfamily, drawn
-// to share metrics and colour, so the running text, the navigation and the
-// code blocks look like one document rather than three. Source Serif is a
-// screen-first serif: it holds up at body sizes where Garamond-style faces go
-// thin, and its weight sits close enough to KaTeX's Computer Modern that an
-// inline $x_i$ does not jump out of the sentence around it.
+// Crimson Pro for the reading face: an old-style serif in the Garamond
+// tradition, but drawn as a variable font for screens rather than digitised
+// from metal, so it keeps the literary colour of that tradition without going
+// thin at body size the way a straight Garamond revival does.
+//
+// Two consequences of that choice, handled below. Crimson has a small x-height
+// and narrow letterforms, so it needs a larger size than a modern screen serif
+// to read at the same apparent size -- hence 19px rather than 18. And because
+// it is narrow, a measure fixed in rem would run to eighty-odd characters, so
+// the measure is set in `ch`, which counts characters instead of guessing.
+//
+// It is not a superfamily with the sans and mono below, unlike the Source
+// family it replaced. They are neutral enough not to argue with it, and they
+// only appear on furniture -- navigation, tables, code.
 //
 // Serif for everything a reader reads, sans for everything a reader clicks.
 
-$font-family-serif:      "Source Serif 4", Charter, Georgia, "Times New Roman", serif !default;
+$font-family-serif:      "Crimson Pro", "Source Serif 4", Charter, Georgia, "Times New Roman", serif !default;
 $font-family-sans-serif: "Source Sans 3", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !default;
 $font-family-monospace:  "Source Code Pro", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace !default;
 $font-family-base:       $font-family-serif !default;
 
-$font-size-root:   18px !default;
-$line-height-base: 1.68 !default;
+$font-size-root:   19px !default;
+$line-height-base: 1.62 !default;
 
 $headings-font-family: $font-family-serif !default;
 $headings-font-weight: 600 !default;
+$font-weight-base:     450 !default;   // Crimson at 400 reads light on screen
 $headings-line-height: 1.25 !default;
 
 // Near-black rather than black: less glare in a long reading session.
@@ -32,6 +41,7 @@ $code-color: #8f3b2f !default;
 
 body {
   font-family: $font-family-serif;
+  font-weight: 450;
   font-variant-numeric: oldstyle-nums proportional-nums;
   text-rendering: optimizeLegibility;
 }
@@ -64,10 +74,12 @@ h3 { margin-top: 1.8rem; }
   letter-spacing: 0.02em;
 }
 
-// Measure. Around 68 characters at this size, which is where prose stops
-// needing effort to track from one line to the next.
+// Measure, in `ch` so it follows the face rather than a guess in rem: Crimson
+// is narrow and the same 40rem that held ~70 characters in Source Serif runs to
+// well over eighty here. Around 65-70 characters is where prose stops needing
+// effort to track from one line to the next.
 main.content, #quarto-document-content {
-  max-width: 40rem;
+  max-width: 62ch;
 }
 .column-page, .column-screen-inset, .cell-output-display { max-width: none; }
 

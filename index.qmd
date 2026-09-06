@@ -64,7 +64,7 @@ it.
 
 ## How it was made
 
-Each lecture was written up independently by three or four students. Those notes
+Each lecture was written up independently by several students. Those notes
 were graded against a published rubric --- coverage, technical correctness,
 exposition, figures, and derivations --- with a language model producing three
 independent readings per note and a human reading every one before any grade

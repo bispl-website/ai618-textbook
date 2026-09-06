@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build a merge worksheet for one chapter from the graded scribe notes.
 
-This does not copy the winner. With only three or four independent write-ups of
+This does not copy the winner. With only a few independent write-ups of
 a lecture, the best of them still has holes -- and the grading pass already
 produced the hole list, because `coverage_gaps` is a scored criterion. So the
 worksheet starts from the strongest note and tells the editor, section by
@@ -143,7 +143,7 @@ def seed_chapter(lec: str, records: list[dict], scribe_repo: Path) -> str:
 
     name = title.group(1).strip() if title else f"Lecture {lec[3:]}"
     # lec00 is the instructor's preliminaries chapter, not one of the
-    # twenty-eight lectures. It sits between the preface and Part I and carries
+    # lectures. It sits between the preface and Part I and carries
     # no number, so that chapter N keeps meaning lecture N for everything after
     # it. An unnumbered chapter is a heading with `.unnumbered`, not a YAML
     # title, which is how the preface and the references are written too.

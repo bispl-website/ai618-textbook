@@ -1,0 +1,107 @@
+/*-- scss:defaults --*/
+
+// Typography for a mathematics textbook read on screen.
+//
+// Source Serif 4 / Source Sans 3 / Source Code Pro are one superfamily, drawn
+// to share metrics and colour, so the running text, the navigation and the
+// code blocks look like one document rather than three. Source Serif is a
+// screen-first serif: it holds up at body sizes where Garamond-style faces go
+// thin, and its weight sits close enough to KaTeX's Computer Modern that an
+// inline $x_i$ does not jump out of the sentence around it.
+//
+// Serif for everything a reader reads, sans for everything a reader clicks.
+
+$font-family-serif:      "Source Serif 4", Charter, Georgia, "Times New Roman", serif !default;
+$font-family-sans-serif: "Source Sans 3", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !default;
+$font-family-monospace:  "Source Code Pro", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace !default;
+$font-family-base:       $font-family-serif !default;
+
+$font-size-root:   18px !default;
+$line-height-base: 1.68 !default;
+
+$headings-font-family: $font-family-serif !default;
+$headings-font-weight: 600 !default;
+$headings-line-height: 1.25 !default;
+
+// Near-black rather than black: less glare in a long reading session.
+$body-color: #1c1e21 !default;
+$link-color: #14507d !default;
+$code-color: #8f3b2f !default;
+
+/*-- scss:rules --*/
+
+body {
+  font-family: $font-family-serif;
+  font-variant-numeric: oldstyle-nums proportional-nums;
+  text-rendering: optimizeLegibility;
+}
+
+// Navigation, sidebars, buttons and captions stay sans: they are furniture, and
+// setting them in the reading face makes the page look uniformly grey.
+.navbar, .sidebar, #quarto-sidebar, #quarto-margin-sidebar, .sidebar-navigation,
+.quarto-secondary-nav, .toc-actions, .nav-page, .quarto-title-banner,
+figcaption, .figure-caption, .table-caption, caption, .callout-title-container,
+.quarto-search, footer.footer {
+  font-family: $font-family-sans-serif;
+  font-variant-numeric: normal;
+}
+
+// Chapter openings. Tight tracking on the large sizes, where the default
+// spacing looks loose.
+h1, .title {
+  letter-spacing: -0.015em;
+  font-weight: 700;
+}
+h2, h3, h4 { letter-spacing: -0.005em; }
+
+h1.title { font-size: 2.4rem; margin-bottom: 0.6rem; }
+h2 { margin-top: 2.4rem; }
+h3 { margin-top: 1.8rem; }
+
+// A part page is a divider, not a chapter: let it breathe.
+.quarto-part-title, h1.quarto-part {
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+// Measure. Around 68 characters at this size, which is where prose stops
+// needing effort to track from one line to the next.
+main.content, #quarto-document-content {
+  max-width: 40rem;
+}
+.column-page, .column-screen-inset, .cell-output-display { max-width: none; }
+
+p { margin-bottom: 1.1rem; }
+
+// Lining figures inside tables and maths, oldstyle everywhere else.
+table, .katex, code, pre { font-variant-numeric: normal; }
+
+table {
+  font-family: $font-family-sans-serif;
+  font-size: 0.92rem;
+}
+
+code, pre {
+  font-family: $font-family-monospace;
+  font-size: 0.86em;
+}
+pre.sourceCode {
+  border-radius: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+code:not(.sourceCode) {
+  background: rgba(0, 0, 0, 0.04);
+  padding: 0.1em 0.3em;
+  border-radius: 3px;
+}
+
+// Display maths gets room; KaTeX defaults sit too close to the paragraph above.
+.katex-display { margin: 1.5rem 0; }
+
+blockquote {
+  border-left: 3px solid rgba(0, 0, 0, 0.15);
+  color: #45484d;
+  font-style: italic;
+}
+
+a { text-underline-offset: 0.15em; }

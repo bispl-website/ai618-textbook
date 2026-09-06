@@ -13,7 +13,9 @@ It reads the *private* scribe repository and writes into this one:
 
 Outputs:
     drafts/lec07-merge.md   the worksheet: ranking, gap union, errors to fix
-    chapters/ch07.qmd       the top note, seeded with TODO markers at each gap
+    chapters/ch07.qmd       the top note, with the gap list carried in a
+                            comment at the top -- the tool cannot tell where
+                            in the prose a missing topic belongs
 
 Neither output is finished work. The worksheet is a reading order for a human;
 the chapter is a starting point that still needs the merge done by hand.
@@ -24,6 +26,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shutil
 import sys
 from pathlib import Path
 
@@ -116,6 +119,36 @@ def worksheet(lec: str, records: list[dict], scribe_repo: Path) -> str:
     return "\n".join(L) + "\n"
 
 
+def copy_figures(lec: str, body: str, scribe_repo: Path) -> tuple[str, int, list[str]]:
+    """Bring the base note's figures into this repository and repoint them.
+
+    A submission refers to its figures as `../figures/name.png`, which resolves
+    inside the scribe repository and nowhere else. Copying the prose alone
+    leaves a chapter whose images 404 -- and Quarto does not fail on a missing
+    image, so the build stays green and only the published page shows it. The
+    files land in `chapters/figures/lecNN/` so that two scribes of different
+    lectures cannot collide.
+    """
+    dest_dir = REPO / "chapters" / "figures" / lec
+    src_dir = scribe_repo / "lectures" / lec / "figures"
+    copied, missing = 0, []
+
+    def repoint(m: re.Match) -> str:
+        name = Path(m.group(2)).name
+        src = src_dir / name
+        if not src.exists():
+            missing.append(name)
+            return m.group(0)
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dest_dir / name)
+        nonlocal copied
+        copied += 1
+        return f"{m.group(1)}figures/{lec}/{name}"
+
+    body = re.sub(r"(\]\()(\.\./figures/[^)\s]+)", repoint, body)
+    return body, copied, missing
+
+
 def seed_chapter(lec: str, records: list[dict], scribe_repo: Path) -> str:
     base = records[0]
     src = scribe_repo / "lectures" / lec / "submissions" / f"{base['github']}.qmd"
@@ -134,6 +167,13 @@ def seed_chapter(lec: str, records: list[dict], scribe_repo: Path) -> str:
     else:
         body = text
 
+    body, copied, missing = copy_figures(lec, body, scribe_repo)
+    if copied:
+        print(f"copied {copied} figure(s) into chapters/figures/{lec}/")
+    for name in missing:
+        print(f"  WARNING: {name} is referenced but not in the scribe repo; "
+              "the published page will show a broken image")
+
     title = re.search(r'title:\s*"?([^"\n]+)"?', text)
     contributors = ", ".join(r["github"] for r in records)
     gaps = "\n".join(
@@ -142,6 +182,11 @@ def seed_chapter(lec: str, records: list[dict], scribe_repo: Path) -> str:
     ) or "- (none reported)"
 
     name = title.group(1).strip() if title else f"Lecture {lec[3:]}"
+    # Scribe notes are titled "Lecture 07 --- Flow Matching", which is how the
+    # submission is identified. A book chapter is not identified that way: the
+    # number is already in the chapter heading, and Part I would read "1
+    # Lecture 01 --- ...". Keep only what follows the dash.
+    name = re.sub(r"^Lecture\s*\d+\s*[-\u2013\u2014]+\s*", "", name)
     # lec00 is the instructor's preliminaries chapter, not one of the
     # lectures. It sits between the preface and Part I and carries
     # no number, so that chapter N keeps meaning lecture N for everything after
@@ -155,22 +200,22 @@ def seed_chapter(lec: str, records: list[dict], scribe_repo: Path) -> str:
     return head + f"""
 
 <!--
-DRAFT seeded by scripts/promote.py from the highest-scoring {lec} scribe note.
-Base note: {base['github']} ({base['aggregate']['score']:.1f}/100).
-Merge sources: {contributors}.
+DRAFT seeded by scripts/promote.py from the strongest {lec} scribe note.
+Base note: {base['github']}. Merge sources: {contributors}.
+
+This repository is public and this comment ships in the page source, so it
+carries no scores and no per-note criticism. Both live in
+drafts/{lec}-merge.md, which .gitignore keeps out of the repository.
 
 Before this chapter is publishable:
 
-1. Fill the gaps below from the other candidates -- see drafts/{lec}-merge.md
-   for who covered what.
+1. Fill the gaps listed in drafts/{lec}-merge.md, which also says which of
+   the other notes covered each one.
 2. Resolve every suspected error in the worksheet against the lecture itself.
 3. Reconcile notation with the neighbouring chapters.
 4. Copy-edit. The scribe repository never penalised English fluency, so some
    base notes need a real pass here.
 5. Replace this comment and the contributor list below with the final credit.
-
-Gaps reported in this base note:
-{gaps}
 -->
 
 ::: {{.callout-important}}

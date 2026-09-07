@@ -1246,36 +1246,36 @@ Convexity is preserved under various operations. For example, if $\{f_i\}_{i\in 
 Important examples of convex functions are
 summarized in @tbl-convex.
 
-| Name | $f(x)$ |  |  |
-|:--:|:--:|:--:|:--:|
-| exponential | $e^{ax},\quad \forall a \in {\mathbb R}$ |  |  |
-| quadratic over linear | $x^2/y,  \quad (x,y) \in {\mathbb R}\times {\mathbb R}_{++}$ |  |  |
-| Huber function | $\left\{  \begin{array}{cc} \vert x\vert ^2/2\mu,  & \text{if }\vert x\vert <\mu \\ \vert x\vert  - \mu/2, & \text{if  }\vert x\vert \geq \mu \end{array} \right.$ |  |  |
-| relative entropy | $y\log y -y \log x, \quad  (x,y) \in {\mathbb R}_{++}\times {\mathbb R}_{++}$ |  |  |
-| indicator function | $\iota_{\mathcal{C}}({\boldsymbol{x}}), \quad \mathcal{C}\text{: convex set}$ |  |  |
-| support function | $S_{\mathcal{C}}({\boldsymbol{x}}) = \sup\{ \langle {\boldsymbol{x}}, {\boldsymbol{y}}\rangle \vert  {\boldsymbol{y}}\in C \}$ |  |  |
-| distance to a set | $d({\boldsymbol{x}},\mathcal{S}) = \inf_{{\boldsymbol{y}}\in \mathcal{S}} \Vert {\boldsymbol{x}}-{\boldsymbol{y}}\Vert$ |  |  |
-| affine function | ${\boldsymbol{T}}{\boldsymbol{x}}+ {\boldsymbol{b}}, \quad {\boldsymbol{x}}\in {\mathbb R}^n.$ |  |  |
-| quadratic function | ${\boldsymbol{x}}^\top {\boldsymbol{Q}}{\boldsymbol{x}}/2, \quad {\boldsymbol{x}}\in {\mathbb R}^n,   {\boldsymbol{Q}}\in {\mathbb S}_+$ |  |  |
-| $p$-norms | $\Vert {\boldsymbol{x}}\Vert _p= \left(\sum_i \vert x_i\vert ^p\right)^{1/p}$, $p \geq 1$ |  |  |
-| $l_\infty$-norm | $\Vert {\boldsymbol{x}}\Vert _\infty = \max_i \vert x_i\vert$ |  |  |
-| max function | $\max\{x_1,\cdots, x_n\}$ |  |  |
-| log-sum-exponential | $\log \left(\sum_{i=1}^n e^{x_i} \right)$, $x=(x_1,\cdots, x^{(k)}) \in {\mathbb R}^n$. |  |  |
-| Gaussian data fidelity | $\Vert {\boldsymbol{y}}-{\boldsymbol{A}}{\boldsymbol{x}}\Vert ^2, \quad {\boldsymbol{x}}\in \mathcal{H}$ |  |  |
-| Poisson data fidelity | $\langle \boldsymbol{1}, {\boldsymbol{A}}{\boldsymbol{x}}\rangle - \langle {\boldsymbol{y}}, \log({\boldsymbol{A}}{\boldsymbol{x}}) \rangle,\quad {\boldsymbol{x}}\in {\mathbb R}^n, \boldsymbol{1} =(1,\cdots, 1) \in {\mathbb R}^n$ |  |  |
-| spectral norm | $\Vert {\boldsymbol{X}}\Vert _2 = \sigma_{\mathrm{max}} ({\boldsymbol{X}}) = (\lambda_{\mathrm{max}} ({\boldsymbol{X}}^\top {\boldsymbol{X}}) )^{1/2}$, ${\boldsymbol{X}}\in {\mathbb R}^{n\times n}$ |  |  |
-|  nuclear norm | $\Vert {\boldsymbol{X}}\Vert _* =  \sum_i\sigma_i ({\boldsymbol{X}}) = \sum_i(\lambda_i ({\boldsymbol{X}}^\top {\boldsymbol{X}}) )^{1/2}$, ${\boldsymbol{X}}\in {\mathbb R}^{n\times n}$ |  |  |
+| Name | $f(x)$ |
+|:------------------|:--------------------------------------------------------------|
+| exponential | $e^{ax},\quad \forall a \in {\mathbb R}$ |
+| quadratic over linear | $x^2/y,  \quad (x,y) \in {\mathbb R}\times {\mathbb R}_{++}$ |
+| Huber function | $\left\{  \begin{array}{cc} \vert x\vert ^2/2\mu,  & \text{if }\vert x\vert <\mu \\ \vert x\vert  - \mu/2, & \text{if  }\vert x\vert \geq \mu \end{array} \right.$ |
+| relative entropy | $y\log y -y \log x, \quad  (x,y) \in {\mathbb R}_{++}\times {\mathbb R}_{++}$ |
+| indicator function | $\iota_{\mathcal{C}}({\boldsymbol{x}}), \quad \mathcal{C}\text{: convex set}$ |
+| support function | $S_{\mathcal{C}}({\boldsymbol{x}}) = \sup\{ \langle {\boldsymbol{x}}, {\boldsymbol{y}}\rangle \vert  {\boldsymbol{y}}\in C \}$ |
+| distance to a set | $d({\boldsymbol{x}},\mathcal{S}) = \inf_{{\boldsymbol{y}}\in \mathcal{S}} \Vert {\boldsymbol{x}}-{\boldsymbol{y}}\Vert$ |
+| affine function | ${\boldsymbol{T}}{\boldsymbol{x}}+ {\boldsymbol{b}}, \quad {\boldsymbol{x}}\in {\mathbb R}^n.$ |
+| quadratic function | ${\boldsymbol{x}}^\top {\boldsymbol{Q}}{\boldsymbol{x}}/2, \quad {\boldsymbol{x}}\in {\mathbb R}^n,   {\boldsymbol{Q}}\in {\mathbb S}_+$ |
+| $p$-norms | $\Vert {\boldsymbol{x}}\Vert _p= \left(\sum_i \vert x_i\vert ^p\right)^{1/p}$, $p \geq 1$ |
+| $l_\infty$-norm | $\Vert {\boldsymbol{x}}\Vert _\infty = \max_i \vert x_i\vert$ |
+| max function | $\max\{x_1,\cdots, x_n\}$ |
+| log-sum-exponential | $\log \left(\sum_{i=1}^n e^{x_i} \right)$, $x=(x_1,\cdots, x^{(k)}) \in {\mathbb R}^n$. |
+| Gaussian data fidelity | $\Vert {\boldsymbol{y}}-{\boldsymbol{A}}{\boldsymbol{x}}\Vert ^2, \quad {\boldsymbol{x}}\in \mathcal{H}$ |
+| Poisson data fidelity | $\langle \boldsymbol{1}, {\boldsymbol{A}}{\boldsymbol{x}}\rangle - \langle {\boldsymbol{y}}, \log({\boldsymbol{A}}{\boldsymbol{x}}) \rangle,\quad {\boldsymbol{x}}\in {\mathbb R}^n, \boldsymbol{1} =(1,\cdots, 1) \in {\mathbb R}^n$ |
+| spectral norm | $\Vert {\boldsymbol{X}}\Vert _2 = \sigma_{\mathrm{max}} ({\boldsymbol{X}}) = (\lambda_{\mathrm{max}} ({\boldsymbol{X}}^\top {\boldsymbol{X}}) )^{1/2}$, ${\boldsymbol{X}}\in {\mathbb R}^{n\times n}$ |
+| nuclear norm | $\Vert {\boldsymbol{X}}\Vert _* =  \sum_i\sigma_i ({\boldsymbol{X}}) = \sum_i(\lambda_i ({\boldsymbol{X}}^\top {\boldsymbol{X}}) )^{1/2}$, ${\boldsymbol{X}}\in {\mathbb R}^{n\times n}$ |
 : Examples of convex functions. {#tbl-convex}
 
 A function $f$ is *concave* if $-f$ is convex. It is easy to show that an affine function $f({\boldsymbol{x}}) = {\boldsymbol{A}}{\boldsymbol{x}}+{\boldsymbol{b}}$ is both convex and concave.
 Examples of concave functions that are often used in this textbook can be found in @tbl-example-concave.
 
-| Name | $f(x)$ |  |
-|:--:|:--:|:--:|
-| powers | $~~x^p, \quad 0\leq p \leq 1, \quad x \in {\mathbb R}_{++}$ |  |
-| geometric mean | $\left( \prod_{i=1}^n x_i \right)^{\frac{1}{n}}$ |  |
-| logarithm | $\log x, \quad x \in {\mathbb R}_{++}$ |  |
-| log determinant | $\log \det({\boldsymbol{X}}), \quad {\boldsymbol{X}}\in  {\mathbb S}_{++}$ |  |
+| Name | $f(x)$ |
+|:------------------|:--------------------------------------------------------------|
+| powers | $~~x^p, \quad 0\leq p \leq 1, \quad x \in {\mathbb R}_{++}$ |
+| geometric mean | $\left( \prod_{i=1}^n x_i \right)^{\frac{1}{n}}$ |
+| logarithm | $\log x, \quad x \in {\mathbb R}_{++}$ |
+| log determinant | $\log \det({\boldsymbol{X}}), \quad {\boldsymbol{X}}\in  {\mathbb S}_{++}$ |
 : Examples of concave functions. {#tbl-example-concave}
 
 ### Subdifferentials {#sec-subdifferentials}
@@ -1405,7 +1405,7 @@ $$
 ![\(a\) Geometry of convex conjugate. (b) Examples of finding convex conjugate for $f(x)=bx+c$.](figures/lec00/testConjugate.png){#fig-conjugate width=11cm}
 
 | $f(x)$ | $\mathrm{dom}f$ | $f^*(u)$ | $\mathrm{dom}f^*$ |
-|:--:|:--:|:--:|:--:|
+|:------------------------------|:--------------|:----------------------------------------|:--------------|
 | $f(ax)$ | $D$ | $f^*(u/a)$ | $D$ |
 | $f(x+b)$ | $D$ | $f^*(u)-\langle b, u \rangle$ | $D$ |
 | $af(x), a>0$ | $D$ | $a f^*(u/a)$ | $D$ |

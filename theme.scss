@@ -70,6 +70,26 @@ table {
   font-size: 0.92rem;
 }
 
+// The measure above is set for prose and is too narrow for a table of formulas:
+// every entry of the convex-function table wrapped onto two lines while the
+// right of the page stayed empty. A table may run past the measure, centred on
+// it, and scrolls rather than wraps if it still does not fit. The viewport
+// guard keeps it clear of the sidebar and the contents column.
+.quarto-float-tbl {
+  max-width: min(78ch, calc(100vw - 8rem));
+  position: relative;
+  left: 50%;
+  transform: translateX(-50%);
+
+  > div {
+    overflow-x: auto;
+  }
+
+  table {
+    margin-inline: auto;
+  }
+}
+
 code, pre {
   font-family: $font-family-monospace;
   font-size: 0.86em;

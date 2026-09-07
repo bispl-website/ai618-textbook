@@ -274,9 +274,9 @@ A norm $\|\cdot\|$ is a real-valued function defined on the vector space that ha
 
 :::
 
-### The $l_p$ norms {#sec-lp}
+### The lp Norms {#sec-lp}
 
-The family we use throughout is the $l_p$ norms. For ${\boldsymbol{x}}\in{\mathbb R}^n$ and
+The family we use throughout is the $l_p$ norms, written $\|\cdot\|_p$. For ${\boldsymbol{x}}\in{\mathbb R}^n$ and
 $p\geq 1$,
 
 $$
@@ -816,7 +816,7 @@ $$
 \end{aligned}
 $$
 
-### The Moore--Penrose pseudo-inverse {#sec-pseudoinverse}
+### The Moore--Penrose Pseudo-inverse {#sec-pseudoinverse}
 
 The decomposition @eq-fourdecomp says that ${\boldsymbol{A}}$ is a bijection from
 $\mathcal{R}({\boldsymbol{A}}^\top)$ onto $\mathcal{R}({\boldsymbol{A}})$, and inverting that

@@ -50,6 +50,33 @@ For all $x, y, z \in \mathcal{X}$, this function is required to satisfy the foll
 
 :::
 
+Before going further it is worth seeing that the axioms are satisfied by more
+than the familiar distance, and that they do exclude things.
+
+::: {#exm-metrics}
+
+The following are metric spaces.
+
+1.  The Euclidean metric $d({\boldsymbol{x}},{\boldsymbol{y}})=\|{\boldsymbol{x}}-{\boldsymbol{y}}\|_2$ on ${\mathbb R}^n$.
+
+2.  The discrete metric on any set, $d(x,y)=1$ if $x\neq y$ and $0$ otherwise.
+    Every subset is open under it, so it is a useful source of counterexamples.
+
+3.  The supremum metric on $C[a,b]$, the continuous functions on $[a,b]$,
+    $d(f,g)=\sup_{t\in[a,b]}|f(t)-g(t)|$. Convergence in this metric is uniform
+    convergence.
+
+4.  The metric induced by any norm on a vector space, $d({\boldsymbol{x}},{\boldsymbol{y}})=\|{\boldsymbol{x}}-{\boldsymbol{y}}\|$,
+    of which the $l_p$ metrics of [the $l_p$ norms](#sec-lp) are the family we use most.
+
+By contrast, the squared Euclidean distance $d({\boldsymbol{x}},{\boldsymbol{y}})=\|{\boldsymbol{x}}-{\boldsymbol{y}}\|_2^2$ is *not*
+a metric: with $x=0$, $y=1$, $z=2$ on the real line it gives $d(x,z)=4$ while
+$d(x,y)+d(y,z)=2$, so the triangle inequality fails. It is nonetheless a
+perfectly good objective function, which is why the distinction matters ---
+being a useful measure of discrepancy and being a metric are different things.
+
+:::
+
 A metric on a space induces topological properties like open and closed sets, which lead to the study of more abstract topological spaces.
 Specifically, about any point $x$ in a metric space $\mathcal{X}$, we define the open ball of radius $r>0$ about $x$ as the set
 
@@ -84,6 +111,42 @@ A metric space $\mathcal{X}$ is said to be complete if every Cauchy sequence con
 
 :::
 
+Completeness is a property of the space, not of the metric alone. The rationals
+${\mathbb Q}$ with $d(x,y)=|x-y|$ are not complete: the sequence $1, 1.4, 1.41,
+1.414,\ldots$ is Cauchy in ${\mathbb Q}$ but its limit $\sqrt2$ is not a
+rational number. The same sequence in ${\mathbb R}$ converges. This is the
+sense in which ${\mathbb R}$ completes ${\mathbb Q}$, and it is why the
+iterative algorithms mentioned above are stated over ${\mathbb R}^n$ rather
+than over the numbers a computer can actually represent.
+
+We turn now to maps between metric spaces. Continuity is defined first in the
+general form, and the Lipschitz condition afterwards as a stronger requirement.
+
+::: {#def-continuity}
+
+Let $(\mathcal{X},d_{\mathcal{X}})$ and $(\mathcal{Y},d_{\mathcal{Y}})$ be metric spaces. A function
+$f:\mathcal{X}\mapsto \mathcal{Y}$ is *continuous at* $x_0\in \mathcal{X}$ if for every
+$\varepsilon>0$ there exists $\delta>0$ such that
+
+$$
+d_{\mathcal{X}}(x,x_0)<\delta \quad \Longrightarrow \quad d_{\mathcal{Y}}(f(x),f(x_0))<\varepsilon .
+$$ {#eq-epsdelta}
+
+It is *continuous* if it is continuous at every point, and *uniformly
+continuous* if the same $\delta$ works at every point, i.e. if for every
+$\varepsilon>0$ there is a $\delta>0$ such that
+$d_{\mathcal{Y}}(f(x),f(y))<\varepsilon$ whenever $d_{\mathcal{X}}(x,y)<\delta$.
+
+:::
+
+Two equivalent formulations are worth recording, because each is the convenient
+one in a different argument. First, $f$ is continuous if and only if the
+preimage $f^{-1}(V)$ of every open $V\subset \mathcal{Y}$ is open in $\mathcal{X}$ --- the
+formulation that survives when the metric is dropped and only the topology is
+kept. Second, $f$ is continuous at $x_0$ if and only if $f(x_n)\to f(x_0)$ for
+every sequence $x_n\to x_0$, which is the one used to pass a limit through a
+function.
+
 ::: {#def-edfc}
 
 Given two metric spaces $(\mathcal{X}, d_{\mathcal{X}})$ and $(\mathcal{Y}, d_{\mathcal{Y}})$, where $d_{\mathcal{X}}$ denotes the metric on the set $\mathcal{X}$ and $d_{\mathcal{Y}}$ is the metric on set $\mathcal{Y}$, a function $f:\mathcal{X}\mapsto \mathcal{Y}$ is called Lipschitz continuous if there exists a real constant $K\geq 0$ such that, for all $x_1,x_2\in \mathcal{X}$,
@@ -99,10 +162,46 @@ $K$-Lipschitz function.
 
 :::
 
+The three conditions stand in a strict hierarchy,
+
+$$
+\text{Lipschitz} \;\Longrightarrow\; \text{uniformly continuous} \;\Longrightarrow\; \text{continuous},
+$$ {#eq-continuity-chain}
+
+and neither implication reverses. Taking $\delta=\varepsilon/K$ in
+@eq-epsdelta proves the first, and the second is immediate from the
+definitions. For the failures: $f(x)=\sqrt{x}$ on $[0,1]$ is uniformly
+continuous but not Lipschitz, since its slope is unbounded near $0$; and
+$f(x)=x^2$ on ${\mathbb R}$ is continuous but not uniformly continuous, since
+the $\delta$ that works near the origin fails far from it. The distinction is
+not academic here --- a Lipschitz gradient is exactly the hypothesis under
+which gradient descent with a fixed step size is guaranteed to descend.
+
 ## Vector Space
 
 A vector space $\mathcal{V}$ is a set that is closed under finite vector addition and scalar multiplication. In machine learning applications, the scalars are usually members of real or complex values,
 in which case $\mathcal{V}$ is called a vector space over real numbers, or complex numbers.
+
+Stated in full, a vector space over a field ${\mathbb F}$ (for us ${\mathbb R}$
+or ${\mathbb C}$) is a set $\mathcal{V}$ with an addition and a scalar
+multiplication satisfying, for all ${\boldsymbol{u}},{\boldsymbol{v}},{\boldsymbol{w}}\in \mathcal{V}$ and
+$\alpha,\beta\in{\mathbb F}$:
+
+1.  ${\boldsymbol{u}}+{\boldsymbol{v}}={\boldsymbol{v}}+{\boldsymbol{u}}$ and $({\boldsymbol{u}}+{\boldsymbol{v}})+{\boldsymbol{w}}={\boldsymbol{u}}+({\boldsymbol{v}}+{\boldsymbol{w}})$;
+
+2.  there is a zero vector $\mathbf{0}$ with ${\boldsymbol{u}}+\mathbf{0}={\boldsymbol{u}}$, and each ${\boldsymbol{u}}$ has an inverse $-{\boldsymbol{u}}$ with ${\boldsymbol{u}}+(-{\boldsymbol{u}})=\mathbf{0}$;
+
+3.  $\alpha(\beta {\boldsymbol{u}})=(\alpha\beta){\boldsymbol{u}}$ and $1{\boldsymbol{u}}={\boldsymbol{u}}$;
+
+4.  $\alpha({\boldsymbol{u}}+{\boldsymbol{v}})=\alpha {\boldsymbol{u}}+\alpha {\boldsymbol{v}}$ and $(\alpha+\beta){\boldsymbol{u}}=\alpha {\boldsymbol{u}}+\beta {\boldsymbol{u}}$.
+
+A *subspace* of $\mathcal{V}$ is a subset that is itself a vector space under
+the same operations. Verifying the eight axioms again is unnecessary: a
+non-empty $\mathcal{W}\subset \mathcal{V}$ is a subspace precisely when it is
+closed under linear combination, that is when $\alpha {\boldsymbol{u}}+\beta {\boldsymbol{v}}\in
+\mathcal{W}$ for all ${\boldsymbol{u}},{\boldsymbol{v}}\in \mathcal{W}$ and all scalars
+$\alpha,\beta$. Every subspace contains $\mathbf{0}$, which is the quickest way
+to rule one out.
 
 For example, the Euclidean $n$-space ${\mathbb R}^n$ is called a real vector space, and ${\mathbb C}^n$ is called a complex vector space.
 In the $n$-dimensional Euclidean space ${\mathbb R}^n$, every element is represented by a list of $n$ real numbers, addition is component-wise, and scalar multiplication is multiplication on each term separately.
@@ -175,13 +274,60 @@ A norm $\|\cdot\|$ is a real-valued function defined on the vector space that ha
 
 :::
 
+### The $l_p$ norms {#sec-lp}
+
+The family we use throughout is the $l_p$ norms. For ${\boldsymbol{x}}\in{\mathbb R}^n$ and
+$p\geq 1$,
+
+$$
+\|{\boldsymbol{x}}\|_p = \left( \sum_{i=1}^n |x_i|^p \right)^{1/p} ,
+$$ {#eq-lpnorm}
+
+with the limiting case $\|{\boldsymbol{x}}\|_\infty = \lim_{p\to\infty}\|{\boldsymbol{x}}\|_p =
+\max_i |x_i|$. The cases $p=1$, $p=2$ and $p=\infty$ account for nearly every
+norm in this book: $\|\cdot\|_2$ is the induced norm of the Euclidean inner
+product, $\|\cdot\|_1$ is the sparsity-promoting surrogate of
+[the discussion of convexity](#sec-convex-sets-functions), and $\|\cdot\|_\infty$ is the dual norm of
+$\|\cdot\|_1$, as @tbl-conjugate records.
+
+The first two norm axioms are immediate from @eq-lpnorm. The third is
+Minkowski's inequality, $\|{\boldsymbol{x}}+{\boldsymbol{y}}\|_p \leq \|{\boldsymbol{x}}\|_p+\|{\boldsymbol{y}}\|_p$ for
+$p\geq 1$, which is where the restriction on $p$ enters.
+
+It is worth seeing that the restriction is real rather than a technicality.
+Define $\|{\boldsymbol{x}}\|_p$ by @eq-lpnorm for some $0<p<1$ --- say $p=1/2$ --- and take
+
+$$
+{\boldsymbol{x}}=\begin{bmatrix}1\\0\end{bmatrix},\qquad {\boldsymbol{y}}=\begin{bmatrix}0\\1\end{bmatrix}.
+$$
+
+Then $\|{\boldsymbol{x}}\|_{1/2}=\|{\boldsymbol{y}}\|_{1/2}=1$, while
+
+$$
+\|{\boldsymbol{x}}+{\boldsymbol{y}}\|_{1/2} = \left(1^{1/2}+1^{1/2}\right)^{2} = 4 > 2 = \|{\boldsymbol{x}}\|_{1/2}+\|{\boldsymbol{y}}\|_{1/2},
+$$
+
+so the triangle inequality fails and $\|\cdot\|_{1/2}$ is not a norm. The
+geometric statement of the same fact is that the set $\{{\boldsymbol{x}}: \|{\boldsymbol{x}}\|_p\leq
+1\}$ is convex for $p\geq1$ and non-convex for $p<1$, its faces bending in
+towards the origin. Such $\|\cdot\|_p$ are called *quasi-norms*, and they
+satisfy the triangle inequality only up to a constant.
+
+The non-convexity is exactly why they are used. The count of non-zero entries,
+written $\|{\boldsymbol{x}}\|_0$, is the quantity one actually wants to minimise in a
+sparse recovery problem, and minimising it is combinatorial. The quasi-norms
+with $p<1$ approximate $\|\cdot\|_0$ better than $\|\cdot\|_1$ does --- at the
+price of the convexity that makes $\|\cdot\|_1$ tractable. That trade is the
+subject of a large literature, and [the discussion of convexity](#sec-convex-sets-functions) explains what is
+lost when convexity goes.
+
 From the inner product, we can obtain the so-called induced norm:
 
 $$
 \|{\boldsymbol{x}}\|=\sqrt{\langle {\boldsymbol{x}},{\boldsymbol{x}}\rangle}.
 $$
 
-Similarly, the definition of the metric in @sec-metric informs us that a norm in a vector space $\mathcal{V}$ induces a metric, i.e.
+Similarly, the definition of the metric in [the metric space section](#sec-metric) informs us that a norm in a vector space $\mathcal{V}$ induces a metric, i.e.
 
 $$
 \begin{aligned}
@@ -197,6 +343,37 @@ $$
 |\langle {\boldsymbol{x}}, {\boldsymbol{y}}\rangle|  \leq \|{\boldsymbol{x}}\|\|{\boldsymbol{y}}\|.
 \end{aligned}
 $$ {#eq-cauchy}
+
+The proof is short enough to give, and the argument --- minimise a quadratic
+that is non-negative by construction --- recurs throughout the book.
+
+::: {.proof}
+
+If ${\boldsymbol{y}}=\mathbf{0}$ both sides vanish, so assume ${\boldsymbol{y}}\neq \mathbf{0}$ and
+take the real case. For every $t\in{\mathbb R}$,
+
+$$
+0 \leq \|{\boldsymbol{x}}-t{\boldsymbol{y}}\|^2 = \|{\boldsymbol{x}}\|^2 - 2t\langle {\boldsymbol{x}},{\boldsymbol{y}}\rangle + t^2\|{\boldsymbol{y}}\|^2 .
+$$
+
+The right-hand side is a quadratic in $t$ that is never negative, so its
+discriminant cannot be positive:
+$4\langle {\boldsymbol{x}},{\boldsymbol{y}}\rangle^2 - 4\|{\boldsymbol{x}}\|^2\|{\boldsymbol{y}}\|^2 \leq 0$, which is
+@eq-cauchy. Equivalently, substituting the minimiser
+$t^\star = \langle {\boldsymbol{x}},{\boldsymbol{y}}\rangle/\|{\boldsymbol{y}}\|^2$ gives
+$0 \leq \|{\boldsymbol{x}}\|^2 - \langle {\boldsymbol{x}},{\boldsymbol{y}}\rangle^2/\|{\boldsymbol{y}}\|^2$. For a complex
+inner product the same argument runs with $t$ chosen to align the phase of
+$\langle {\boldsymbol{x}},{\boldsymbol{y}}\rangle$. This concludes the proof.
+
+:::
+
+Equality holds if and only if $\|{\boldsymbol{x}}-t^\star{\boldsymbol{y}}\|=0$, that is if and only
+if ${\boldsymbol{x}}$ and ${\boldsymbol{y}}$ are linearly dependent. One consequence is that the
+induced norm really is a norm: expanding
+$\|{\boldsymbol{x}}+{\boldsymbol{y}}\|^2=\|{\boldsymbol{x}}\|^2+2\langle {\boldsymbol{x}},{\boldsymbol{y}}\rangle+\|{\boldsymbol{y}}\|^2$ and
+bounding the middle term by @eq-cauchy gives
+$\|{\boldsymbol{x}}+{\boldsymbol{y}}\|^2 \leq (\|{\boldsymbol{x}}\|+\|{\boldsymbol{y}}\|)^2$, which is the triangle
+inequality.
 
 ## Banach and Hilbert Space
 
@@ -268,9 +445,51 @@ The following are well-known examples of Hilbert spaces:
   $$ {#eq-L2}
 
 Among the various forms of the Hilbert space, the reproducing kernel Hilbert space (RKHS) is of particular interest
-in the classical machine learning literature, which will be explained later in this book.
+in the classical machine learning literature.
 Here, the readers are reminded that the RKHS is only a subset of the Hilbert space as shown in @fig-space, i.e.
 the Hilbert space is more general than the RKHS.
+
+What distinguishes an RKHS is that pointwise evaluation is well behaved. In a
+general function space, two functions can be close in norm yet differ wildly at
+a given point --- in $L^2({\mathbb R})$ the value $f(x)$ at a single $x$ is not
+even defined, since changing $f$ on a set of measure zero changes nothing.
+
+::: {#def-rkhs}
+
+A Hilbert space $\mathcal{H}$ of functions $f:\mathcal{X}\mapsto {\mathbb R}$
+is a *reproducing kernel Hilbert space* if for every $x\in\mathcal{X}$ the
+evaluation functional $\delta_x: f\mapsto f(x)$ is bounded, that is if there is
+a constant $C_x$ with $|f(x)|\leq C_x\|f\|_{\mathcal{H}}$ for all
+$f\in\mathcal{H}$.
+
+:::
+
+Boundedness is the whole of the definition, and the familiar machinery follows
+from it. By the Riesz representation theorem a bounded linear functional is an
+inner product against some element, so for each $x$ there exists
+$k_x\in\mathcal{H}$ with
+
+$$
+f(x) = \langle f, k_x \rangle_{\mathcal{H}}, \qquad \forall f \in \mathcal{H},
+$$ {#eq-reproducing}
+
+which is the *reproducing property*. Writing $k(x,y) := k_y(x) = \langle k_y,
+k_x\rangle_{\mathcal{H}}$ defines the *reproducing kernel*, a symmetric function
+that is positive definite: for any points $x_1,\ldots,x_m$ and any
+coefficients $c_1,\ldots,c_m$,
+
+$$
+\sum_{i,j} c_ic_j k(x_i,x_j) = \left\| \sum_i c_i k_{x_i} \right\|_{\mathcal{H}}^2 \geq 0 .
+$$
+
+The Moore--Aronszajn theorem is the converse, and it is what makes the notion
+useful: every symmetric positive-definite $k$ arises this way from exactly one
+RKHS. One may therefore choose a kernel and never construct the space at all,
+which is the content of the "kernel trick" --- the Gaussian kernel
+$k(x,y)=\exp(-\|x-y\|^2/2\sigma^2)$ being the standard example, with the
+polynomial kernel $k(x,y)=(\langle x,y\rangle+c)^d$ the other common one.
+The Gaussian kernel's RKHS is infinite-dimensional, so a finite inner product
+computation stands in for one in a space that cannot be written down.
 
 ### Basis and Frames
 
@@ -305,7 +524,10 @@ A set $\mathcal{B}$ is a basis of $\mathcal{V}$ if and only if every element of 
 The coefficients of this linear combination are referred to as expansion coefficients,
 or coordinates on $\mathcal{B}$ of the vector.
 The elements of a basis are called basis vectors.
-In general, for $m$-dimensional spaces, the number of basis vectors is $m$.
+Any two bases of the same vector space have the same number of elements, and
+that number is the *dimension* $\dim \mathcal{V}$. So the phrase
+"$m$-dimensional space" means exactly that every basis of it has $m$ elements,
+and a set of more than $m$ vectors in it is necessarily dependent.
 For example, when $\mathcal{V}={\mathbb R}^2$, the following two sets are some examples of a basis:
 
 $$
@@ -380,6 +602,39 @@ $$ {#eq-frame0}
 where $\alpha,\beta>0$ are called the frame bounds. If $\alpha=\beta$, then the frame is said to be tight.
 In fact, an orthonormal basis is a special case of a tight frame with $\alpha=\beta=1$, which is Parseval's identity. A general basis need not be a frame at all.
 
+The frame inequality says a redundant expansion loses nothing; what makes it
+usable is that the expansion can be inverted. Collect the frame vectors as the
+*analysis operator* $\Phi: \mathcal{H}\mapsto l^2(\Gamma)$, $(\Phi
+{\boldsymbol{f}})_k=\langle {\boldsymbol{f}},\phi_k\rangle$, whose adjoint $\Phi^*$ is the *synthesis
+operator* $\Phi^*{\boldsymbol{c}}=\sum_k c_k\phi_k$. Their composition is the *frame
+operator*
+
+$$
+S = \Phi^*\Phi, \qquad S{\boldsymbol{f}} = \sum_{k\in\Gamma} \langle {\boldsymbol{f}},\phi_k\rangle \phi_k .
+$$ {#eq-frameop}
+
+In this notation the frame inequality reads $\alpha I \preceq S \preceq \beta
+I$, so the lower bound $\alpha>0$ is exactly the statement that $S$ is
+invertible. Setting $\tilde\phi_k := S^{-1}\phi_k$, the *canonical dual frame*,
+and applying $S^{-1}$ to @eq-frameop gives the reconstruction formula
+
+$$
+{\boldsymbol{f}} = \sum_{k\in\Gamma} \langle {\boldsymbol{f}},\phi_k\rangle \tilde\phi_k
+    = \sum_{k\in\Gamma} \langle {\boldsymbol{f}},\tilde\phi_k\rangle \phi_k .
+$$ {#eq-framerecon}
+
+For a tight frame $S=\alpha I$, so $\tilde\phi_k=\alpha^{-1}\phi_k$ and the
+formula collapses to ${\boldsymbol{f}} = \alpha^{-1}\sum_k \langle
+{\boldsymbol{f}},\phi_k\rangle\phi_k$ --- no inverse to compute. This is why tight frames
+are the ones worth constructing, and with $\alpha=1$ it is the ordinary
+orthonormal expansion.
+
+Note that @eq-framerecon is not the only expansion of ${\boldsymbol{f}}$: when the frame is
+redundant the coefficients are not unique, and the canonical dual is the choice
+that gives the coefficient sequence of least $l^2$ norm. Choosing a different
+expansion --- the sparsest rather than the smallest --- is the starting point
+of sparse coding.
+
 ## Some Matrix Algebra
 
 In the following, we introduce some matrix algebra that is useful in understanding the materials in this book.
@@ -427,6 +682,41 @@ $$
 \mathcal{R}({\boldsymbol{A}})^\perp = \mathcal{N}({\boldsymbol{A}}^\top),\quad \mathcal{N}({\boldsymbol{A}})^\perp = \mathcal{R}({\boldsymbol{A}}^\top).
 $$ {#eq-RN}
 
+Both identities follow from the definitions in one line. A vector ${\boldsymbol{y}}$ is
+orthogonal to $\mathcal{R}({\boldsymbol{A}})$ exactly when $\langle {\boldsymbol{y}},{\boldsymbol{A}}{\boldsymbol{x}}\rangle=0$
+for all ${\boldsymbol{x}}$, and since $\langle {\boldsymbol{y}},{\boldsymbol{A}}{\boldsymbol{x}}\rangle = \langle
+{\boldsymbol{A}}^\top{\boldsymbol{y}},{\boldsymbol{x}}\rangle$, that holds for all ${\boldsymbol{x}}$ precisely when
+${\boldsymbol{A}}^\top{\boldsymbol{y}}=\mathbf{0}$. The second identity is the first applied to
+${\boldsymbol{A}}^\top$.
+
+These are the *four fundamental subspaces* of ${\boldsymbol{A}}\in{\mathbb R}^{m\times n}$.
+Writing $r=\mathrm{rank}({\boldsymbol{A}})$, their dimensions are
+
+$$
+\dim \mathcal{R}({\boldsymbol{A}}) = \dim \mathcal{R}({\boldsymbol{A}}^\top) = r, \qquad
+\dim \mathcal{N}({\boldsymbol{A}}) = n-r, \qquad
+\dim \mathcal{N}({\boldsymbol{A}}^\top) = m-r .
+$$ {#eq-fourdims}
+
+The first equality --- that the column rank and the row rank agree --- is what
+lets one speak of *the* rank at all. The second is the rank--nullity theorem,
+$\dim \mathcal{R}({\boldsymbol{A}}) + \dim \mathcal{N}({\boldsymbol{A}}) = n$: every dimension of the
+domain is either mapped somewhere or collapsed.
+
+Together with @eq-RN, @eq-fourdims says that ${\boldsymbol{A}}$ splits its domain and
+codomain into orthogonal pieces,
+
+$$
+{\mathbb R}^n = \mathcal{R}({\boldsymbol{A}}^\top) \oplus \mathcal{N}({\boldsymbol{A}}), \qquad
+{\mathbb R}^m = \mathcal{R}({\boldsymbol{A}}) \oplus \mathcal{N}({\boldsymbol{A}}^\top),
+$$ {#eq-fourdecomp}
+
+and that ${\boldsymbol{A}}$ maps the $r$-dimensional $\mathcal{R}({\boldsymbol{A}}^\top)$ bijectively
+onto the $r$-dimensional $\mathcal{R}({\boldsymbol{A}})$ while sending $\mathcal{N}({\boldsymbol{A}})$
+to zero. This is the picture behind the pseudo-inverse of [the pseudo-inverse](#sec-pseudoinverse):
+inverting the bijective part is the most that can be asked of a matrix that is
+not invertible.
+
 If a vector space $\mathcal{V}$ is Hilbert space, then it is known that
 for a subspace $\mathcal{S}\in \mathcal{V}$ and the vector ${\boldsymbol{y}}\in \mathcal{V}$, the point in $\mathcal{S}$ that is closest to ${\boldsymbol{y}}$ exists and is unique,
 and given by
@@ -458,6 +748,43 @@ where $\lambda$ is a scalar, termed the eigenvalue corresponding to ${\boldsymbo
 
 :::
 
+Equivalently, $\lambda$ is an eigenvalue when ${\boldsymbol{A}}-\lambda{\boldsymbol{I}}$ is singular,
+so the eigenvalues are the roots of the characteristic polynomial
+$\det({\boldsymbol{A}}-\lambda{\boldsymbol{I}})=0$. An $n\times n$ matrix therefore has $n$
+eigenvalues over ${\mathbb C}$, counted with multiplicity.
+
+If ${\boldsymbol{A}}$ has $n$ linearly independent eigenvectors, collecting them as the
+columns of ${\boldsymbol{V}}$ and the eigenvalues into a diagonal ${\boldsymbol {\Lambda}}$ turns
+the $n$ equations ${\boldsymbol{A}}{\boldsymbol{v}}_i=\lambda_i{\boldsymbol{v}}_i$ into the single statement
+${\boldsymbol{A}}{\boldsymbol{V}}={\boldsymbol{V}}{\boldsymbol {\Lambda}}$, and ${\boldsymbol{V}}$ is invertible, so
+
+$$
+{\boldsymbol{A}} = {\boldsymbol{V}}{\boldsymbol {\Lambda}}{\boldsymbol{V}}^{-1} .
+$$ {#eq-eigendecomp}
+
+Such an ${\boldsymbol{A}}$ is called *diagonalisable*. Not every matrix is: the
+independent eigenvectors may be fewer than $n$, as for
+$\left[\begin{smallmatrix}1&1\\0&1\end{smallmatrix}\right]$, which has the
+single eigenvalue $1$ and only one eigenvector direction.
+
+The symmetric case is both better behaved and the one we need. The *spectral
+theorem* states that a real symmetric ${\boldsymbol{A}}={\boldsymbol{A}}^\top$ --- or a Hermitian
+${\boldsymbol{A}}={\boldsymbol{A}}^H$ in the complex case --- is always diagonalisable, its
+eigenvalues are real, and its eigenvectors can be chosen orthonormal, so that
+@eq-eigendecomp becomes
+
+$$
+{\boldsymbol{A}} = {\boldsymbol{U}}{\boldsymbol {\Lambda}}{\boldsymbol{U}}^\top, \qquad {\boldsymbol{U}}^\top{\boldsymbol{U}}={\boldsymbol{I}} .
+$$ {#eq-spectral}
+
+This is the statement that gives meaning to the ordering of eigenvalues used
+for positive semidefinite operators later in this chapter, and it connects the
+eigen-decomposition to the SVD defined next: ${\boldsymbol{A}}^\top{\boldsymbol{A}}$ is symmetric and
+positive semidefinite for any ${\boldsymbol{A}}$, its eigenvectors are the right singular
+vectors of ${\boldsymbol{A}}$, and its eigenvalues are the squared singular values,
+$\lambda_i({\boldsymbol{A}}^\top{\boldsymbol{A}}) = \sigma_i({\boldsymbol{A}})^2$. The matrix norms defined below
+are written in exactly that form.
+
 We now define the singular value decomposition (SVD) of ${\boldsymbol{A}}$.
 
 ::: {#thm-ac06}
@@ -488,6 +815,57 @@ $$
 {{\mathcal P}}_{\mathcal{R}({\boldsymbol{A}})}= {\boldsymbol{U}}{\boldsymbol{U}}^\top,\quad & {{\mathcal P}}_{\mathcal{R}({\boldsymbol{A}}^\top)} = {\boldsymbol{V}}{\boldsymbol{V}}^\top.
 \end{aligned}
 $$
+
+### The Moore--Penrose pseudo-inverse {#sec-pseudoinverse}
+
+The decomposition @eq-fourdecomp says that ${\boldsymbol{A}}$ is a bijection from
+$\mathcal{R}({\boldsymbol{A}}^\top)$ onto $\mathcal{R}({\boldsymbol{A}})$, and inverting that
+bijection is what the pseudo-inverse does. In terms of the compact SVD
+${\boldsymbol{A}}={\boldsymbol{U}}{\boldsymbol {\Sigma}}{\boldsymbol{V}}^\top$,
+
+$$
+{\boldsymbol{A}}^\dagger := {\boldsymbol{V}}{\boldsymbol {\Sigma}}^{-1}{\boldsymbol{U}}^\top
+ = \sum_{k=1}^r \frac{1}{\sigma_k}{\boldsymbol{v}}_k{\boldsymbol{u}}_k^\top ,
+$$ {#eq-pinv}
+
+which is well defined because ${\boldsymbol {\Sigma}}$ collects only the $r$ non-zero
+singular values. When ${\boldsymbol{A}}$ is invertible, ${\boldsymbol{A}}^\dagger={\boldsymbol{A}}^{-1}$.
+
+Applying @eq-pinv to the projectors obtained above gives
+
+$$
+{\boldsymbol{A}}^\dagger {\boldsymbol{A}} = {\boldsymbol{V}}{\boldsymbol{V}}^\top = {{\mathcal P}}_{\mathcal{R}({\boldsymbol{A}}^\top)},
+\qquad
+{\boldsymbol{A}}{\boldsymbol{A}}^\dagger = {\boldsymbol{U}}{\boldsymbol{U}}^\top = {{\mathcal P}}_{\mathcal{R}({\boldsymbol{A}})} ,
+$$ {#eq-pinvproj}
+
+so neither product is the identity unless the corresponding null space is
+trivial. These two identities are half of the four *Penrose conditions*, which
+characterise ${\boldsymbol{A}}^\dagger$ uniquely as the matrix ${\boldsymbol{X}}$ satisfying
+
+$$
+{\boldsymbol{A}}{\boldsymbol{X}}{\boldsymbol{A}}={\boldsymbol{A}}, \qquad {\boldsymbol{X}}{\boldsymbol{A}}{\boldsymbol{X}}={\boldsymbol{X}}, \qquad
+({\boldsymbol{A}}{\boldsymbol{X}})^\top={\boldsymbol{A}}{\boldsymbol{X}}, \qquad ({\boldsymbol{X}}{\boldsymbol{A}})^\top={\boldsymbol{X}}{\boldsymbol{A}} .
+$$ {#eq-penrose}
+
+The reason the pseudo-inverse appears throughout inverse problems is the
+following. Consider $\min_{\boldsymbol{x}} \|{\boldsymbol{A}}{\boldsymbol{x}}-{\boldsymbol{b}}\|_2^2$, which need not have a
+unique solution and, if ${\boldsymbol{b}}\notin\mathcal{R}({\boldsymbol{A}})$, has no exact one. The
+residual is smallest when ${\boldsymbol{A}}{\boldsymbol{x}}$ is the projection of ${\boldsymbol{b}}$ onto
+$\mathcal{R}({\boldsymbol{A}})$, and among all ${\boldsymbol{x}}$ achieving it, adding any element of
+$\mathcal{N}({\boldsymbol{A}})$ changes nothing. Then
+
+$$
+{\boldsymbol{x}}^\star = {\boldsymbol{A}}^\dagger {\boldsymbol{b}}
+$$
+
+is the unique minimiser lying in $\mathcal{R}({\boldsymbol{A}}^\top)$, i.e. the
+least-squares solution of smallest norm. This is the first example in the book
+of a problem with no unique answer being made well posed by choosing among the
+solutions, and @eq-pinv shows the price: the small singular values sit in a
+denominator, so a $\sigma_k$ near zero amplifies whatever noise ${\boldsymbol{b}}$ carries
+in the direction ${\boldsymbol{u}}_k$. Every regularisation scheme in later chapters is,
+in one way or another, a response to that.
 
 Using the SVD, we can define the matrix norm.
 Among the various forms of matrix norms for a matrix ${\boldsymbol{X}}\in {\mathbb R}^{n\times n}$,
@@ -846,7 +1224,7 @@ For simplicity, we denote $\mathcal{A}\succeq 0$ (resp. $\mathcal{A}\succ 0$ ) f
 If $\mathcal{A}:{\mathbb C}^n \mapsto {\mathbb C}^n$, then ${\mathbb S}^{n}_{++}$ and ${\mathbb S}_{+}^n$ denote the set of $n\times n$ positive definite and positive semidefinite matrices, respectively.
 Here, the eigenvalues of positive semidefinite (resp. positive definite) are all real and non-negative (resp. positive).
 
-### Convex Sets, Convex Functions
+### Convex Sets, Convex Functions {#sec-convex-sets-functions}
 
 A function $f({\boldsymbol{x}})$ is a *convex function* if
 $\mathrm {dom}f$ is a convex set and
@@ -900,7 +1278,7 @@ Examples of concave functions that are often used in this textbook can be found 
 | log determinant | $\log \det({\boldsymbol{X}}), \quad {\boldsymbol{X}}\in  {\mathbb S}_{++}$ |  |
 : Examples of concave functions. {#tbl-example-concave}
 
-### Subdifferentials
+### Subdifferentials {#sec-subdifferentials}
 
 The *directional derivative* of $f$ at ${\boldsymbol{x}}\in \mathrm{dom}f$ in the direction of ${\boldsymbol{y}}\in \mathcal{H}$ is defined by
 
@@ -919,7 +1297,7 @@ $$
 
 If a function is differentiable, the convexity of a function can easily be checked using the first- and second-order differentiability, as stated in the following:
 
-::: {#sec-convexity}
+::: {#thm-convexity}
 
 Let $f:\mathcal{H}\mapsto  (-\infty, \infty]$ be proper. Suppose that $\mathrm{dom}f$ is open and convex, and $f$ is Gateaux differentiable on $\mathrm{dom}f$. Then, the following are equivalent:
 
@@ -931,10 +1309,40 @@ Let $f:\mathcal{H}\mapsto  (-\infty, \infty]$ be proper. Suppose that $\mathrm{d
 
 :::
 
+@thm-convexity uses the gradient only. When $f$ is twice differentiable there
+is a second characterisation, and it is usually the one that settles a concrete
+case.
+
+::: {#thm-secondorder}
+
+Let $f$ be twice differentiable with $\mathrm{dom}f$ open and convex. Then $f$
+is convex if and only if its Hessian is positive semidefinite everywhere,
+
+$$
+\nabla^2 f({\boldsymbol{x}}) \succeq 0, \qquad \forall {\boldsymbol{x}}\in \mathrm{dom}f .
+$$ {#eq-secondorder}
+
+:::
+
+On the real line this reads $f''(x)\geq 0$, the familiar test. Two cautions
+about the strict version. If $\nabla^2 f({\boldsymbol{x}}) \succ 0$ everywhere then $f$ is
+strictly convex, but the converse fails: $f(x)=x^4$ is strictly convex while
+$f''(0)=0$. And strict convexity is weaker than *strong convexity*, which asks
+for $\nabla^2 f({\boldsymbol{x}}) \succeq \mu {\boldsymbol{I}}$ with $\mu>0$ --- a uniform curvature
+bound that strict convexity does not provide, and the hypothesis under which
+gradient descent converges at a linear rate.
+
+As an example, take the quadratic $f({\boldsymbol{x}})=\tfrac12 {\boldsymbol{x}}^\top {\boldsymbol{Q}}{\boldsymbol{x}} -
+{\boldsymbol{b}}^\top{\boldsymbol{x}}$ with ${\boldsymbol{Q}}$ symmetric. Here $\nabla f({\boldsymbol{x}})={\boldsymbol{Q}}{\boldsymbol{x}}-{\boldsymbol{b}}$ and
+$\nabla^2 f({\boldsymbol{x}})={\boldsymbol{Q}}$, so $f$ is convex exactly when ${\boldsymbol{Q}}\succeq 0$,
+strongly convex exactly when ${\boldsymbol{Q}}\succ 0$, and in that case the minimiser is
+the solution of ${\boldsymbol{Q}}{\boldsymbol{x}}={\boldsymbol{b}}$. By @eq-spectral the eigenvalues of ${\boldsymbol{Q}}$
+decide all three questions at once.
+
 If the convergence in @eq-gateaux is uniform with respect to ${\boldsymbol{y}}$ on bounded sets, i.e.
 
 $$
-\lim_{\boldsymbol{0}\neq {\boldsymbol{y}}\rightarrow \boldsymbol{0}b} \frac{ f({\boldsymbol{x}}+{\boldsymbol{y}}) - f({\boldsymbol{x}}) - \langle {\boldsymbol{y}}, \nabla f({\boldsymbol{x}}) \rangle}{\|{\boldsymbol{y}}\|} = 0,
+\lim_{\boldsymbol{0}\neq {\boldsymbol{y}}\rightarrow \boldsymbol{0}} \frac{ f({\boldsymbol{x}}+{\boldsymbol{y}}) - f({\boldsymbol{x}}) - \langle {\boldsymbol{y}}, \nabla f({\boldsymbol{x}}) \rangle}{\|{\boldsymbol{y}}\|} = 0,
 $$ {#eq-frechet}
 
 then $f$ is *Frechet differentiable* and $\nabla f({\boldsymbol{x}})$ is called the *Frechet gradient* of $f$ at ${\boldsymbol{x}}$.
@@ -1203,7 +1611,7 @@ $$
 
 where ${\boldsymbol {\alpha}}=[\alpha_1,\cdots,\alpha_n]$ and ${\boldsymbol{\nu}}=[\nu_1,\cdots,\nu_p]$ are referred to as the *dual variables*
 or *Lagrangian multipliers*, ${\boldsymbol {\alpha}}\geq \mathbf{0}$ implies that each element is non-negative,
-and the Lagrangian $g({\boldsymbol {\alpha}},{\boldsymbol{\nu}})$ is defined by
+and the *Lagrangian dual function* $g({\boldsymbol {\alpha}},{\boldsymbol{\nu}})$ is defined by
 
 $$
 \begin{aligned}
@@ -1212,6 +1620,23 @@ $$
 $$
 
 :::
+
+Two properties hold with no assumption on the primal problem at all. First, $g$
+is concave, being a pointwise infimum of functions that are affine in
+$({\boldsymbol {\alpha}},{\boldsymbol{\nu}})$ --- so the dual problem is a concave maximisation, hence
+convex, even when the primal is not. Second, *weak duality*: for any feasible
+${\boldsymbol{x}}$ and any ${\boldsymbol {\alpha}}\geq \mathbf{0}$,
+
+$$
+g({\boldsymbol {\alpha}},{\boldsymbol{\nu}}) \;\leq\; f_0({\boldsymbol{x}}) + \sum_{i=1}^n \alpha_i f_i({\boldsymbol{x}}) + \sum_{j=1}^p \nu_j h_j({\boldsymbol{x}}) \;\leq\; f_0({\boldsymbol{x}}) ,
+$$ {#eq-weakduality}
+
+where the first inequality is the definition of the infimum and the second
+holds because $\alpha_i f_i({\boldsymbol{x}})\leq 0$ and $h_j({\boldsymbol{x}})=0$ at a feasible
+${\boldsymbol{x}}$. Taking the best on each side gives $d^\star \leq p^\star$, and the
+difference $p^\star - d^\star \geq 0$ is the *duality gap*. This is what makes
+the dual useful even when it is not tight: any feasible dual point certifies a
+lower bound on the primal optimum.
 
 One of the important findings in convex optimization theory is that if the primal problem is convex
 *and a constraint qualification holds* --- for example Slater's condition, which asks that some strictly
@@ -1226,9 +1651,33 @@ $$
 $$ {#eq-duality}
 
 where ${\boldsymbol{x}}^*$ and ${\boldsymbol {\alpha}}^*,{\boldsymbol{\nu}}^*$ are the optimal solutions for the primal and dual problems, respectively.
+i.e. the duality gap is zero.
 Often, the dual formulation is easier to solve than the primal problem.
-Additionally, there is also an interesting
-geometric interpretation, which will be explained later.
+
+When strong duality holds and the functions are differentiable, the primal and
+dual optima are characterised by the *Karush--Kuhn--Tucker* conditions: at
+${\boldsymbol{x}}^*$ and $({\boldsymbol {\alpha}}^*,{\boldsymbol{\nu}}^*)$,
+
+$$
+\begin{aligned}
+ f_i({\boldsymbol{x}}^*) &\leq 0, \quad h_j({\boldsymbol{x}}^*) = 0 && \text{(primal feasibility)},\\
+ \alpha_i^* &\geq 0 && \text{(dual feasibility)},\\
+ \alpha_i^* f_i({\boldsymbol{x}}^*) &= 0 && \text{(complementary slackness)},\\
+ \nabla f_0({\boldsymbol{x}}^*) + \sum_i \alpha_i^* \nabla f_i({\boldsymbol{x}}^*) + \sum_j \nu_j^* \nabla h_j({\boldsymbol{x}}^*) &= \mathbf{0} && \text{(stationarity)}.
+\end{aligned}
+$$ {#eq-kkt}
+
+Complementary slackness is the informative one: a constraint that is inactive
+at the optimum carries a zero multiplier, so the multipliers say which
+constraints are actually binding. For a convex problem satisfying Slater's
+condition the KKT conditions are necessary and sufficient, which turns a
+constrained problem into a system of equations and inequalities. Note that
+stationarity is the constrained analogue of $\nabla f = \mathbf{0}$, and that
+Fermat's rule of [the subdifferential section](#sec-subdifferentials) generalises it to the non-differentiable
+case.
+
+There is also an interesting geometric interpretation, which will be explained
+later in this book.
 
 ---
 

@@ -2,28 +2,13 @@
 
 
 <!--
-DRAFT seeded by scripts/promote.py from the strongest lec00 scribe note.
-Base note: test. Merge sources: test.
-
-This repository is public and this comment ships in the page source, so it
-carries no scores and no per-note criticism. Both live in
-drafts/lec00-merge.md, which .gitignore keeps out of the repository.
-
-Before this chapter is publishable:
-
-1. Fill the gaps listed in drafts/lec00-merge.md, which also says which of
-   the other notes covered each one.
-2. Resolve every suspected error in the worksheet against the lecture itself.
-3. Reconcile notation with the neighbouring chapters.
-4. Copy-edit. The scribe repository never penalised English fluency, so some
-   base notes need a real pass here.
-5. Replace this comment and the contributor list below with the final credit.
+Not a merged scribe chapter: the instructor wrote this one, from his own book,
+so that the lecture chapters can refer to the mathematics rather than restate
+it. The coverage gaps the grading passes reported against the first draft have
+been filled and the errors they found corrected; what is still outstanding is
+reconciling notation with the lecture chapters, which cannot be done until
+those exist.
 -->
-
-::: {.callout-important}
-## Draft
-This chapter is a merge in progress and has not been edited or checked.
-:::
 
 In this chapter, we briefly review the basic mathematical concepts that are required to understand
 the materials of this book.
@@ -1681,4 +1666,4 @@ later in this book.
 
 ---
 
-*Scribe notes for this lecture: test.*
+*Written by Jong Chul Ye.*

@@ -86,9 +86,10 @@ within a chapter and mostly consistent across chapters; where a chapter departs
 from earlier usage it says so at the start. A chapter still marked *not yet
 written* is one whose scribe notes have not been merged.
 
-The two references the course leans on throughout are Jong Chul Ye's *Geometry
-of Deep Learning* (Springer, 2022) and Lipman et al., *Flow Matching Guide and
-Code* ([arXiv:2412.06264](https://arxiv.org/abs/2412.06264)).
+The two references the course leans on throughout are Jong Chul Ye's
+[*Geometry of Deep Learning*](https://doi.org/10.1007/978-981-16-6046-7)
+(Springer, 2022) and Lipman et al., *Flow Matching Guide and Code*
+([arXiv:2412.06264](https://arxiv.org/abs/2412.06264)).
 
 ## Contributing
 

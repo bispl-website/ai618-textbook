@@ -1,5 +1,5 @@
 ---
-title: "Geometric GAN and Wasserstein GAN"
+title: "StyleGAN and Style Transfer"
 ---
 
 ::: {.callout-note}

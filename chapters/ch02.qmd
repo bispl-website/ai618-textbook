@@ -1,5 +1,5 @@
 ---
-title: "GAN, f-GAN and InfoGAN"
+title: "GAN and its Extensions: f-GAN, W-GAN, McGAN, Geometric GAN, LS-GAN"
 ---
 
 ::: {.callout-note}

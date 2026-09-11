@@ -1,5 +1,5 @@
 ---
-title: "Score-based Generative Models with SDEs"
+title: "Conditional Diffusion Models I"
 ---
 
 ::: {.callout-note}

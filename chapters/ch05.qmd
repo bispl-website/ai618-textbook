@@ -1,5 +1,5 @@
 ---
-title: "VAE, beta-VAE and Normalizing Flow"
+title: "Self-supervised Denoising: Noise2Noise, Noise2Self and Noise2Score"
 ---
 
 ::: {.callout-note}

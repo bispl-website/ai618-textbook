@@ -1,5 +1,5 @@
 ---
-title: "Self-supervised Denoising: Noise2Noise, Noise2Self and Noise2Score"
+title: "Denoising Diffusion Probabilistic Models"
 ---
 
 ::: {.callout-note}

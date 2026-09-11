@@ -31,17 +31,20 @@ run it.
 
 Five parts, following the course:
 
-**Optimal Transport, Adversarial and Latent Variable Models.** Monge and
-Kantorovich, duality, Wasserstein distances. Then GANs read through that lens
---- f-GAN, geometric GAN, W-GAN --- unpaired translation with CycleGAN and its
-optimal transport form, and the StyleGAN and StarGAN families. Then the
-likelihood side: the ELBO, VAE and $\beta$-VAE, normalizing flows. The part closes on
-self-supervised denoising, where Tweedie's formula turns denoising into score
-estimation and opens the door to everything that follows.
+**Optimal Transport, Adversarial and Latent Variable Models.** Statistical
+distances between distributions --- $f$-divergences, integral probability
+metrics --- and then optimal transport: Monge and Kantorovich, duality,
+Wasserstein distances. Then GANs read through that lens, from the original
+minimax objective out to f-GAN, W-GAN, McGAN, geometric GAN and LS-GAN,
+followed by style: style transfer and the StyleGAN family, unpaired translation
+with CycleGAN and its optimal transport form, and multi-domain translation.
+Then the likelihood side: the ELBO, VAE and $\beta$-VAE, normalizing flows. The
+part closes on self-supervised denoising, where Tweedie's formula turns
+denoising into score estimation and opens the door to everything that follows.
 
 **Diffusion Models.** DDPM and its variational bound, score-based models
 through the lens of stochastic differential equations, the probability flow
-ODE. Conditioning and guidance, latent diffusion, Schrodinger bridges,
+ODE. Conditioning and guidance across two chapters, latent diffusion, Schrodinger bridges,
 acceleration by high-order solvers and consistency models, and the applications
 that made the family matter: editing, inverse problems, video and 3D.
 

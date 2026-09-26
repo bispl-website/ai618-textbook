@@ -681,16 +681,8 @@ saturation values directly, and they agree with the bounds proved above.
 The last row is a useful consistency check on @prp-js-generator: dividing the
 saturation value $2 \log 2$ by the factor of two recovers exactly the bound
 $\log 2$ of @prp-js-bounded, attained precisely on mutually singular pairs.
-
-The Pearson row settles the one generator that the table of @sec-f-divergences
-lists but never evaluates. For $f(u) = (u-1)^{2}$ we have $f(0) = 1$ and
-$f'(\infty) = \lim_{u \to \infty} (u-1)^{2}/u = +\infty$, so $\chi^{2}$ joins
-the two Kullback--Leibler divergences among the generators that are infinite on
-singular pairs. Away from that case it is finite exactly when $P \ll Q$ with
-$dP/dQ \in L^{2}(Q)$, since
-$D_{\chi^{2}}(P \Vert Q) = \int (dP/dQ)^{2} dQ - 1$ --- a stronger demand than
-the mere absolute continuity that $D_{\mathrm{KL}}$ needs, and the reason
-$\chi^{2}$ plays no part in the generative models of this course.
+The Pearson $\chi^{2}$ row is the one generator the chapter tabulates but never
+works through; @sec-adv-chi2 does so.
 
 ### What this costs a generator
 
@@ -804,43 +796,15 @@ The name "dual-norm view" comes from reading @eq-ipm as a norm on the signed
 measure $\mu - \nu$. Probability measures pair with bounded functions by
 integration, so $\mu - \nu$ acts as a linear functional on the space of test
 functions; @eq-ipm is the operator norm of that functional, measured over the
-unit ball $\mathcal{F}$. Two remarks make that reading precise, and both are
-used later.
+unit ball $\mathcal{F}$. Different choices of $\mathcal{F}$ are different
+norms on the same object, and, as we are about to see, three familiar
+quantities are three choices. How literally that dual-norm reading may be
+taken, and which topology each choice induces, are examined in
+@sec-adv-dualnorm.
 
-First, $\mathcal{F}$ is always taken symmetric, $\mathcal{F} = -\mathcal{F}$.
-The absolute value in @eq-ipm may then be dropped, because $h$ and $-h$ both
-compete in the supremum:
-
-$$
-d_{\mathcal{F}}(\mu,\nu)
-  = \sup_{h \in \mathcal{F}} \left(
-      \int_{\mathcal{X}} h \, d\mu - \int_{\mathcal{X}} h \, d\nu \right) ,
-\qquad \mathcal{F} = -\mathcal{F} .
-$$ {#eq-ipm-symmetric}
-
-All three classes below are symmetric, and @eq-ipm-symmetric is what lets
-@thm-kantorovich-rubinstein, whose supremum carries no absolute value, be read
-off as an instance of @def-ipm.
-
-Second, the dual norm is literal only when $\mathcal{F}$ is the unit ball of a
-genuine norm: if $\lVert \cdot \rVert_{B}$ is a norm on a space $B$ of test
-functions and $\mathcal{F} = \{ h : \lVert h \rVert_{B} \leq 1 \}$, then
-$d_{\mathcal{F}}(\mu,\nu) = \lVert \mu - \nu \rVert_{B^{\ast}}$ exactly.
-That holds for the indicator and RKHS classes below. It does *not* hold for
-$\mathrm{Lip}_{1}$: the Lipschitz constant vanishes on constants, so it is a
-seminorm, and $\mathrm{Lip}_{1}$ is unbounded in any function norm. The dual
-reading is recovered by quotienting out the constants --- legitimate here
-because $\mu - \nu$ annihilates them, both measures having total mass $1$ ---
-or equivalently by normalising $\varphi(x_{0}) = 0$ at a base point.
-
-Different choices of $\mathcal{F}$ are different norms on the same object, and
-they induce genuinely different topologies on $\mathcal{P}(\mathcal{X})$: the
-indicators give total variation, the strongest of the three and the one in
-which @thm-saturation bites; the bounded-Lipschitz ball
-$\{ h : \lVert h \rVert_{\infty} + \mathrm{Lip}(h) \leq 1 \}$ metrises weak
-convergence; and $\mathrm{Lip}_{1}$ gives $W_{1}$, which metrises weak
-convergence too on a space of bounded diameter. Three familiar quantities are
-three choices, and we take them in turn.
+Throughout we take $\mathcal{F}$ symmetric, $\mathcal{F} = -\mathcal{F}$, as
+all three classes below are; the absolute value in @eq-ipm may then be dropped,
+since $h$ and $-h$ both compete in the supremum.
 
 ::: {#prp-ipm-metric}
 ## Integral probability metrics are pseudo-metrics
@@ -981,49 +945,9 @@ $\lVert m_{\mu} - m_{\nu} \rVert^{2}
 @eq-mmd-expanded is what makes the maximum mean discrepancy practical: it is
 written entirely in terms of expectations of the kernel, so it can be estimated
 from two samples without any density estimate and without solving the
-supremum. Given $x_{1},\dots,x_{m} \sim \mu$ and $y_{1},\dots,y_{n} \sim \nu$
-independently, replacing each expectation in @eq-mmd-expanded by the
-corresponding sample average gives the $V$-statistic
-
-$$
-\widehat{\mathrm{MMD}}^{2}_{V}
-  = \frac{1}{m^{2}} \sum_{i,j} k(x_{i},x_{j})
-  - \frac{2}{mn} \sum_{i,j} k(x_{i},y_{j})
-  + \frac{1}{n^{2}} \sum_{i,j} k(y_{i},y_{j}) .
-$$ {#eq-mmd-v}
-
-It is biased upwards, because the diagonal terms $k(x_{i},x_{i})$ estimate
-$\mathbb{E}_{x,x'}k(x,x')$ with $x' = x$ rather than with an independent copy.
-Deleting the diagonals gives the $U$-statistic
-
-$$
-\widehat{\mathrm{MMD}}^{2}_{U}
-  = \frac{1}{m(m-1)} \sum_{i \neq j} k(x_{i},x_{j})
-  - \frac{2}{mn} \sum_{i,j} k(x_{i},y_{j})
-  + \frac{1}{n(n-1)} \sum_{i \neq j} k(y_{i},y_{j}) ,
-$$ {#eq-mmd-u}
-
-which is unbiased for $\mathrm{MMD}^{2}$ but is no longer a squared norm and so
-can come out negative when the two distributions agree. Both need
-$O\bigl((m+n)^{2}\bigr)$ kernel evaluations, which is what keeps the maximum
-mean discrepancy to moderate batch sizes and is the practical reason it is
-usually preferred as a *test* statistic rather than a training loss at scale.
-
-Whether the maximum mean discrepancy separates distributions at all is a
-property of the kernel and not of the estimator. Call $k$ *characteristic* if
-the mean embedding $\mu \mapsto m_{\mu}$ is injective on
-$\mathcal{P}(\mathcal{X})$; by @prp-ipm-metric this is exactly the condition
-under which $\mathrm{MMD}(\mu,\nu) = 0$ if and only if $\mu = \nu$, that is,
-under which @eq-mmd is a metric rather than a pseudo-metric. For a
-translation-invariant kernel on $\mathbb{R}^{d}$ the condition can be read off
-the spectrum: Bochner's theorem writes
-$k(x,y) = \int_{\mathbb{R}^{d}} e^{i \langle \omega, x-y \rangle} \,
-d\Lambda(\omega)$ for a finite non-negative spectral measure $\Lambda$, and $k$
-is characteristic exactly when $\mathrm{supp}(\Lambda) = \mathbb{R}^{d}$ ---
-the embedding then sees every frequency of the characteristic function of
-$\mu - \nu$. The Gaussian kernel qualifies, its spectral measure being Gaussian
-and so of full support; a band-limited kernel does not, and is blind to
-whatever the two distributions do above its cutoff.
+supremum. The two standard estimators, and the condition on the kernel under
+which the maximum mean discrepancy separates distributions at all, are in
+@sec-adv-mmd.
 
 This is the discrepancy behind the moment-matching generative models, and it is
 where McGAN and MMD-GAN enter in the next lecture.
@@ -1153,20 +1077,8 @@ $W_{p}(\mu_{1},\mu_{3}) \leq W_{p}(\mu_{1},\mu_{2}) + W_{p}(\mu_{2},\mu_{3})$.
 By Jensen's inequality $W_{1} \leq W_{p}$ for $p \geq 1$, so the Wasserstein
 distances form an increasing family. We will use $W_{1}$ almost exclusively,
 because it is the one with a dual formulation simple enough to implement.
-
-Being a metric is not by itself the property that matters for @sec-synthesis;
-*which* topology the metric induces is. On a Polish space,
-$W_{p}(\mu_{n},\mu) \to 0$ holds if and only if $\mu_{n} \to \mu$ weakly
-**and** $\int d(x,x_{0})^{p} d\mu_{n} \to \int d(x,x_{0})^{p} d\mu$ for some
---- equivalently any --- base point $x_{0}$. On a space of bounded diameter,
-which is the case for images in a fixed pixel range, the moment condition is
-automatic and $W_{p}$ metrises weak convergence outright. No $f$-divergence
-does this. Total variation and the Jensen--Shannon divergence induce a strictly
-finer topology, and @exm-parallel-lines below exhibits the gap concretely: a
-sequence converging weakly on which both stay pinned at their saturation
-values. That mismatch of topologies, rather than the arithmetic of any one
-example, is the precise sense in which the Wasserstein distance "still varies
-smoothly" where the others do not.
+Being a metric is not by itself what matters for @sec-synthesis --- *which*
+topology the metric induces is --- and @sec-adv-topology settles that.
 
 ## Monge's formulation {#sec-monge}
 
@@ -1221,58 +1133,10 @@ $\nu(\{1\}) = \tfrac{1}{2}$, a contradiction.
 The obstruction is plain once seen: a map sends the single atom at $0$
 somewhere, and it can only send it to one place, whereas $\nu$ requires the
 mass to end up in two. A map cannot split mass. This is exactly what
-@sec-kantorovich repairs.
+@sec-kantorovich repairs. Atoms are the crudest obstruction but not the
+only one; @sec-adv-monge gives two more, one of which shows that a non-atomic
+$\mu$ does not make Monge's problem well behaved either.
 
-Atoms are the crudest obstruction but not the only one, and it is worth seeing
-a second, because the atomic example can leave the impression that a non-atomic
-$\mu$ makes Monge's problem well behaved. It does not. The feasible set
-$\{T : T_{\#}\mu = \nu\}$ is not closed in any topology for which
-$\mathbb{M}$ is continuous, so the infimum in @eq-monge can fail to be attained
-even when feasible maps are plentiful.
-
-::: {#exm-monge-not-attained}
-## An infimum with no minimiser
-Work in $\mathbb{R}^{2}$ with $c(x,y) = \lVert x-y \rVert$. Let $\mu$ be
-uniform on the segment $\{0\} \times [0,1]$, and let
-$\nu = \tfrac{1}{2}\nu_{-} + \tfrac{1}{2}\nu_{+}$ with $\nu_{\pm}$ uniform
-on $\{\pm 1\} \times [0,1]$. Then $\inf_{T} \mathbb{M}(T) = 1$, but
-$\mathbb{M}(T) > 1$ for every feasible $T$, so no optimal map exists.
-:::
-
-::: {.proof}
-*Every feasible map costs more than $1$.* A point $x = (0,t)$ and a point
-$y = (\pm 1, s)$ of the target are at distance
-$\sqrt{1 + (t-s)^{2}} \geq 1$, with equality only when $s = t$. So
-$\mathbb{M}(T) \geq 1$ always, with equality only if $T$ preserves height
-$\mu$-almost everywhere. But a height-preserving $T$ pushes $\mu$ onto a set
-meeting each height at most once, whereas $\nu$ charges two points at every
-height; such a $T$ is not feasible. Hence $\mathbb{M}(T) > 1$.
-
-*The infimum is $1$.* Cut $[0,1]$ into $2n$ strips of height $1/(2n)$ and let
-$T_{n}$ send the odd strips to the left target and the even strips to the
-right, each by the affine map onto the corresponding strip of height $1/n$.
-Each half receives mass $n \cdot \tfrac{1}{2n} = \tfrac{1}{2}$ spread
-uniformly, so $T_{n}$ is feasible, and it moves any point vertically by at most
-$1/n$, so $\mathbb{M}(T_{n}) \leq \sqrt{1 + n^{-2}} \to 1$.
-
-*Kantorovich attains it.* The plan that splits each $(0,t)$ evenly between
-$(-1,t)$ and $(1,t)$ is a coupling of cost exactly $1$.
-:::
-
-This example also sharpens @eq-relaxation: there the inequality is strict with
-*both* sides finite, which @prp-monge-fails, whose right-hand side is an
-infimum over the empty set, could not show.
-
-Failure of uniqueness is a third phenomenon, independent of the other two. For
-Monge's original cost $c(x,y) = \lVert x-y \rVert$, take
-$\mu = \mathrm{Uniform}[0,1]$ and $\nu = \mathrm{Uniform}[2,3]$ on the line.
-Every target point lies to the right of every source point, so
-$\lvert x-y \rvert = y-x$ and every feasible map has the same cost
-$\mathbb{E}_{\nu}[y] - \mathbb{E}_{\mu}[x] = 2$. All of them are optimal,
-including the monotone map of @thm-monge-1d and including maps that reverse
-order. Uniqueness, when it holds, comes from strict convexity of the cost ---
-it is the quadratic cost of @thm-brenier that forces a single answer, not
-transport as such.
 
 When a solution does exist, the one-dimensional case can be written down.
 
@@ -1408,45 +1272,10 @@ Three things improve at once. The objective is linear in $\pi$, the
 constraint set $\Pi(\mu,\nu)$ is convex --- a convex combination of couplings
 is a coupling, since @eq-marginals is linear in $\pi$ --- and on finite spaces
 the whole thing is a linear program, the observation for which Kantorovich
-shared the 1975 Nobel Memorial Prize in Economics.
+shared the 1975 Nobel Memorial Prize in Economics. @sec-adv-lp writes that
+program out, and reads off it both why the dual of @sec-duality is the
+practical formulation and when the relaxation costs nothing.
 
-That linear program is worth displaying rather than leaving inside the proof of
-@thm-kantorovich-duality, because it is what a solver actually receives and
-because its shape is the reason the dual of @sec-duality, and not
-@eq-kantorovich itself, is what generative models implement. Take
-$\mathcal{X} = \{x_{1},\dots,x_{m}\}$ and
-$\mathcal{Y} = \{y_{1},\dots,y_{n}\}$, collect the marginals into vectors
-$\mu \in \mathbb{R}^{m}$ and $\nu \in \mathbb{R}^{n}$ and the costs into the
-matrix $C_{ij} = c(x_{i},y_{j})$. A coupling is a matrix
-$\Pi \in \mathbb{R}^{m \times n}$ and @eq-kantorovich reads
-
-$$
-\min_{\Pi \geq 0} \; \langle C, \Pi \rangle = \sum_{i,j} C_{ij}\Pi_{ij}
-\qquad \text{subject to} \qquad
-\Pi \mathbf{1}_{n} = \mu , \quad \Pi^{\top} \mathbf{1}_{m} = \nu .
-$$ {#eq-kantorovich-lp}
-
-The feasible set of @eq-kantorovich-lp is the transportation polytope of $\mu$
-and $\nu$: non-empty, compact and convex. It carries $mn$ non-negative
-variables against only $m+n$ equality constraints, one of which is redundant,
-since summing either family returns the total mass $1$; so $m+n-1$ are
-independent. That imbalance is the whole of computational optimal transport.
-The primal holds a variable for every *pair* of points, the dual of
-@sec-duality one per point, and once $m$ and $n$ reach the tens of thousands
-only the second can be stored at all.
-
-The polytope also settles when Monge and Kantorovich agree. Suppose $m = n$ and
-both marginals are uniform, $\mu = \nu = \tfrac{1}{n}\mathbf{1}_{n}$. The
-feasible set is then $\tfrac{1}{n}\mathcal{B}_{n}$, where $\mathcal{B}_{n}$ is
-the Birkhoff polytope of doubly stochastic matrices. By the Birkhoff--von
-Neumann theorem the extreme points of $\mathcal{B}_{n}$ are exactly the
-permutation matrices, and a linear objective on a compact convex polytope
-attains its minimum at an extreme point. So an optimal plan may be taken to be
-$\tfrac{1}{n}P_{\sigma}$ for a permutation $\sigma$ --- that is, to be induced
-by a map after all, and @eq-relaxation holds with equality. The relaxation
-costs nothing for discrete measures with equal atom weights; it earns its keep
-in the unequal and continuous cases, which are the ones
-@prp-monge-fails and @exm-monge-not-attained describe.
 
 ::: {#prp-monge-ge-kantorovich}
 ## The relaxation is genuine
@@ -1622,76 +1451,6 @@ equality of the two optimal values. The passage from finite spaces to Polish
 spaces is by approximation and is given in Villani, Theorem 1.3.
 :::
 
-Two things that last sentence hides are used later, so we state them.
-
-*What the general theorem needs.* Strong duality in @eq-ot-duality holds whenever
-$\mathcal{X}$ and $\mathcal{Y}$ are Polish and $c$ is lower semicontinuous and
-bounded below. Neither continuity of $c$ nor finiteness of the optimal value is
-required. The proof is not a limit of the finite argument above; it is a
-Fenchel--Rockafellar duality in the pair
-$\bigl( C_{b}(\mathcal{X} \times \mathcal{Y}),
-\mathcal{M}(\mathcal{X} \times \mathcal{Y}) \bigr)$, with the lower
-semicontinuous $c$ approached from below by bounded continuous costs.
-
-*When the supremum is attained.* @eq-ot-duality is written with a supremum and not
-a maximum deliberately: optimal potentials need not exist. They do exist, and
-are then called Kantorovich potentials as in @def-c-transform, under a mild
-domination hypothesis --- it is enough that $c$ be continuous and that
-$c(x,y) \leq a(x) + b(y)$ for some $a \in L^{1}(\mu)$ and $b \in L^{1}(\nu)$.
-Both costs used in this chapter satisfy it whenever the measures have the
-moments @def-wasserstein assumes, since
-$\lVert x-y \rVert \leq \lVert x \rVert + \lVert y \rVert$ and
-$\tfrac{1}{2}\lVert x-y \rVert^{2} \leq \lVert x \rVert^{2} + \lVert y
-\rVert^{2}$. This is the hypothesis that licenses @thm-brenier to begin by
-taking optimal potentials as given.
-
-Duality constrains the optimal plans themselves and not only the optimal value.
-The weak-duality computation above integrated an inequality; once the two
-optimal values agree, that inequality has nowhere left to hide.
-
-::: {#prp-complementary-slackness}
-## Complementary slackness
-Let $\pi$ be optimal for @eq-kantorovich and $(\varphi,\psi)$ optimal for
-@eq-ot-duality, with the common value finite. Then
-
-$$
-\varphi(x) + \psi(y) = c(x,y)
-\qquad \text{for } \pi\text{-almost every } (x,y) ,
-$$ {#eq-slackness}
-
-so $\pi$ is concentrated on the set where the dual constraint is active. When
-$\psi = \varphi^{c}$, that set is the $c$-superdifferential of $\varphi$.
-:::
-
-::: {.proof}
-The function $c(x,y) - \varphi(x) - \psi(y)$ is non-negative by the definition
-of $\Phi_{c}$, and its integral against $\pi$ is
-$\mathbb{K}(\pi) - \mathbb{J}(\varphi,\psi)$, which vanishes by @eq-ot-duality. A
-non-negative function with zero integral is zero almost everywhere.
-:::
-
-@eq-slackness is the engine of every structural result about optimal plans; it
-is what @thm-brenier uses to turn a coupling into a map. It also has a
-consequence that mentions no potentials at all. If $\pi$ is optimal then
-$\mathrm{supp}(\pi)$ is **$c$-cyclically monotone**: for every finite family
-$(x_{1},y_{1}),\dots,(x_{N},y_{N})$ in the support and every permutation
-$\sigma$ of $\{1,\dots,N\}$,
-
-$$
-\sum_{i=1}^{N} c(x_{i},y_{i})
-  \; \leq \; \sum_{i=1}^{N} c\bigl( x_{i}, y_{\sigma(i)} \bigr) .
-$$ {#eq-cyclical-monotonicity}
-
-The proof is one line from @eq-slackness: summing the equality over the family
-gives $\sum_{i} c(x_{i},y_{i}) = \sum_{i}\varphi(x_{i}) + \sum_{i}\psi(y_{i})$,
-the right-hand side is unchanged by reindexing $\psi$ along $\sigma$, and
-$\varphi(x_{i}) + \psi(y_{\sigma(i)}) \leq c(x_{i},y_{\sigma(i)})$ term by
-term. In words: no finite reshuffling of destinations among the pairs the plan
-actually uses can lower the bill. For $c$ continuous and real-valued the
-converse holds as well --- a coupling with $c$-cyclically monotone support is
-optimal --- so @eq-cyclical-monotonicity characterises optimality with no
-reference to the dual problem.
-
 The dual constraint couples $\varphi$ and $\psi$, but only in one direction:
 for a fixed $\varphi$ there is a best possible $\psi$, and it can be written
 down.
@@ -1710,33 +1469,6 @@ $$ {#eq-c-transform}
 A function $\varphi$ is called $c$-concave if $\varphi = \psi^{c}$ for some
 $\psi$. Optimal $\varphi$ and $\psi$ are called Kantorovich potentials.
 :::
-
-Two instances are worth having in hand before the general theory, because the
-chapter uses both. For $c(x,y) = \lVert x-y \rVert$ the $c$-transform of a
-$1$-Lipschitz function is simply its negative; that is
-@lem-ctransform-lipschitz below, and it is what makes the Wasserstein-1 dual
-implementable. For the quadratic cost
-$c(x,y) = \tfrac{1}{2}\lVert x-y \rVert^{2}$ the $c$-transform is the Legendre
-transform wearing a disguise. Put
-$u(x) = \tfrac{1}{2}\lVert x \rVert^{2} - \varphi(x)$ and expand the square:
-
-$$
-\varphi^{c}(y)
-  = \inf_{x} \Bigl\{ \tfrac{1}{2}\lVert x-y \rVert^{2} - \varphi(x) \Bigr\}
-  = \tfrac{1}{2}\lVert y \rVert^{2}
-    - \sup_{x} \bigl\{ \langle x,y \rangle - u(x) \bigr\}
-  = \tfrac{1}{2}\lVert y \rVert^{2} - u^{\ast}(y) .
-$$ {#eq-c-transform-quadratic}
-
-So $\varphi$ is $c$-concave for the quadratic cost exactly when
-$u = \tfrac{1}{2}\lVert \cdot \rVert^{2} - \varphi$ is convex and lower
-semicontinuous: applying @eq-c-transform-quadratic twice turns $c$-concavity of
-$\varphi$ into the identity $u = u^{\ast\ast}$, which is the Fenchel--Moreau
-theorem. It is worth registering that what appears is *convexity* of $u$ and
-not concavity --- the $c$-transform reverses order, and the
-$\tfrac{1}{2}\lVert \cdot \rVert^{2}$ absorbs the sign. This identification is
-the entire change of variables of @thm-brenier, which carries it out in a
-single line.
 
 ::: {#prp-dual-reduction}
 ## The dual is a supremum over one potential
@@ -1866,9 +1598,11 @@ probability metric $d_{\mathcal{F}}$ with
 $\mathcal{F} = \mathrm{Lip}_{1}(\mathcal{X})$ --- the case promised in
 @sec-ipm and left unproved there. One step is needed to match the two
 expressions, since @def-ipm carries an absolute value and @eq-kr does not, and
-it is the symmetry recorded at @eq-ipm-symmetric: $\mathrm{Lip}_{1}$ is closed
-under $\varphi \mapsto -\varphi$, so the supremum of the signed difference
-already equals the supremum of its absolute value. The two families of statistical distance
+it is the symmetry assumed in @sec-ipm: $\mathrm{Lip}_{1}$ is closed under
+$\varphi \mapsto -\varphi$, so the supremum of the signed difference already
+equals the supremum of its absolute value.
+
+The two families of statistical distance
 introduced in this chapter, one built from density ratios and one built from
 transport cost, meet at this single identity: $W_{1}$ is simultaneously the
 cheapest way to move mass and the most a $1$-Lipschitz test function can tell
@@ -1919,21 +1653,20 @@ $$
 \langle x, y \rangle \leq u(x) + v(y) ,
 $$ {#eq-fenchel-young}
 
-which is precisely the Fenchel--Young inequality for the pair $u, v$. This
-change of variables is exactly @eq-c-transform-quadratic: in the new variables
-the $c$-transform of @def-c-transform *is* the Legendre transform, the relation
-$\psi = \varphi^{c}$ reading $v = u^{\ast}$. By @prp-dual-reduction the
-supremum may be restricted to $c$-concave $\varphi$, which by the discussion
-following @def-c-transform says precisely that $u$ may be taken convex and
-lower semicontinuous with $u = v^{\ast}$.
+which is precisely the Fenchel--Young inequality for the pair $u, v$. In
+these variables the $c$-transform of @def-c-transform is the Legendre
+transform, the relation $\psi = \varphi^{c}$ reading $v = u^{\ast}$; this is
+worked out in @sec-adv-legendre. By @prp-dual-reduction the supremum may be
+restricted to $c$-concave $\varphi$, which says here that $u$ may be taken
+convex and lower semicontinuous with $u = v^{\ast}$.
 
-Let $\pi$ be an optimal coupling and $(\varphi,\psi)$ optimal potentials; these
-exist because $\tfrac{1}{2}\lVert x-y \rVert^{2} \leq \lVert x \rVert^{2} +
-\lVert y \rVert^{2}$ is dominated in the sense required after
-@thm-kantorovich-duality, the two measures having finite second moments. By
-@prp-complementary-slackness the dual constraint is active $\pi$-almost
-everywhere, so @eq-fenchel-young holds with equality for $\pi$-almost every
-$(x,y)$:
+Let $\pi$ be an optimal coupling and $(\varphi,\psi)$ optimal potentials, which
+exist for this cost because $\tfrac{1}{2}\lVert x-y \rVert^{2} \leq
+\lVert x \rVert^{2} + \lVert y \rVert^{2}$ and both measures have finite second
+moments; @sec-adv-duality states the hypothesis in general. Weak duality was an
+integrated inequality, and equality of the two optimal values forces the
+non-negative integrand $c - \varphi - \psi$ to vanish $\pi$-almost everywhere.
+So @eq-fenchel-young holds with equality for $\pi$-almost every $(x,y)$:
 
 $$
 \langle x,y \rangle = u(x) + v(y) .
@@ -2154,18 +1887,9 @@ Take $D$ to be an integral probability metric and one obtains the alternatives.
 W-GAN takes $\mathcal{F} = \mathrm{Lip}_{1}$ and optimises the dual in
 @eq-kr, which is why its critic is Lipschitz-constrained and why its loss
 remains informative when the supports are disjoint --- by
-@exm-parallel-lines it still reports $\lvert \theta \rvert$. What upgrades that
-example into a statement about training is the topological fact recorded in
-@sec-wasserstein: $W_{1}$ metrises weak convergence on a space of bounded
-diameter, whereas total variation and the Jensen--Shannon divergence induce a
-strictly finer topology. If $G_{\theta}(z)$ is locally Lipschitz in $\theta$,
-uniformly in $z$ up to an integrable envelope, then $\theta \mapsto
-\mu_{\theta}$ is weakly continuous, and therefore $\theta \mapsto
-W_{1}(\mu_{\theta}, p_{\text{data}})$ is continuous everywhere and, being
-locally Lipschitz, differentiable almost everywhere. No such statement is
-available for $D_{\mathrm{JS}}$, which by @thm-saturation is locally constant
-wherever the supports separate. This is Theorem 1 of Arjovsky, Chintala and
-Bottou, and it is the reason the loss was worth changing. McGAN and MMD-GAN
+@exm-parallel-lines it still reports $\lvert \theta \rvert$. The general statement behind that
+example --- that the loss is continuous in $\theta$, where the Jensen--Shannon
+one is not --- is @sec-adv-continuity. McGAN and MMD-GAN
 take $\mathcal{F}$ to be a moment class or an RKHS ball and use
 @eq-mmd-expanded, which is estimable directly from two samples and needs no
 inner maximisation at all.
@@ -2200,6 +1924,388 @@ that a generative model is a transport of one measure onto another --- rather
 than a likelihood to be maximised --- is the thread that runs through the
 diffusion, flow matching and Schrodinger bridge lectures in the rest of the
 course.
+
+## Advanced topics {#sec-advanced}
+
+The chapter above follows the lecture. This section collects material that the
+lecture did not cover but that the development above leans on or leaves
+open: a divergence the tables list without evaluating, the two estimators that
+make the maximum mean discrepancy usable, the linear-programming form of the
+Kantorovich problem, the hypotheses under which duality survives the passage to
+Polish spaces, and the topological facts that turn @exm-parallel-lines from an
+example into a theorem about training. Each subsection is self-contained and
+none is needed to follow the main line.
+
+### Where the Pearson chi-squared divergence is finite {#sec-adv-chi2}
+
+The generator table of @sec-f-divergences lists $f(u) = (u-1)^{2}$, and the
+saturation table of @sec-saturation gives its row, but neither is worked
+through in the chapter. Here $f(0) = 1$ and
+$f'(\infty) = \lim_{u \to \infty} (u-1)^{2}/u = +\infty$, so by
+@thm-saturation the Pearson $\chi^{2}$ divergence is $+\infty$ on mutually
+singular pairs, joining the two Kullback--Leibler divergences rather than the
+bounded generators.
+
+Away from that case,
+
+$$
+D_{\chi^{2}}(P \Vert Q)
+  = \int \left( \frac{dP}{dQ} - 1 \right)^{2} dQ
+  = \int \left( \frac{dP}{dQ} \right)^{2} dQ \; - \; 1 ,
+$$ {#eq-chi-squared}
+
+so $\chi^{2}$ is finite exactly when $P \ll Q$ **and** $dP/dQ \in L^{2}(Q)$.
+That is a strictly stronger demand than the absolute continuity
+$D_{\mathrm{KL}}$ needs, and it is why $\chi^{2}$ plays no part in the
+generative models of this course: the situation of @sec-saturation defeats it
+even more thoroughly than the others.
+
+### How literal is the dual-norm reading? {#sec-adv-dualnorm}
+
+@def-ipm was introduced as the norm of the signed measure $\mu - \nu$
+measured over a unit ball. The reading is exact for two of the three classes of
+@sec-ipm and only approximate for the third, and the difference is worth
+pinning down because it is the reason
+@thm-kantorovich-rubinstein needs a normalisation.
+
+If $\lVert \cdot \rVert_{B}$ is a genuine norm on a space $B$ of test
+functions and $\mathcal{F} = \{ h : \lVert h \rVert_{B} \leq 1 \}$, then
+
+$$
+d_{\mathcal{F}}(\mu,\nu) = \lVert \mu - \nu \rVert_{B^{\ast}}
+$$ {#eq-ipm-dual-norm}
+
+by the definition of the dual norm. The indicator class and the RKHS ball of
+@prp-mmd are of this kind. The class $\mathrm{Lip}_{1}$ is not: the Lipschitz
+constant vanishes on constant functions, so it is a seminorm rather than a
+norm, and $\mathrm{Lip}_{1}$ is unbounded in any function norm --- it contains
+$\varphi + t$ for every real $t$. The dual reading is recovered by quotienting
+out the constants, which is legitimate here because $\mu - \nu$ annihilates
+them, both measures having total mass $1$; equivalently, by normalising
+$\varphi(x_{0}) = 0$ at a base point, which is what one does in practice when
+implementing @eq-kr.
+
+The choice of $\mathcal{F}$ also fixes a topology on $\mathcal{P}(\mathcal{X})$,
+and the three are genuinely different:
+
+| $\mathcal{F}$ | Metric | Topology induced |
+|---|---|---|
+| indicators $\mathbf{1}_{A}$ | total variation | strictly finer than weak; the one @thm-saturation bites in |
+| $\{ h : \lVert h \rVert_{\infty} + \mathrm{Lip}(h) \leq 1 \}$ | bounded-Lipschitz | weak convergence |
+| $\mathrm{Lip}_{1}$ | $W_{1}$ | weak convergence, on a space of bounded diameter |
+
+The second row is the Dudley metric. The third is what @sec-adv-topology takes
+up in general, and the gap between the first row and the other two is the whole
+argument of @sec-synthesis.
+
+### Estimating the maximum mean discrepancy {#sec-adv-mmd}
+
+@eq-mmd-expanded writes $\mathrm{MMD}^{2}$ entirely in terms of expectations
+of the kernel, which is what makes it usable: no density estimate and no inner
+maximisation. Given $x_{1},\dots,x_{m} \sim \mu$ and
+$y_{1},\dots,y_{n} \sim \nu$ independently, replacing each expectation by the
+corresponding sample average gives the $V$-statistic
+
+$$
+\widehat{\mathrm{MMD}}^{2}_{V}
+  = \frac{1}{m^{2}} \sum_{i,j} k(x_{i},x_{j})
+  - \frac{2}{mn} \sum_{i,j} k(x_{i},y_{j})
+  + \frac{1}{n^{2}} \sum_{i,j} k(y_{i},y_{j}) .
+$$ {#eq-mmd-v}
+
+It is biased upwards, because the diagonal terms $k(x_{i},x_{i})$ estimate
+$\mathbb{E}_{x,x'}k(x,x')$ with $x' = x$ rather than with an independent copy.
+Deleting the diagonals gives the $U$-statistic
+
+$$
+\widehat{\mathrm{MMD}}^{2}_{U}
+  = \frac{1}{m(m-1)} \sum_{i \neq j} k(x_{i},x_{j})
+  - \frac{2}{mn} \sum_{i,j} k(x_{i},y_{j})
+  + \frac{1}{n(n-1)} \sum_{i \neq j} k(y_{i},y_{j}) ,
+$$ {#eq-mmd-u}
+
+which is unbiased for $\mathrm{MMD}^{2}$ but is no longer a squared norm, so a
+single estimate can come out negative when the two distributions agree. Both
+need $O\bigl((m+n)^{2}\bigr)$ kernel evaluations. That quadratic cost is what
+keeps the maximum mean discrepancy to moderate batch sizes, and is the
+practical reason it is more often used as a two-sample *test* statistic than as
+a training loss at scale.
+
+Whether the maximum mean discrepancy separates distributions at all is a
+property of the kernel and not of the estimator. Call $k$ **characteristic** if
+the mean embedding $\mu \mapsto m_{\mu}$ is injective on
+$\mathcal{P}(\mathcal{X})$; by @prp-ipm-metric this is exactly the condition
+under which $\mathrm{MMD}(\mu,\nu) = 0$ if and only if $\mu = \nu$, that is,
+under which @eq-mmd is a metric and not merely a pseudo-metric. For a
+translation-invariant kernel on $\mathbb{R}^{d}$ the condition can be read off
+the spectrum. Bochner's theorem writes
+
+$$
+k(x,y) = \int_{\mathbb{R}^{d}}
+  e^{i \langle \omega, \, x-y \rangle} \, d\Lambda(\omega)
+$$ {#eq-bochner}
+
+for a finite non-negative spectral measure $\Lambda$, and $k$ is characteristic
+exactly when $\mathrm{supp}(\Lambda) = \mathbb{R}^{d}$: the embedding then sees
+every frequency of the characteristic function of $\mu - \nu$, so no non-zero
+difference can be invisible. The Gaussian kernel qualifies, its spectral
+measure being Gaussian and hence of full support. A band-limited kernel does
+not, and is blind to whatever the two distributions do above its cutoff.
+
+### The topology of the Wasserstein distance {#sec-adv-topology}
+
+@thm-wp-metric establishes that $W_{p}$ is a metric. That alone is not the
+property @sec-synthesis relies on; what matters is which notion of convergence
+it defines. On a Polish space,
+
+$$
+W_{p}(\mu_{n},\mu) \to 0
+\iff
+\mu_{n} \to \mu \ \text{weakly}
+\ \ \text{and} \ \
+\int d(x,x_{0})^{p} d\mu_{n} \to \int d(x,x_{0})^{p} d\mu
+$$ {#eq-wp-topology}
+
+for some --- equivalently any --- base point $x_{0}$. On a space of bounded
+diameter, which is the case for images confined to a fixed pixel range, the
+moment condition is automatic and $W_{p}$ metrises weak convergence outright.
+
+No $f$-divergence does this. Total variation and the Jensen--Shannon
+divergence induce a strictly finer topology, and @exm-parallel-lines is the gap
+made concrete: $\mu_{\theta} \to \mu_{0}$ weakly as $\theta \to 0$, yet both
+stay pinned at their saturation values until the instant $\theta = 0$. That
+mismatch of topologies, rather than the arithmetic of any single example, is
+the precise sense in which the Wasserstein distance "still varies smoothly"
+where the others do not, and @sec-adv-continuity turns it into a statement
+about training.
+
+### Two further ways Monge's problem fails {#sec-adv-monge}
+
+@prp-monge-fails rules out a transport map by an atom: a map cannot split
+mass. It is easy to read that as the only difficulty, and to conclude that a
+non-atomic $\mu$ makes @eq-monge well behaved. It does not. The feasible set
+$\{T : T_{\#}\mu = \nu\}$ is not closed in any topology for which $\mathbb{M}$
+is continuous, so the infimum can fail to be attained even when feasible maps
+are plentiful.
+
+::: {#exm-monge-not-attained}
+## An infimum with no minimiser
+Work in $\mathbb{R}^{2}$ with $c(x,y) = \lVert x-y \rVert$. Let $\mu$ be
+uniform on the segment $\{0\} \times [0,1]$, and let
+$\nu = \tfrac{1}{2}\nu_{-} + \tfrac{1}{2}\nu_{+}$ with $\nu_{\pm}$ uniform
+on $\{\pm 1\} \times [0,1]$. Then $\inf_{T} \mathbb{M}(T) = 1$, but
+$\mathbb{M}(T) > 1$ for every feasible $T$, so no optimal map exists.
+:::
+
+::: {.proof}
+*Every feasible map costs more than $1$.* A point $x = (0,t)$ and a point
+$y = (\pm 1, s)$ of the target are at distance
+$\sqrt{1 + (t-s)^{2}} \geq 1$, with equality only when $s = t$. So
+$\mathbb{M}(T) \geq 1$ always, with equality only if $T$ preserves height
+$\mu$-almost everywhere. But a height-preserving $T$ pushes $\mu$ onto a set
+meeting each height at most once, whereas $\nu$ charges two points at every
+height; such a $T$ is not feasible. Hence $\mathbb{M}(T) > 1$.
+
+*The infimum is $1$.* Cut $[0,1]$ into $2n$ strips of height $1/(2n)$ and let
+$T_{n}$ send the odd strips to the left target and the even strips to the
+right, each by the affine map onto the corresponding strip of height $1/n$.
+Each half receives mass $n \cdot \tfrac{1}{2n} = \tfrac{1}{2}$ spread
+uniformly, so $T_{n}$ is feasible, and it moves any point vertically by at most
+$1/n$, so $\mathbb{M}(T_{n}) \leq \sqrt{1 + n^{-2}} \to 1$.
+
+*Kantorovich attains it.* The plan that splits each $(0,t)$ evenly between
+$(-1,t)$ and $(1,t)$ is a coupling of cost exactly $1$.
+:::
+
+This example also sharpens @eq-relaxation: there the inequality is strict with
+*both* sides finite, which @prp-monge-fails, whose right-hand side is an
+infimum over the empty set, could not show.
+
+Failure of uniqueness is a third phenomenon, independent of the other two. For
+Monge's original cost $c(x,y) = \lVert x-y \rVert$, take
+$\mu = \mathrm{Uniform}[0,1]$ and $\nu = \mathrm{Uniform}[2,3]$ on the line.
+Every target point lies to the right of every source point, so
+$\lvert x-y \rvert = y-x$ and every feasible map has the same cost
+$\mathbb{E}_{\nu}[y] - \mathbb{E}_{\mu}[x] = 2$. All of them are optimal,
+including the monotone map of @thm-monge-1d and including maps that reverse
+order. Uniqueness, when it holds, comes from strict convexity of the cost ---
+it is the quadratic cost of @thm-brenier that forces a single answer, not
+transport as such.
+
+### The Kantorovich problem as a linear program {#sec-adv-lp}
+
+On finite spaces @eq-kantorovich is a linear program, and it is worth
+displaying rather than leaving inside the proof of @thm-kantorovich-duality: it
+is what a solver actually receives, and its shape is the reason the dual of
+@sec-duality, and not the primal, is what generative models implement. Take
+$\mathcal{X} = \{x_{1},\dots,x_{m}\}$ and
+$\mathcal{Y} = \{y_{1},\dots,y_{n}\}$, collect the marginals into vectors
+$\mu \in \mathbb{R}^{m}$ and $\nu \in \mathbb{R}^{n}$ and the costs into the
+matrix $C_{ij} = c(x_{i},y_{j})$. A coupling is a matrix
+$\Pi \in \mathbb{R}^{m \times n}$ and @eq-kantorovich reads
+
+$$
+\min_{\Pi \geq 0} \; \langle C, \Pi \rangle = \sum_{i,j} C_{ij}\Pi_{ij}
+\qquad \text{subject to} \qquad
+\Pi \mathbf{1}_{n} = \mu , \quad \Pi^{\top} \mathbf{1}_{m} = \nu .
+$$ {#eq-kantorovich-lp}
+
+The feasible set of @eq-kantorovich-lp is the transportation polytope of $\mu$
+and $\nu$: non-empty, compact and convex. It carries $mn$ non-negative
+variables against only $m+n$ equality constraints, one of which is redundant,
+since summing either family returns the total mass $1$; so $m+n-1$ are
+independent. That imbalance is the whole of computational optimal transport.
+The primal holds a variable for every *pair* of points, the dual of
+@sec-duality one per point, and once $m$ and $n$ reach the tens of thousands
+only the second can be stored at all.
+
+The polytope also settles when Monge and Kantorovich agree. Suppose $m = n$ and
+both marginals are uniform, $\mu = \nu = \tfrac{1}{n}\mathbf{1}_{n}$. The
+feasible set is then $\tfrac{1}{n}\mathcal{B}_{n}$, where $\mathcal{B}_{n}$ is
+the Birkhoff polytope of doubly stochastic matrices. By the Birkhoff--von
+Neumann theorem the extreme points of $\mathcal{B}_{n}$ are exactly the
+permutation matrices, and a linear objective on a compact convex polytope
+attains its minimum at an extreme point. So an optimal plan may be taken to be
+$\tfrac{1}{n}P_{\sigma}$ for a permutation $\sigma$ --- that is, to be induced
+by a map after all, and @eq-relaxation holds with equality. The relaxation
+costs nothing for discrete measures with equal atom weights; it earns its keep
+in the unequal and continuous cases, which are the ones
+@prp-monge-fails and @exm-monge-not-attained describe.
+
+### Duality beyond finite spaces {#sec-adv-duality}
+
+The proof of @thm-kantorovich-duality settles strong duality on finite spaces
+and defers the rest to a citation. Two things that citation hides are worth
+stating; a consequence for the optimal plans themselves follows in
+@sec-adv-slackness.
+
+*What the general theorem needs.* Strong duality in @eq-ot-duality holds whenever
+$\mathcal{X}$ and $\mathcal{Y}$ are Polish and $c$ is lower semicontinuous and
+bounded below. Neither continuity of $c$ nor finiteness of the optimal value is
+required. The proof is not a limit of the finite argument above; it is a
+Fenchel--Rockafellar duality in the pair
+$\bigl( C_{b}(\mathcal{X} \times \mathcal{Y}),
+\mathcal{M}(\mathcal{X} \times \mathcal{Y}) \bigr)$, with the lower
+semicontinuous $c$ approached from below by bounded continuous costs.
+
+*When the supremum is attained.* @eq-ot-duality is written with a supremum and not
+a maximum deliberately: optimal potentials need not exist. They do exist, and
+are then called Kantorovich potentials as in @def-c-transform, under a mild
+domination hypothesis --- it is enough that $c$ be continuous and that
+$c(x,y) \leq a(x) + b(y)$ for some $a \in L^{1}(\mu)$ and $b \in L^{1}(\nu)$.
+Both costs used in this chapter satisfy it whenever the measures have the
+moments @def-wasserstein assumes, since
+$\lVert x-y \rVert \leq \lVert x \rVert + \lVert y \rVert$ and
+$\tfrac{1}{2}\lVert x-y \rVert^{2} \leq \lVert x \rVert^{2} + \lVert y
+\rVert^{2}$. This is the hypothesis that licenses @thm-brenier to begin by
+taking optimal potentials as given.
+
+### Complementary slackness and cyclical monotonicity {#sec-adv-slackness}
+
+Duality constrains the optimal plans themselves and not only the optimal value.
+The weak-duality computation in @thm-kantorovich-duality integrated an
+inequality; once the two optimal values agree, that inequality has nowhere left
+to hide.
+
+::: {#prp-complementary-slackness}
+## Complementary slackness
+Let $\pi$ be optimal for @eq-kantorovich and $(\varphi,\psi)$ optimal for
+@eq-ot-duality, with the common value finite. Then
+
+$$
+\varphi(x) + \psi(y) = c(x,y)
+\qquad \text{for } \pi\text{-almost every } (x,y) ,
+$$ {#eq-slackness}
+
+so $\pi$ is concentrated on the set where the dual constraint is active. When
+$\psi = \varphi^{c}$, that set is the $c$-superdifferential of $\varphi$.
+:::
+
+::: {.proof}
+The function $c(x,y) - \varphi(x) - \psi(y)$ is non-negative by the definition
+of $\Phi_{c}$, and its integral against $\pi$ is
+$\mathbb{K}(\pi) - \mathbb{J}(\varphi,\psi)$, which vanishes by @eq-ot-duality. A
+non-negative function with zero integral is zero almost everywhere.
+:::
+
+@eq-slackness is the engine of every structural result about optimal plans; it
+is what @thm-brenier uses to turn a coupling into a map. It also has a
+consequence that mentions no potentials at all. If $\pi$ is optimal then
+$\mathrm{supp}(\pi)$ is **$c$-cyclically monotone**: for every finite family
+$(x_{1},y_{1}),\dots,(x_{N},y_{N})$ in the support and every permutation
+$\sigma$ of $\{1,\dots,N\}$,
+
+$$
+\sum_{i=1}^{N} c(x_{i},y_{i})
+  \; \leq \; \sum_{i=1}^{N} c\bigl( x_{i}, y_{\sigma(i)} \bigr) .
+$$ {#eq-cyclical-monotonicity}
+
+The proof is one line from @eq-slackness: summing the equality over the family
+gives $\sum_{i} c(x_{i},y_{i}) = \sum_{i}\varphi(x_{i}) + \sum_{i}\psi(y_{i})$,
+the right-hand side is unchanged by reindexing $\psi$ along $\sigma$, and
+$\varphi(x_{i}) + \psi(y_{\sigma(i)}) \leq c(x_{i},y_{\sigma(i)})$ term by
+term. In words: no finite reshuffling of destinations among the pairs the plan
+actually uses can lower the bill. For $c$ continuous and real-valued the
+converse holds as well --- a coupling with $c$-cyclically monotone support is
+optimal --- so @eq-cyclical-monotonicity characterises optimality with no
+reference to the dual problem.
+
+### The c-transform for the quadratic cost {#sec-adv-legendre}
+
+For $c(x,y) = \lVert x-y \rVert$ the $c$-transform of a $1$-Lipschitz
+function is simply its negative, which is @lem-ctransform-lipschitz. For the
+quadratic cost it is the Legendre transform wearing a disguise, and that
+identification is the whole of the change of variables in @thm-brenier.
+
+$c(x,y) = \tfrac{1}{2}\lVert x-y \rVert^{2}$ the $c$-transform is the Legendre
+transform wearing a disguise. Put
+$u(x) = \tfrac{1}{2}\lVert x \rVert^{2} - \varphi(x)$ and expand the square:
+
+$$
+\varphi^{c}(y)
+  = \inf_{x} \Bigl\{ \tfrac{1}{2}\lVert x-y \rVert^{2} - \varphi(x) \Bigr\}
+  = \tfrac{1}{2}\lVert y \rVert^{2}
+    - \sup_{x} \bigl\{ \langle x,y \rangle - u(x) \bigr\}
+  = \tfrac{1}{2}\lVert y \rVert^{2} - u^{\ast}(y) .
+$$ {#eq-c-transform-quadratic}
+
+So $\varphi$ is $c$-concave for the quadratic cost exactly when
+$u = \tfrac{1}{2}\lVert \cdot \rVert^{2} - \varphi$ is convex and lower
+semicontinuous: applying @eq-c-transform-quadratic twice turns $c$-concavity of
+$\varphi$ into the identity $u = u^{\ast\ast}$, which is the Fenchel--Moreau
+theorem. It is worth registering that what appears is *convexity* of $u$ and
+not concavity --- the $c$-transform reverses order, and the
+$\tfrac{1}{2}\lVert \cdot \rVert^{2}$ absorbs the sign. This identification is
+the entire change of variables of @thm-brenier, which carries it out in a
+single line.
+
+### Continuity of the Wasserstein loss {#sec-adv-continuity}
+
+@exm-parallel-lines shows one generator, with one parameter, on which $W_{1}$
+carries a gradient and the $f$-divergences do not. The general statement rests
+on @sec-adv-topology: $W_{1}$ metrises weak convergence on a space of bounded
+diameter, whereas total variation and the Jensen--Shannon divergence induce a
+strictly finer topology.
+
+Suppose $G_{\theta}(z)$ is locally Lipschitz in $\theta$, uniformly in $z$ up
+to an integrable envelope --- a condition any feed-forward network with
+Lipschitz activations satisfies. Then $\theta \mapsto \mu_{\theta}$ is
+continuous for weak convergence, so by @eq-wp-topology
+
+$$
+\theta \mapsto W_{1}(\mu_{\theta}, p_{\text{data}})
+$$ {#eq-w1-in-theta}
+
+is continuous everywhere and, being locally Lipschitz, differentiable almost
+everywhere. Gradient descent on it is therefore well posed wherever it is run.
+
+No such statement is available for $D_{\mathrm{JS}}$. By @thm-saturation it is
+locally constant wherever the supports separate, which by the dimension count
+of @sec-saturation is essentially everywhere; it is differentiable almost
+everywhere too, but with derivative zero, which is worse than useless. This is
+Theorem 1 of Arjovsky, Chintala and Bottou, and it is the reason the loss was
+worth changing.
+
 
 ## Appendix: proof of the Radon--Nikodym theorem {#sec-appendix-rn}
 

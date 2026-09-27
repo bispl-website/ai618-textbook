@@ -1,0 +1,155 @@
+<!--
+  The page contents used to sit docked on the right for the whole scroll. It
+  took a column the text could have used, and at the prose measure thirteen of
+  chapter 1's ninety-six display equations needed a horizontal scrollbar. The
+  contents are now a panel behind a button at the top right, the body column
+  takes the space back, and an equation that does not fit the measure may run
+  past it.
+
+  The panel is Quarto's own #quarto-margin-sidebar, repositioned rather than
+  moved: re-parenting the <nav> stops the scroll-spy that highlights the
+  section being read. It is offset with `margin-top` because `top` on this
+  element resolves to 0 whatever is declared -- Quarto's stylesheet and its
+  script both set it, and an `!important` override did not take.
+
+  HTML only. The PDF build never includes this file.
+-->
+<style>
+  /* Give the margin column back to the text. The leading columns are copied
+     from Quarto's own `body.floating` template so the chapter list on the
+     left keeps its space; only the body column grows and the trailing margin
+     columns collapse. */
+  #quarto-margin-sidebar { display: none; }
+
+  @media (min-width: 992px) {
+    body.toc-float #quarto-content.page-columns {
+      grid-template-columns:
+        [screen-start] 1.5em
+        [screen-start-inset] 5fr
+        [page-start] minmax(25px, 50px)
+        [page-start-inset] minmax(50px, 150px)
+        [body-start-outset] minmax(25px, 50px)
+        [body-start] 1.5em
+        [body-content-start] minmax(500px, calc(1150px - 3em))
+        [body-content-end] 1.5em
+        [body-end body-end-outset page-end-inset page-end] 5fr
+        [screen-end-inset] 1.5em [screen-end];
+    }
+    body.toc-float main.content { margin-inline: auto; }
+  }
+
+  /* The same argument as .quarto-float-tbl in theme.scss, for display maths.
+     An equation may run past the prose measure, centred on it, and scrolls
+     only if it still does not fit. The viewport guard keeps it clear of the
+     chapter list on the left. */
+  .katex-display {
+    width: max-content;
+    max-width: min(105ch, calc(100vw - 24rem));
+    overflow-x: auto;
+    overflow-y: hidden;
+    position: relative;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  .callout .katex-display { max-width: 100%; }
+
+  #toc-float-button {
+    position: fixed;
+    top: 0.65rem;
+    right: 1rem;
+    z-index: 1051;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.7rem;
+    font-size: 0.85rem;
+    line-height: 1.2;
+    color: var(--bs-body-color, #373a3c);
+    background: var(--bs-body-bg, #fff);
+    border: 1px solid rgba(0, 0, 0, 0.18);
+    border-radius: 0.375rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    cursor: pointer;
+  }
+  #toc-float-button:hover { background: rgba(0, 0, 0, 0.04); }
+  #toc-float-button[aria-expanded="true"] {
+    background: rgba(0, 0, 0, 0.06);
+    border-color: rgba(0, 0, 0, 0.3);
+  }
+  @media (max-width: 575.98px) { #toc-float-button .toc-float-label { display: none; } }
+
+  #toc-float-backdrop { position: fixed; inset: 0; z-index: 1040; background: transparent; }
+
+  body.toc-open #quarto-margin-sidebar {
+    display: block !important;
+    position: fixed !important;
+    right: 1rem !important;
+    left: auto !important;
+    margin-top: 3.1rem !important;
+    width: min(360px, calc(100vw - 2rem)) !important;
+    max-height: calc(100vh - 4.6rem) !important;
+    overflow-y: auto !important;
+    z-index: 1050 !important;
+    padding: 0.9rem 1.1rem 1.1rem;
+    background: var(--bs-body-bg, #fff);
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    border-radius: 0.5rem;
+    box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.18);
+  }
+  body.toc-open #quarto-margin-sidebar #toc-title,
+  body.toc-open #quarto-margin-sidebar .toc-title { margin-top: 0; }
+</style>
+
+<script>
+  (function () {
+    var sidebar = document.getElementById("quarto-margin-sidebar");
+    if (!sidebar || !sidebar.querySelector("nav#TOC, nav[role='doc-toc']")) return;
+
+    document.body.classList.add("toc-float");
+
+    var button = document.createElement("button");
+    button.id = "toc-float-button";
+    button.type = "button";
+    button.setAttribute("aria-expanded", "false");
+    button.setAttribute("aria-controls", "quarto-margin-sidebar");
+    button.title = "Table of contents";
+    button.innerHTML =
+      '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">' +
+      '<path d="M2 3.5h2v2H2v-2zm4 .25h8v1.5H6v-1.5zM2 7h2v2H2V7zm4 .25h8v1.5H6v-1.5zM2 10.5h2v2H2v-2zm4 .25h8v1.5H6v-1.5z"/>' +
+      "</svg><span class=\"toc-float-label\">Contents</span>";
+    document.body.appendChild(button);
+
+    var backdrop = null;
+
+    function close() {
+      document.body.classList.remove("toc-open");
+      button.setAttribute("aria-expanded", "false");
+      if (backdrop) { backdrop.remove(); backdrop = null; }
+    }
+
+    function open() {
+      document.body.classList.add("toc-open");
+      button.setAttribute("aria-expanded", "true");
+      backdrop = document.createElement("div");
+      backdrop.id = "toc-float-backdrop";
+      backdrop.addEventListener("click", close);
+      document.body.appendChild(backdrop);
+      var active = sidebar.querySelector("a.active");
+      if (active) active.scrollIntoView({ block: "nearest" });
+    }
+
+    button.addEventListener("click", function (e) {
+      e.stopPropagation();
+      document.body.classList.contains("toc-open") ? close() : open();
+    });
+
+    // Choosing an entry ends the interaction, so get out of the way.
+    sidebar.addEventListener("click", function (e) {
+      if (e.target.closest("a")) close();
+    });
+
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") close();
+    });
+  })();
+</script>

@@ -41,17 +41,34 @@
   /* The same argument as .quarto-float-tbl in theme.scss, for display maths.
      An equation may run past the prose measure, centred on it, and scrolls
      only if it still does not fit. The viewport guard keeps it clear of the
-     chapter list on the left. */
+     chapter list on the left.
+
+     The width is definite rather than max-content. KaTeX puts the equation
+     number in a .katex-tag absolutely positioned at the right edge of
+     .katex-html, so a box that shrink-wraps the equation puts the number on
+     top of it -- which is what a max-content box did to all forty-seven
+     numbered equations in this chapter. */
   .katex-display {
-    width: max-content;
-    max-width: min(105ch, calc(100vw - 24rem));
+    width: min(105ch, calc(100vw - 24rem));
+    max-width: none;
     overflow-x: auto;
     overflow-y: hidden;
     position: relative;
     left: 50%;
     transform: translateX(-50%);
   }
-  .callout .katex-display { max-width: 100%; }
+  .callout .katex-display { width: 100%; }
+
+  /* Reserve the number's column. Making .katex and .katex-html static moves
+     the tag's containing block out to .katex-display, so the padding below is
+     space the equation cannot grow into: the gutter holds however wide the
+     equation is, and a wider one scrolls instead of running underneath.
+     Browsers without :has fall back to the centred box above, where the
+     number still clears the equation but by less. */
+  .katex-display:has(.katex-tag) { padding-right: 4.5rem; }
+  .katex-display:has(.katex-tag) > .katex,
+  .katex-display:has(.katex-tag) > .katex > .katex-html { position: static; }
+  .katex-display:has(.katex-tag) .katex-tag { position: absolute; right: 0; }
 
   #toc-float-button {
     position: fixed;

@@ -48,7 +48,16 @@ $$ {#eq-gan}
 
 $V$ is the log-likelihood of a binary classifier that labels real samples 1
 and generated samples 0. The discriminator maximises it and the generator
-minimises it. In practice the game is played by alternating stochastic
+minimises it.
+
+![The game of @eq-gan before the algebra. A counterfeiter learns to print
+money that a policeman will accept, and the policeman learns to tell the
+forgeries from the real notes; neither is given the answer, and each improves
+only because the other does. The generator is the counterfeiter and the
+discriminator is the policeman. From the course slides
+[17].](figures/lec02/slides-gan-game.png){#fig-gan-game width=70%}
+
+ In practice the game is played by alternating stochastic
 gradient steps: $k$ ascent steps on the discriminator, then one descent step
 on the generator. Writing the second expectation over $x = G(z)$,
 
@@ -465,7 +474,18 @@ Gaussian $Q$ gives a squared error.
 
 On MNIST the categorical code aligns with digit class (about 5% error as an
 unsupervised classifier) and the continuous codes with rotation and stroke
-width [8]. Mutual information is invariant under invertible reparametrisations
+width [8].
+
+![What the InfoGAN term buys, on MNIST. Each row fixes the noise $z$ and
+sweeps one latent code across its range. (a) In InfoGAN the categorical code
+moves along the digit classes, and the sweep is a clean change of one factor.
+(b) In a plain GAN the same coordinate of the latent vector has no such
+meaning, and the sweep wanders. This is the latent traversal that
+@sec-adv-infogan describes as the standard of evidence for a disentangled
+code. From the course slides [17], after Chen et al.
+[8].](figures/lec02/slides-infogan-mnist.png){#fig-infogan-mnist width=95%}
+
+ Mutual information is invariant under invertible reparametrisations
 of $c$, though, so the objective alone does not decide *which* factor a code
 captures; that comes from the prior, the architecture and the data. The other
 datasets, and how $\lambda$ and the continuous-code head are set, are in
@@ -676,6 +696,14 @@ $$
 \mathcal{F}_{v, \omega} = \left\{ f(x) = \langle v, \Phi_\omega(x) \rangle \; : \; \Vert v \Vert_p \le 1 \right\}.
 $$
 
+![The McGAN critic as a picture. Real samples $x_i$ and generated samples
+$g_\theta(z_i)$ both pass through the same learned feature map $\Phi_\zeta$,
+and what compares them is a linear classifier on top of those features. The
+critic's freedom is therefore split in two: the feature map chooses the space,
+and the linear layer chooses the direction in it. From the course slides [17],
+after Mroueh et al. [13].](figures/lec02/slides-mcgan-arch.png){#fig-mcgan-arch width=85%}
+
+
 With $\mu_\omega(P) = \mathbb{E}_{x \sim P}[\Phi_\omega(x)]$, linearity and the
 definition of the dual norm ($1/p + 1/q = 1$) give
 
@@ -686,7 +714,18 @@ $$ {#eq-mcgan-mean}
 
 The critic finds a feature space in which the two means differ most; the
 generator matches the means there ($\Phi_\omega$ is kept bounded by clipping
-$\omega$). A W-GAN critic whose last layer is linear, $f(x) = \langle v, \Phi_\omega(x) \rangle$,
+$\omega$).
+
+![Why @eq-mcgan-mean is called mean feature matching. The two clouds are the
+features of real and generated samples; the filled circle and the cross are
+their means. The separating hyperplane is normal to the difference of the
+means, so the discriminator's update rotates that normal to separate the
+clouds further, and the generator's update pushes its own mean along the
+normal towards the real one. Both players act on the same vector, from
+opposite ends. From the course slides [17], after Mroueh et al. [13, Fig.
+2].](figures/lec02/slides-mcgan-geometry.png){#fig-mcgan-geometry width=80%}
+
+ A W-GAN critic whose last layer is linear, $f(x) = \langle v, \Phi_\omega(x) \rangle$,
 with $v$ clipped to $[-c, c]$, is exactly mean matching with $p = \infty$,
 i.e. the $\ell_1$ distance between feature means. The two are IPMs of the same
 form and differ only in the function class.
@@ -728,7 +767,15 @@ $$ {#eq-svm}
 
 The hinge terms are zero for samples beyond the margin on their own side;
 only samples inside the margin or misclassified (the *support vectors*)
-contribute. Dropping the $\tfrac{1}{2}\Vert w \Vert^{2}$ term is not a
+contribute.
+
+![The hinge, drawn. The loss is zero once a sample is correctly classified by
+a margin of one, and falls linearly as the score moves the wrong way. That
+flat region is what makes @eq-hinge-d depend only on the support vectors: a
+sample comfortably on its own side contributes no gradient at all. From the
+course slides [17].](figures/lec02/slides-hinge-loss.png){#fig-hinge width=70%}
+
+ Dropping the $\tfrac{1}{2}\Vert w \Vert^{2}$ term is not a
 normalisation identity, and it is worth being explicit about what replaces it:
 without a bound on $\Vert w \Vert$ the hinge loss below can be driven down by
 rescaling $w$, and with it the margin interpretation. Lim and Ye instead fix
@@ -1223,6 +1270,9 @@ arXiv:1703.00573.
 [16] M. Heusel, H. Ramsauer, T. Unterthiner, B. Nessler, S. Hochreiter.
 *GANs Trained by a Two Time-Scale Update Rule Converge to a Local Nash
 Equilibrium.* NeurIPS 2017. arXiv:1706.08500.
+
+[17] J. C. Ye. *AI618 Generative Models and Unsupervised Learning: lecture
+slides.* KAIST, Part 1 --- GAN, 2026.
 
 ---
 

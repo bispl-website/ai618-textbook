@@ -317,7 +317,18 @@ The reverse adversarial term exchanges $x,y$ and $F,G$. The cycle compares a rec
 
 ![The three parts of @eq-cyclegan. (a) Two mappings $G : X \to Y$ and $F : Y \to X$, each with its own discriminator. (b) Forward cycle consistency, $x \to G(x) \to F(G(x)) \approx x$. (c) Backward cycle consistency, $y \to F(y) \to G(F(y)) \approx y$. Adapted from [@cyclegan, Fig. 3].](figures/lec03/sbigstar0310-cyclegan-cycle.png){#fig-cyclegan-cycle width=100%}
 
-**Advantage:** learns two-way translation from unpaired data. **Limitation:** cycle consistency does not establish the correct semantic pairing, and optimization is substantially more delicate than in Pix2Pix. The lecture emphasizes the practical reason: CycleGAN jointly trains two generators and two discriminators, so adversarial objectives in both directions interact with the cycle term. In practice the networks are updated alternately rather than by solving a closed-form minimax problem; poorly balanced updates can produce unstable dynamics. This training difficulty was presented in class as an important hands-on lesson, not a minor implementation detail [@lecture-script]. @fig-translation contrasts paired supervision, round-trip reconstruction, domain-conditioned reconstruction, and style-code conditioning across the main translation models.
+**Advantage:** learns two-way translation from unpaired data.
+
+![What unpaired translation produces, which the rest of this section
+describes only as an objective. Each pair is a source image and the output of
+a CycleGAN trained on two unpaired collections: photographs and Monet
+paintings, horses and zebras, summer and winter. Note what changes and what
+does not --- colour and texture are rewritten throughout, while the layout of
+the scene and the pose of the animal survive, which is the bias
+@sec-adv-cyclefail identifies as doing the real identification. Adapted from
+[@cyclegan, Fig. 1].](figures/lec03/slides-cyclegan-results.png){#fig-cyclegan-results width=95%}
+
+ **Limitation:** cycle consistency does not establish the correct semantic pairing, and optimization is substantially more delicate than in Pix2Pix. The lecture emphasizes the practical reason: CycleGAN jointly trains two generators and two discriminators, so adversarial objectives in both directions interact with the cycle term. In practice the networks are updated alternately rather than by solving a closed-form minimax problem; poorly balanced updates can produce unstable dynamics. This training difficulty was presented in class as an important hands-on lesson, not a minor implementation detail [@lecture-script]. @fig-translation contrasts paired supervision, round-trip reconstruction, domain-conditioned reconstruction, and style-code conditioning across the main translation models.
 
 ![Comparison of conditioning and supervision across image-to-image translation models. Pix2Pix uses a paired target $y$ to supervise $G(x)$; CycleGAN reconstructs the source after the round trip $x \to G(x) \to F(G(x))$; StarGAN reuses the same generator with the original domain label $k$ to reconstruct the source; and StarGAN v2 feeds both a source image $x$ and a target-domain style code $s_t$, where $s_t$ comes either from the mapping network $M_t(z)$ or the style encoder $E_t(x_{\mathrm{ref}})$.](figures/lec03/Jeongchan-Kim-translation.png){#fig-translation width=100%}
 

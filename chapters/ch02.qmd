@@ -1,5 +1,5 @@
 ---
-title: "GAN and its Extensions: f-GAN, W-GAN, McGAN, Geometric GAN, LS-GAN"
+title: "GAN and its Extensions"
 ---
 
 ## Overview
@@ -305,6 +305,15 @@ at $T^*(x) = f'(p(x)/q(x))$, where the supremum in @eq-fenchel is reached.
 The right-hand side involves only *expectations*, so it can be estimated from
 samples without knowing either density. That is what makes it usable for a
 GAN.
+
+![Both halves of the variational bound, for the Kullback--Leibler generator
+$f(u) = u\log u$. Left: @eq-fenchel at a single point --- the supporting line
+of slope $t$ touches the graph exactly at the density ratio $u$ for which
+$t = f'(u)$, which is the equality case of the Fenchel--Young inequality and
+the reason $T^*(x) = f'(p(x)/q(x))$ is optimal. Right: on a two-point example,
+the objective of @eq-fgan-bound plotted against a one-parameter family of test
+functions $T_\alpha$; it rises to the divergence itself and no
+further.](figures/lec02/lhk6565-fenchel.png){#fig-fenchel width=95%}
 
 ### f-GAN as the general recipe
 
@@ -748,6 +757,14 @@ direction $\mu_\omega(P) - \mu_\omega(Q)$ averages *all* samples: Geometric
 GAN uses only the *hard* samples near the boundary. Lim and Ye analyse the
 equilibrium of the resulting game in [14]; @sec-adv-geometric states what
 they prove and what it assumes.
+
+![The discriminator as a margin classifier in feature space, with the score
+written $h$ for the $f(x) = \langle w, \Phi_\zeta(x)\rangle + b$ of the text.
+The solid line is the decision boundary $h = 0$ and the dashed lines the
+margin $h = \pm 1$; only the points inside the band or on the wrong side of it
+contribute to @eq-hinge-d, and those are the support vectors. The arrow is the
+generator's step: it moves a fake feature along the normal towards, and
+through, the boundary.](figures/lec02/inhyeok-jeong-margin.png){#fig-margin width=85%}
 
 ### Which distance the hinge discriminator estimates
 

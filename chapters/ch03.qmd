@@ -362,7 +362,21 @@ u_i\ \xrightarrow{E_i}\ z\ \xrightarrow{G_j}\ \hat u_j,
 \mathbb{E}\|z-E_i(G_i(z))\|_2.
 $$ {#eq-radialgan}
 
-Here $u_i$ denotes a record including its response in the paper's continuous-response setting, and $z$ can come from other domains' encoders. Domain adversarial losses match translated and real records. **Advantage:** $O(K)$ encoder/decoder modules accommodate heterogeneous feature spaces. **Limitation:** requires a useful shared representation and still uses multiple domain modules. It is originally a predictive-data transfer method, not a many-image fusion model or a single universal generator like StarGAN.
+Here $u_i$ denotes a record including its response in the paper's continuous-response setting, and $z$ can come from other domains' encoders. Domain adversarial losses match translated and real records.
+
+![RadialGAN's shape, and the reason for its name. Each outer node is one
+domain's record space $\mathcal{X}^{(i)} \times \mathcal{Y}$ --- features
+together with the response, since the paper's setting is prediction --- and
+the hub is the shared latent space $\mathcal{Z}$. Every domain reaches every
+other only through the hub, so adding a domain adds one encoder, one decoder
+and one discriminator rather than a mapping to each existing domain: $O(K)$
+modules where the pairwise construction of this section needs $K(K-1)$. The
+slide writes $F_i$ for the encoder that @eq-radialgan calls $E_i$; the black
+arrows $G_i$ are the decoders and $D_i$ is the discriminator of domain $i$.
+From the course slides, after
+[@radialgan].](figures/lec03/slides-radialgan.png){#fig-radialgan width=60%}
+
+ **Advantage:** $O(K)$ encoder/decoder modules accommodate heterogeneous feature spaces. **Limitation:** requires a useful shared representation and still uses multiple domain modules. It is originally a predictive-data transfer method, not a many-image fusion model or a single universal generator like StarGAN.
 
 ### StarGAN: one generator conditioned on a domain label
 

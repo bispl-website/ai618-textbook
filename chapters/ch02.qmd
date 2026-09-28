@@ -805,13 +805,18 @@ GAN uses only the *hard* samples near the boundary. Lim and Ye analyse the
 equilibrium of the resulting game in [14]; @sec-adv-geometric states what
 they prove and what it assumes.
 
-![The discriminator as a margin classifier in feature space, with the score
-written $h$ for the $f(x) = \langle w, \Phi_\zeta(x)\rangle + b$ of the text.
-The solid line is the decision boundary $h = 0$ and the dashed lines the
-margin $h = \pm 1$; only the points inside the band or on the wrong side of it
-contribute to @eq-hinge-d, and those are the support vectors. The arrow is the
-generator's step: it moves a fake feature along the normal towards, and
-through, the boundary.](figures/lec02/inhyeok-jeong-margin.png){#fig-margin width=85%}
+![Both players, in feature space. The solid line is the decision boundary
+$\langle w, \Phi_\zeta(x)\rangle + b = 0$ and the dashed lines the margin at
+$\pm 1$; circles are real features and crosses generated ones, and the shaded
+band holds the support vectors $\mathcal{M}$ --- the only samples that
+contribute to @eq-hinge-d, since the hinge is flat outside it (@fig-hinge).
+The discriminator's step (red) moves the hyperplane to separate the two
+clouds; the generator's step (blue) moves its features along the normal $w$
+towards the real side, and its direction is set by the sums over
+$\mathcal{M}$ alone, not over every sample. Compare @fig-mcgan-geometry,
+where the same normal is the difference of *all* the feature means. From the
+course slides [17], after Lim and Ye
+[14].](figures/lec02/slides-geometric-gan-margin.png){#fig-margin width=80%}
 
 ### Which distance the hinge discriminator estimates
 

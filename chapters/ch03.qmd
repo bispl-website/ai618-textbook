@@ -49,7 +49,6 @@ For each table row, $v$ is the average of $(X-\mu)^2$ over the indicated indices
 
 ![The difference between batch, layer and instance normalization. Each cube is a feature tensor with batch axis $N$, channel axis $C$ and spatial axes $(H,W)$; the shaded entries are the ones that share a mean and a standard deviation. Adapted from [@groupnorm, Fig. 2], with the group-normalization panel omitted.](figures/lec03/sbigstar0310-norm-methods.png){#fig-norm-methods width=100%}
 
-
 BN uses minibatch statistics during training and population estimates at inference. IN recomputes statistics separately for each image; LN also avoids dependence on other minibatch samples. The transcript initially describes BN statistics as channel-independent but then explicitly corrects this: $\mu_c$ and $v_c$ depend on the channel [@lecture-script].
 
 ### Deriving the matrix representation
@@ -88,10 +87,7 @@ $$ {#eq-adain-def}
 
 $D_S$ is defined similarly; $X$ and $S$ need not have the same number of positions. A fixed encoder, this transform, and a learned decoder produce a stylized image. The decoder is trained using content-feature and style-statistic losses. Reference statistics are computed from $S$, not new free parameters trained for every reference image.
 
-![AdaIN performs feed-forward style transfer by normalizing content features and replacing their channel-wise statistics with those of the style features before decoding the transformed representation. Adapted from [@adain].](figures/lec03/albertruaz-adain.png){#fig-adain-pipeline width=100%}
-
 ![The feed-forward style transfer network of @sec-adv-adain-training. A fixed VGG encoder maps the content and style images to feature space, AdaIN aligns the channel-wise statistics of the content features with those of the style features, and a learned decoder maps the result back to an image. The same encoder computes the content loss $\mathcal{L}_c$ and the style loss $\mathcal{L}_s$ used to train the decoder. Adapted from [@adain, Fig. 2].](figures/lec03/sbigstar0310-adain-arch.png){#fig-adain-arch width=100%}
-
 
 **Advantage:** efficient arbitrary-reference stylization without an eigendecomposition. **Limitation:** channel means and variances do not determine cross-channel covariance or a general feature distribution. A successful feature transform also need not invert perfectly through the decoder.
 
@@ -213,11 +209,6 @@ Why use $\mathcal{W}$? The mapping can reshape the simple prior before synthesis
 
 ![A traditional generator (left) feeds the latent code $z$ through its input layer only. The style-based generator of StyleGAN (right) maps $z$ to $w$ with the mapping network $f$, feeds $w$ to every AdaIN layer of the synthesis network $g$ through a learned affine transform A, adds per-layer noise scaled by B, and starts the synthesis from a learned constant. Adapted from [@stylegan, Fig. 1].](figures/lec03/sbigstar0310-stylegan-arch.png){#fig-stylegan-arch width=100%}
 
-![The same comparison drawn at the level of the whole generator: a conventional generator feeds the latent code directly into the synthesis network, whereas StyleGAN maps it to an intermediate representation whose affine transforms control AdaIN at multiple resolutions, with independent noise entering separately to model stochastic spatial detail. Adapted from [@stylegan].](figures/lec03/albertruaz-stylegan.png){#fig-stylegan-compare width=100%}
-
-![StyleGAN with its layer counts: the mapping network has eight layers and the synthesis network eighteen, producing resolutions from $4^2$ to $1024^2$ with 26.2M trainable parameters. Adapted from [@stylegan].](figures/lec03/chaeraemong-stylegan.png){#fig-stylegan-sizes width=100%}
-
-
 ### Structured noise injection: structured content at the input
 
 SNI replaces the fixed input by a tensor assembled from location-specific mappings. A schematic form of its local/shared construction is [@sni, Secs. 3--4]
@@ -257,8 +248,6 @@ $$ {#eq-dat-diversity}
 The shared style is fixed while content varies. Once the distance exceeds $\tau$, this term stops rewarding further separation; it does **not** enforce a hard upper bound on the distance. Training uses non-saturating adversarial loss and $R_1$ discriminator regularization.
 
 **Advantage:** spatial control at coarse and fine resolutions with $O(N)$ gate values. **Limitation:** a diagonal gate does not itself move pixels; geometric changes emerge through subsequent convolutions. Separation is an empirical inductive bias, not a theorem of perfect disentanglement.
-
-![(a) StyleGAN disentangles style and content using AdaIN and per-pixel noise; (b) SNI additionally injects structured content codes into the generator; (c) Diagonal GAN instead uses diagonal attention for content control and AdaIN for style. Adapted from [@diagonal].](figures/lec03/chaeraemong-dat.png){#fig-dat-compare width=100%}
 
 ![Where content enters, in the three generators of this section. (a) StyleGAN: the style code reaches every layer through the AdaIN boxes, each fed by its own affine transform A, while content arrives only as per-pixel noise scaled by the boxes B. (b) SNI: a separate content code enters once, as the input tensor. (c) Diagonal GAN: the content code reaches every layer as a diagonal attention map, which makes the content path symmetric with the style path. Adapted from [@diagonal, Fig. 2].](figures/lec03/sbigstar0310-content-control.png){#fig-content-control width=100%}
 
@@ -300,19 +289,13 @@ The adversarial term tests conditional realism; the paired term anchors the outp
 
 ![The discriminator of a conditional GAN sees the input together with the output, which is what @eq-pix2pix means by $D(x,y)$. Left: a generated pair $(x, G(x))$ should be classified as fake. Right: a real pair $(x,y)$ should be classified as real. Adapted from [@pix2pix, Fig. 2].](figures/lec03/sbigstar0310-pix2pix-cgan.png){#fig-pix2pix-cgan width=100%}
 
-![The same conditioning on one task: a conditional GAN translating an edge map into a photograph, with both generator and discriminator conditioned on the edge map. Adapted from [@pix2pix].](figures/lec03/chaeraemong-pix2pix.png){#fig-pix2pix-edges width=100%}
-
-
 ### Why unpaired translation is ill-posed
 
 With unpaired collections, we observe marginals $p_{\mathcal{X}},p_{\mathcal{Y}}$, not the correspondence $p(x,y)$. Matching $G_\#p_{\mathcal{X}}=p_{\mathcal{Y}}$ does not tell us which target belongs to a particular input. For example, two equally likely inputs and two equally likely targets admit both possible bijections with exactly the same marginals. A constraint is necessary, but a constraint need not identify the intended semantics.
 
 ![Paired training data (left) consist of examples $\{x_i, y_i\}$ whose correspondence is known. Unpaired data (right) consist of a set $X$ and a set $Y$ with no information about which $x$ matches which $y$. Adapted from [@cyclegan, Fig. 2].](figures/lec03/sbigstar0310-paired-unpaired.png){#fig-paired-unpaired width=100%}
 
-![The same distinction stated as what is missing: paired translation provides an explicit source-target correspondence for each training example, whereas unpaired translation observes only separate samples from the two domains, and the missing correspondence is what makes the problem underdetermined. Adapted from [@cyclegan].](figures/lec03/albertruaz-paired-unpaired.png){#fig-paired-unpaired-2 width=100%}
-
 ![Why matching marginals is not enough, drawn for horses and zebras, with the pose of each animal standing for the content a translation should keep. (a) The correct mapping keeps the pose; (b) a shuffled mapping loses it. Both produce the same set of outputs, so a discriminator that sees only outputs has no reason to prefer (a) --- the argument of @sec-adv-illposed. Horse icon from Font Awesome Free, licensed under CC BY 4.0.](figures/lec03/sbigstar0310-shuffled-mapping.png){#fig-shuffled-mapping width=100%}
-
 
 ### CycleGAN and the role of the cycle
 
@@ -334,11 +317,6 @@ The reverse adversarial term exchanges $x,y$ and $F,G$. The cycle compares a rec
 
 ![The three parts of @eq-cyclegan. (a) Two mappings $G : X \to Y$ and $F : Y \to X$, each with its own discriminator. (b) Forward cycle consistency, $x \to G(x) \to F(G(x)) \approx x$. (c) Backward cycle consistency, $y \to F(y) \to G(F(y)) \approx y$. Adapted from [@cyclegan, Fig. 3].](figures/lec03/sbigstar0310-cyclegan-cycle.png){#fig-cyclegan-cycle width=100%}
 
-![The same three parts drawn together: (a) two directional generators with their domain discriminators, and (b, c) the cycle-consistent round trips in both directions. Adapted from [@cyclegan].](figures/lec03/albertruaz-cyclegan-panels.png){#fig-cyclegan-panels width=100%}
-
-![CycleGAN at a glance: the two generators, the two discriminators, and the round trip that supplies the only supervision available without pairs. Adapted from [@cyclegan].](figures/lec03/chaeraemong-cyclegan.png){#fig-cyclegan-overview width=100%}
-
-
 **Advantage:** learns two-way translation from unpaired data. **Limitation:** cycle consistency does not establish the correct semantic pairing, and optimization is substantially more delicate than in Pix2Pix. The lecture emphasizes the practical reason: CycleGAN jointly trains two generators and two discriminators, so adversarial objectives in both directions interact with the cycle term. In practice the networks are updated alternately rather than by solving a closed-form minimax problem; poorly balanced updates can produce unstable dynamics. This training difficulty was presented in class as an important hands-on lesson, not a minor implementation detail [@lecture-script]. @fig-translation contrasts paired supervision, round-trip reconstruction, domain-conditioned reconstruction, and style-code conditioning across the main translation models.
 
 ![Comparison of conditioning and supervision across image-to-image translation models. Pix2Pix uses a paired target $y$ to supervise $G(x)$; CycleGAN reconstructs the source after the round trip $x \to G(x) \to F(G(x))$; StarGAN reuses the same generator with the original domain label $k$ to reconstruct the source; and StarGAN v2 feeds both a source image $x$ and a target-domain style code $s_t$, where $s_t$ comes either from the mapping network $M_t(z)$ or the style encoder $E_t(x_{\mathrm{ref}})$.](figures/lec03/Jeongchan-Kim-translation.png){#fig-translation width=100%}
@@ -352,7 +330,6 @@ The lecture presents a clear architectural progression. Pairwise CycleGAN/DiscoG
 For $K$ domains, separate directed pairwise generators require $K(K-1)$ maps: choose one source and one different target. This is a naive pairwise construction, not a universal lower bound. Slide 119 counts $K$ discriminators by sharing one per destination; independently trained CycleGAN pairs instead contain $K(K-1)$ discriminator instances.
 
 ![The counting argument of this section, drawn. (a) Translating among four domains with cross-domain models such as CycleGAN needs twelve generators, one for every ordered pair. (b) StarGAN serves five domains with a single generator that takes the target domain as an input. Adapted from [@stargan, Fig. 2].](figures/lec03/sbigstar0310-stargan-star.png){#fig-stargan-star width=100%}
-
 
 **DiscoGAN** independently develops bidirectional unpaired translation with adversarial losses and two reconstruction cycles [@discogan, Sec. 2]. In the present notation its generator objective has the structure
 
@@ -397,9 +374,6 @@ $\mathcal{V}_{\mathrm{adv}}$ is the paper's log-GAN value in its explanatory for
 
 ![The four terms of @eq-stargan as training steps. (a) The discriminator learns to tell real from fake and to classify real images into their domains. (b) The generator takes the input image with the target domain label and produces a fake image. (c) The same generator maps that fake image back with the original label, which gives the reconstruction loss. (d) The generator learns to produce fakes the discriminator takes as real and classifies into the target domain. Adapted from [@stargan, Fig. 3].](figures/lec03/sbigstar0310-stargan-overview.png){#fig-stargan-overview width=100%}
 
-![The same architecture stated compactly: one generator and one discriminator for every domain, conditioned on a target domain label, with the discriminator both judging realism and predicting the domain. Adapted from [@stargan].](figures/lec03/chaeraemong-stargan.png){#fig-stargan-single width=100%}
-
-
 ### StarGAN v2: diverse, domain-specific style codes
 
 StarGAN v2 replaces the fixed label input to $G$ with a style code injected through AdaIN. A mapping network $M_t(z)$ supplies latent-guided styles; a style encoder $E_t(x_{\mathrm{ref}})$ supplies reference-guided styles. $M$, $E$, and $D$ have domain-specific output heads, while $G$ is shared [@starganv2, Sec. 2; @lecture-slides, pp. 123--125].
@@ -430,9 +404,6 @@ Style reconstruction prevents ignoring the style input; the **minus** sign rewar
 **Advantage:** latent and reference control with multiple outputs per target domain. **Limitation:** multiple objectives must balance diversity and preservation, and trained domains still need labels. The original model has neither a text encoder nor text cross-attention; the transcript's diffusion/text comparison is an analogy.
 
 ![The four modules of StarGAN v2. The generator translates an input image into an output reflecting a style code; the mapping network turns a latent code into style codes, one per domain; the style encoder extracts the style codes of a reference image; and the discriminator decides, for each domain, whether an image is a real image of that domain. All modules except the generator share their first layers and end in one branch per domain. Adapted from [@starganv2, Fig. 2].](figures/lec03/sbigstar0310-stargan-v2.png){#fig-starganv2-modules width=100%}
-
-![The distinction StarGAN v2 adds to StarGAN: the target domain and the particular style within that domain are separate inputs, and the style code can come either from a random latent through the mapping network or from a reference image through the style encoder. Adapted from [@starganv2].](figures/lec03/albertruaz-starganv2.png){#fig-starganv2-style width=100%}
-
 
 ### Comparison at a glance
 

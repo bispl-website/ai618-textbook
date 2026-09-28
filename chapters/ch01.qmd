@@ -1250,6 +1250,21 @@ print(np.mean(np.abs(x - (2 + 2 * x))))   # ~2.5000   cost of T(x) = 2 + 2x
 print(np.sqrt(np.mean((x - (2 + 2 * x)) ** 2)))   # ~2.5166  matches W_2
 ```
 
+A second instance, with a map that is not affine, shows the two readings of
+@thm-monge-1d side by side.
+
+![One transport problem, seen twice. **A.** The push-forward of
+@eq-pushforward made concrete: $T(x) = \sqrt{x}$ carries
+$X \sim \mathrm{Uniform}[0,1]$ to the law with density $2y$ on $[0,1]$, and
+the target event $[\tfrac{1}{2}, 1]$ receives exactly the mass its preimage
+$[\tfrac{1}{4}, 1]$ had, namely $\tfrac{3}{4}$. This $T$ is the monotone map
+$G^{-1} \circ F$ of @thm-monge-1d, since $F(x) = x$ and $G(y) = y^{2}$.
+**B.** The same pair through their quantile functions. @eq-w-1d integrates the
+horizontal gap between $F^{-1}$ and $G^{-1}$, so $W_{1}$ is the shaded area
+between the two curves, here
+$\int_{0}^{1} (\sqrt{u} - u) \, du = \tfrac{2}{3} - \tfrac{1}{2} =
+\tfrac{1}{6}$.](figures/lec01/jun-brro-transport-overview.png){#fig-transport-overview width=95%}
+
 ## Kantorovich's relaxation {#sec-kantorovich}
 
 Kantorovich's reformulation replaces the map by a coupling, and so allows mass
@@ -2171,6 +2186,18 @@ by a map after all, and @eq-relaxation holds with equality. The relaxation
 costs nothing for discrete measures with equal atom weights; it earns its keep
 in the unequal and continuous cases, which are the ones
 @prp-monge-fails and @exm-monge-not-attained describe.
+
+![A plan $\Pi$ drawn as a weighted bipartite graph, which is what
+@eq-kantorovich-lp is. **A.** The obstruction of @prp-monge-fails: the single
+source atom has to send mass to two targets, and only an edge weight can do
+that. **B.** A plan between $\mu$ with mass $\tfrac{1}{2}$ at $0$ and $2$ and
+$\nu$ with masses $\tfrac{1}{4}, \tfrac{1}{2}, \tfrac{1}{4}$ at $0, 1, 2$.
+Each edge carries one entry $\Pi_{ij}$; the edges leaving a source sum to its
+mass and those entering a target sum to its, which are the two marginal
+constraints. For $c = \lvert x-y \rvert$ this plan costs
+$\tfrac{1}{4}\cdot 0 + \tfrac{1}{4}\cdot 1 + \tfrac{1}{4}\cdot 1 +
+\tfrac{1}{4}\cdot 0 = \tfrac{1}{2}$, which is
+$W_{1}$.](figures/lec01/swy99-couplings.png){#fig-couplings width=95%}
 
 ### Duality beyond finite spaces {#sec-adv-duality}
 

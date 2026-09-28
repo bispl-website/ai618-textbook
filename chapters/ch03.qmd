@@ -6,7 +6,7 @@ title: "StyleGAN, Normalization, Attention, and Image Translation"
 
 Earlier GAN lectures asked how a discriminator measures mismatch between real and generated distributions. This lecture asks a different question: **where should a generator receive information so that we can control what it generates?** The lecture moves from feature normalization and attention, through StyleGAN and content-style disentanglement, to paired, unpaired, and multi-domain image translation. The organizing equation is $Y=AXT+B$: left multiplication acts on spatial positions, while right multiplication acts on channels.
 
-The main exposition follows *Part 1 - GAN*, pp. 78--125, and the accompanying lecture transcript [@lecture-slides; @lecture-script]. Paper-level equations are added where they clarify a model discussed in class. A short section near the end collects related paper extensions that are useful for placing the lecture in context but were not developed in the provided pp. 78--125/script; they are kept separate so that the main narrative follows the class itself.
+The main exposition follows *Part 1 - GAN*, pp. 78--125, and the accompanying lecture transcript [@lecture-slides; @lecture-script]. Paper-level equations are added where they clarify a model discussed in class. A section of advanced topics at the end collects the material that was not developed in the provided pp. 78--125/script, so that the main narrative follows the class itself.
 
 **Color key.** $\textcolor{blue}{\text{Blue}}$ marks spatial/content control; $\textcolor{red}{\text{red}}$ marks style/channel control; $\textcolor{violet}{\text{violet}}$ marks reconstruction or consistency; $\textcolor{teal}{\text{teal}}$ marks domain supervision; and $\textcolor{orange}{\text{orange}}$ marks diversity. Shared adversarial terms remain black. Labels accompany color so that the comparisons remain readable in grayscale.
 
@@ -391,80 +391,6 @@ The main change from StarGAN to StarGAN v2 is not simply "more domains." StarGAN
 
 **Training versus inference.** Discriminator updates treat generated images as detached samples. Generator updates propagate gradients through the discriminator while holding its parameters fixed; the cycle also backpropagates through the participating generators. Inference uses the trained generator and its required conditioning modules, not the discriminator. The distinction between a minimax value and the loss minimized by each optimizer is therefore important.
 
-## Brief paper extensions {#sec-paper-extensions}
-
-The following related topics complement the lecture but were not developed in the provided pp. 78--125/script. They are therefore kept brief and separate from the main lecture flow.
-
-### Gram-matrix style loss
-
-Before AdaIN, neural style transfer represented style by correlations of fixed encoder features. With $\Phi_\ell(I)\in\mathbb{R}^{N_\ell\times C_\ell}$ and $\Gamma_\ell(I)=\Phi_\ell(I)^\top\Phi_\ell(I)$, a representative objective is [@gatys]
-
-$$
-\mathcal{L}_{\mathrm{style}}=
-\sum_\ell a_\ell\|\Gamma_\ell(I_o)-\Gamma_\ell(I_s)\|_F^2,
-\qquad
-\mathcal{L}_{\mathrm{content}}=\|\Phi_{\ell_c}(I_o)-\Phi_{\ell_c}(I_c)\|_F^2.
-$$ {#eq-gram-supp}
-
-A Gram matrix is unchanged by a permutation of spatial positions, so it captures channel co-occurrence statistics more readily than layout. **Advantage:** rich multi-layer appearance matching. **Limitation:** the original method optimizes each output image iteratively and does not guarantee content preservation. AdaIN is a feed-forward statistic-matching alternative, not an exact solver of the Gram objective.
-
-### StyleGAN2: demodulation and path-length regularization
-
-StyleGAN2 removes explicit instance normalization from the synthesis path and modulates/demodulates convolution weights [@stylegan2]. If $s_i$ is a style scale for input channel $i$,
-
-$$
-w'_{ijk}=\textcolor{red}{s_i}w_{ijk},\qquad
-w''_{ijk}=\frac{w'_{ijk}}
-{\sqrt{\sum_{i',k'}(w'_{i'jk'})^2+\epsilon}}.
-$$ {#eq-stylegan2-supp}
-
-Demodulation controls the expected output scale without normalizing each observed feature map, addressing the characteristic droplet artifacts associated with the original normalization design. StyleGAN2 also uses path-length regularization,
-
-$$
-\mathcal{L}_{\mathrm{pl}}=
-\mathbb{E}_{w,r}\left(\|J_g(w)^\top r\|_2-a\right)^2,
-$$ {#eq-path-supp}
-
-which encourages a more uniform sensitivity of the generated image to changes in $w$. **Advantage:** cleaner style modulation and fewer normalization artifacts. **Limitation:** these regularizers improve conditioning but do not guarantee semantic disentanglement.
-
-### OT-driven CycleGAN and CycleGAN failure modes
-
-A related optimal-transport formulation derives CycleGAN rather than modifying it [@otcycle]. It is worth following the direction of that derivation, because it answers the question the lecture leaves open --- where the cycle term comes from --- and the answer is the opposite of what the shape of the objective suggests.
-
-Start from a Kantorovich problem between the two domains, with a *joint* transport cost that charges a pair $(x,y)$ for the round trip under the two maps $R:\mathcal{Y}\to\mathcal{X}$ and $H:\mathcal{X}\to\mathcal{Y}$,
-
-$$
-d\big((x,y)\big)=\|x-R(y)\|+\|y-H(x)\|.
-$$ {#eq-otcycle-cost}
-
-Minimising $\int d \, d\pi$ over couplings $\pi$ of $p_{\mathcal{X}}$ and $p_{\mathcal{Y}}$ is the primal problem, and its objective **is** the cycle/data-consistency term: @eq-otcycle-cost is what $\mathcal{L}_{\mathrm{cyc}}$ measures. The marginal constraints are then relaxed by Kantorovich duality, and it is the *dual* of those constraints that produces two Wasserstein-1 terms, each realised by a 1-Lipschitz critic. Collecting the two,
-
-$$
-\min_{R,H}
-\textcolor{violet}{\lambda\mathcal{L}_{\mathrm{cyc}}(R,H)}
-+W_1(p_{\mathcal X},R_\#p_{\mathcal Y})+
-W_1(p_{\mathcal Y},H_\#p_{\mathcal X}).
-$$ {#eq-otcycle-supp}
-
-So the reading to carry away is not "$W_1$ matching, plus a cycle penalty of unexplained origin". It is: **the cycle term is the transport cost, and the adversarial terms are the penalties that enforce the marginals.** The weight $\lambda$ is the exchange rate between the two, and taking $\lambda$ large is what recovers the hard marginal constraints of the original Kantorovich problem. The critics are 1-Lipschitz because that is what the dual asks for, not because a Lipschitz constraint was found to stabilise training.
-
-This remains a **surrogate training objective** once the ideal critic class is replaced by neural networks, so the equality between theory and implementation should not be overstated.
-
-Cycle consistency also has important failure modes. First, it does not identify the intended semantic pairing: two domains with two equally likely elements admit a swapped bijection with perfect marginal matching and zero cycle error. Second, a network can hide source information in visually weak high-frequency signals and use it to reconstruct the input, producing a small cycle loss without meaningful visible preservation [@steganography]. Large geometric changes were also reported as difficult in the original CycleGAN study [@cyclegan]. Thus realistic marginals plus a small cycle loss are not a certificate of correct correspondence.
-
-### CollaGAN: many-to-one imputation
-
-CollaGAN considers a different data regime from StarGAN: several **corresponding** domain observations of the same subject are available and one target domain is missing [@collagan]. With target domain $t$ withheld,
-
-$$
-\hat x_t=G(\textcolor{blue}{\{x_j:j\ne t\}},t),\qquad
-\mathcal{L}_{\mathrm{mcyc}}=
-\mathbb{E}_t\sum_{j\ne t}\|x_j-\tilde x_{j\mid t}\|_1.
-$$ {#eq-collagan-supp}
-
-The multiple-cycle construction reconstructs each available input after inserting the predicted missing image. **Advantage:** it can fuse complementary observations from several domains. **Limitation:** it requires corresponding multi-domain input sets, so it solves a different problem from single-input unpaired translation.
-
-
 ## Worked examples and reproducibility {#sec-examples}
 
 ### AdaIN with actual numbers
@@ -531,9 +457,20 @@ none is needed to follow the main line.
 
 ### Gram matrices, and why AdaIN is their diagonal case {#sec-adv-gram}
 
-@eq-gram-supp gives the Gram objective without saying why a Gram matrix is a
-representation of style, and the chapter's ordering --- Gram first, AdaIN
-second --- only makes sense once the link is explicit.
+Before AdaIN, neural style transfer represented style by correlations of fixed encoder features. With $\Phi_\ell(I)\in\mathbb{R}^{N_\ell\times C_\ell}$ and $\Gamma_\ell(I)=\Phi_\ell(I)^\top\Phi_\ell(I)$, a representative objective is [@gatys]
+
+$$
+\mathcal{L}_{\mathrm{style}}=
+\sum_\ell a_\ell\|\Gamma_\ell(I_o)-\Gamma_\ell(I_s)\|_F^2,
+\qquad
+\mathcal{L}_{\mathrm{content}}=\|\Phi_{\ell_c}(I_o)-\Phi_{\ell_c}(I_c)\|_F^2.
+$$ {#eq-gram-supp}
+
+A Gram matrix is unchanged by a permutation of spatial positions, so it captures channel co-occurrence statistics more readily than layout. **Advantage:** rich multi-layer appearance matching. **Limitation:** the original method optimizes each output image iteratively and does not guarantee content preservation. AdaIN is a feed-forward statistic-matching alternative, not an exact solver of the Gram objective.
+
+That is the statement. Why a Gram matrix is a representation of style at all,
+and how it connects to the AdaIN the chapter has already used, is the part
+worth spelling out.
 
 Write $\Phi_\ell(I) \in \mathbb{R}^{N_\ell \times C_\ell}$ for the features of
 a frozen VGG layer, rows indexed by position and columns by channel. Then
@@ -607,7 +544,7 @@ trades content against style continuously, with $\alpha = 0$ reconstructing the
 content image. Interpolating between several styles' AdaIN targets mixes
 styles. Neither is available to a decoder trained per style.
 
-### Why $\mathcal{W}$ disentangles better than $\mathcal{Z}$ {#sec-adv-wspace}
+### Why the W space disentangles better than Z {#sec-adv-wspace}
 
 The chapter answers this in one sentence --- the mapping can reshape the prior
 --- and the standard account is worth the extra paragraph, because it explains
@@ -680,6 +617,58 @@ the finest detail. So the noise inherits the resolution of the layer it enters,
 exactly as the styles do in @eq-stylegan, and the two channels are independent:
 $w$ sets what the image is, $n$ sets the arbitrary part of how it is realised.
 
+### StyleGAN2: demodulation and path-length regularization {#sec-adv-stylegan2}
+
+StyleGAN2 removes explicit instance normalization from the synthesis path and modulates/demodulates convolution weights [@stylegan2]. If $s_i$ is a style scale for input channel $i$,
+
+$$
+w'_{ijk}=\textcolor{red}{s_i}w_{ijk},\qquad
+w''_{ijk}=\frac{w'_{ijk}}
+{\sqrt{\sum_{i',k'}(w'_{i'jk'})^2+\epsilon}}.
+$$ {#eq-stylegan2-supp}
+
+Demodulation controls the expected output scale without normalizing each observed feature map, addressing the characteristic droplet artifacts associated with the original normalization design. StyleGAN2 also uses path-length regularization,
+
+$$
+\mathcal{L}_{\mathrm{pl}}=
+\mathbb{E}_{w,r}\left(\|J_g(w)^\top r\|_2-a\right)^2,
+$$ {#eq-path-supp}
+
+which encourages a more uniform sensitivity of the generated image to changes in $w$. **Advantage:** cleaner style modulation and fewer normalization artifacts. **Limitation:** these regularizers improve conditioning but do not guarantee semantic disentanglement.
+
+Three points make the equations above an argument rather than a recipe.
+
+*Where the droplet comes from.* Instance normalization standardises each
+feature map after the convolution, which means a generator can put a very
+large value in one spatial location and have the normalisation scale
+everything else down around it. The strong local signal survives, because it
+is what sets the scale; the rest of the map is suppressed. That is the droplet
+--- a blob-shaped artefact that appears in the feature maps from $64\times64$
+onwards and, once the network depends on it, in the output. Removing
+normalisation from the forward path removes the mechanism.
+
+*Why dividing by that particular norm works.* Suppose the inputs to the
+convolution are independent with unit variance. After modulation the output
+$j$ has variance $\sum_{i,k}(w'_{ijk})^{2}$, so dividing the weights by
+$\sqrt{\sum_{i',k'}(w'_{i'jk'})^{2}}$ restores unit output variance. The
+essential difference from instance normalization is the object being
+normalised: this acts on the **weights**, using the *expected* statistics
+under an assumption about the input, and not on the observed feature map. The
+generator therefore has no observed quantity to game, which is why the droplet
+does not come back.
+
+*The regulariser and its metric.* In @eq-path-supp the constant $a$ is not a
+hyperparameter but a running exponential average of the observed
+$\|J_g(w)^\top r\|_2$, so the term penalises deviation from the network's own
+current average sensitivity rather than from a chosen value. Its cost is a
+Jacobian-vector product, so it is applied *lazily*, once every 16 minibatches,
+with the step size scaled accordingly. And it is the same quantity the
+perceptual path length of @eq-ppl measures: StyleGAN2 regularises the metric
+that StyleGAN introduced to diagnose entanglement, which is why the two move
+together. StyleGAN2 also drops progressive growing, whose phase-in of new
+resolutions left a preference for fixed detail locations, in favour of skip
+and residual connections that train at full resolution throughout.
+
 ### The solution set of unpaired translation {#sec-adv-illposed}
 
 The chapter's two-point example shows that two bijections match the marginals.
@@ -744,6 +733,31 @@ across the image, and a PatchGAN discriminator judges local patches, so it
 scores texture and is largely blind to global shape. Neither network is asked
 for geometry and neither provides it.
 
+### OT-driven CycleGAN and CycleGAN failure modes {#sec-adv-otcycle}
+
+A related optimal-transport formulation derives CycleGAN rather than modifying it [@otcycle]. It is worth following the direction of that derivation, because it answers the question the lecture leaves open --- where the cycle term comes from --- and the answer is the opposite of what the shape of the objective suggests.
+
+Start from a Kantorovich problem between the two domains, with a *joint* transport cost that charges a pair $(x,y)$ for the round trip under the two maps $R:\mathcal{Y}\to\mathcal{X}$ and $H:\mathcal{X}\to\mathcal{Y}$,
+
+$$
+d\big((x,y)\big)=\|x-R(y)\|+\|y-H(x)\|.
+$$ {#eq-otcycle-cost}
+
+Minimising $\int d \, d\pi$ over couplings $\pi$ of $p_{\mathcal{X}}$ and $p_{\mathcal{Y}}$ is the primal problem, and its objective **is** the cycle/data-consistency term: @eq-otcycle-cost is what $\mathcal{L}_{\mathrm{cyc}}$ measures. The marginal constraints are then relaxed by Kantorovich duality, and it is the *dual* of those constraints that produces two Wasserstein-1 terms, each realised by a 1-Lipschitz critic. Collecting the two,
+
+$$
+\min_{R,H}
+\textcolor{violet}{\lambda\mathcal{L}_{\mathrm{cyc}}(R,H)}
++W_1(p_{\mathcal X},R_\#p_{\mathcal Y})+
+W_1(p_{\mathcal Y},H_\#p_{\mathcal X}).
+$$ {#eq-otcycle-supp}
+
+So the reading to carry away is not "$W_1$ matching, plus a cycle penalty of unexplained origin". It is: **the cycle term is the transport cost, and the adversarial terms are the penalties that enforce the marginals.** The weight $\lambda$ is the exchange rate between the two, and taking $\lambda$ large is what recovers the hard marginal constraints of the original Kantorovich problem. The critics are 1-Lipschitz because that is what the dual asks for, not because a Lipschitz constraint was found to stabilise training.
+
+This remains a **surrogate training objective** once the ideal critic class is replaced by neural networks, so the equality between theory and implementation should not be overstated.
+
+Cycle consistency also has important failure modes. First, it does not identify the intended semantic pairing: two domains with two equally likely elements admit a swapped bijection with perfect marginal matching and zero cycle error. Second, a network can hide source information in visually weak high-frequency signals and use it to reconstruct the input, producing a small cycle loss without meaningful visible preservation [@steganography]. Large geometric changes were also reported as difficult in the original CycleGAN study [@cyclegan]. Thus realistic marginals plus a small cycle loss are not a certificate of correct correspondence.
+
 ### StarGAN's mask vector {#sec-adv-mask}
 
 The chapter mentions the mask in a clause. It is what lets one generator train
@@ -767,9 +781,19 @@ that every CelebA face has a neutral expression.
 
 ### CollaGAN: many inputs, one output {#sec-adv-collagan}
 
-The chapter gives CollaGAN one equation. The setting deserves more, because it
-is the one where this lab's own work sits and because the objective is not a
-relabelling of StarGAN's.
+CollaGAN considers a different data regime from StarGAN: several **corresponding** domain observations of the same subject are available and one target domain is missing [@collagan]. With target domain $t$ withheld,
+
+$$
+\hat x_t=G(\textcolor{blue}{\{x_j:j\ne t\}},t),\qquad
+\mathcal{L}_{\mathrm{mcyc}}=
+\mathbb{E}_t\sum_{j\ne t}\|x_j-\tilde x_{j\mid t}\|_1.
+$$ {#eq-collagan-supp}
+
+The multiple-cycle construction reconstructs each available input after inserting the predicted missing image. **Advantage:** it can fuse complementary observations from several domains. **Limitation:** it requires corresponding multi-domain input sets, so it solves a different problem from single-input unpaired translation.
+
+That is the summary. The setting deserves more, because it is the one where
+this lab's own work sits and because the objective is not a relabelling of
+StarGAN's.
 
 The problem is imputation with several co-registered observations: $N$ MR
 contrasts of the same slice, one of which is missing. A single-input

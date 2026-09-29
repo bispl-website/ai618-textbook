@@ -979,6 +979,16 @@ what $\mu$ had there, and everything arriving at $y$ adds up to what $\nu$
 needs there. The set $\Pi(\mu,\nu)$ is never empty: the product measure
 $\mu \otimes \nu$, which ignores where mass came from, is always a coupling.
 
+![A coupling and the two marginals it must reproduce. The shaded density is a
+joint $\pi$ on the plane; the curve above is its first marginal and the curve
+to the right its second, each obtained by integrating out the other
+coordinate. @eq-marginals asks exactly that these two curves be $\mu$ and
+$\nu$. Nothing asks the joint to be the product of them --- this one is not,
+having two modes where a product would have four --- and the freedom left over
+is the set $\Pi(\mu,\nu)$ that @def-wasserstein minimises over. From the
+course slides.](figures/lec01/slides-joint-marginals.png){#fig-joint-marginals width=55%}
+
+
 ::: {#def-wasserstein}
 ## Wasserstein distance
 Let $(\mathcal{M}, d)$ be a Polish metric space and let $p \geq 1$. For

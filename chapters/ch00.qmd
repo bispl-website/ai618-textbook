@@ -1096,7 +1096,8 @@ where we use @eq-ax and @eq-transp for the second and the third equalities, resp
 
 ::::
 
-::: {#lem-deriv}Let ${\boldsymbol{x}},{\boldsymbol{a}}$ and ${\boldsymbol{B}}$ denote vectors and a matrix with appropriate sizes, respectively.
+::: {#lem-deriv}
+Let ${\boldsymbol{x}},{\boldsymbol{a}}$ and ${\boldsymbol{B}}$ denote vectors and a matrix with appropriate sizes, respectively.
 Then, we have
 
 $$

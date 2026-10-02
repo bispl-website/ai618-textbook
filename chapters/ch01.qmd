@@ -80,6 +80,20 @@ $D(\mu_{\theta}, p_{\text{data}})$ that is small exactly when the two agree,
 and --- this is the part that is easy to forget --- whose gradient in $\theta$
 points somewhere useful when they do not.
 
+Written out, the whole of generative modelling in this chapter is
+
+$$
+\min_{\theta} \, D(\mu_{\theta}, \mu)
+\qquad \text{subject to} \qquad
+\mu_{\theta} = G_{\theta \#} \nu ,
+$$ {#eq-geometry-of-gan}
+
+the form in which the lecture states it [@lecture-slides, p. 51] and the one
+that organises the geometric reading of GANs due to Lei and co-authors
+[@geometry-of-gan]. Everything that follows is a choice of $D$ in
+@eq-geometry-of-gan, and the chapter is in effect a catalogue of those
+choices and of what each one does to the gradient.
+
 There is an obstruction, and it is structural rather than accidental. The
 support of $\mu_{\theta}$ is contained in $G_{\theta}(\mathcal{Y})$, the image
 of a space of dimension $\dim \mathcal{Y}$, which in practice is a hundred or

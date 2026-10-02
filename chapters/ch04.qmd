@@ -668,6 +668,15 @@ triangular, bringing the cost to $O(c)$.
 **Affine coupling.** Exactly @eq-realnvp-forward, acting on a channel split,
 with log-determinant $\operatorname{sum}(\log|s|)$.
 
+![The invertible generator. An image is squeezed into channels, passed through $L$ steps of $1\times1$ convolution and stable additive coupling, and squeezed back; every arrow runs in both directions. From the course slides [@lecture-slides-vae, p. 38].](figures/lec04/slides-glow-architecture.png){#fig-glow-arch width=95%}
+
+![The three blocks, each with its inverse. (b) Squeeze rearranges a $H\times W$ map into four channels at half the resolution. (c) The invertible $1\times1$ convolution multiplies every spatial position by the same $W$, and is undone by $W^{-1}$. (d, e) The stable additive coupling layer adds $\mathcal{F}_1$ of the untouched block to the other, and subtracts it to invert. From the course slides [@lecture-slides-vae, p. 39].](figures/lec04/slides-glow-blocks.png){#fig-glow-blocks width=100%}
+
+@fig-glow-arch and @fig-glow-blocks are worth reading together: the first
+says the model is a stack, the second says every element of the stack is a
+map whose inverse is written next to it. That is the whole design constraint
+of this chapter made concrete.
+
 A **squeeze** operation between scales trades spatial resolution for channels,
 reshaping $1\times H\times W$ into $4\times\frac H2\times\frac W2$, so that the
 $1\times1$ convolution has channels to mix and the coupling split is spatially

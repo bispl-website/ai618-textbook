@@ -37,7 +37,7 @@ the way we meet the non-saturating loss, mode collapse and InfoGAN.
 
 ### The objective
 
-Goodfellow et al. [1] define a two-player game between a generator $G$ and a
+Goodfellow et al. [@gan] define a two-player game between a generator $G$ and a
 discriminator $D$:
 
 $$
@@ -55,7 +55,7 @@ money that a policeman will accept, and the policeman learns to tell the
 forgeries from the real notes; neither is given the answer, and each improves
 only because the other does. The generator is the counterfeiter and the
 discriminator is the policeman. From the course slides
-[17].](figures/lec02/slides-gan-game.png){#fig-gan-game width=70%}
+[@lecture-slides].](figures/lec02/slides-gan-game.png){#fig-gan-game width=70%}
 
  In practice the game is played by alternating stochastic
 gradient steps: $k$ ascent steps on the discriminator, then one descent step
@@ -150,7 +150,7 @@ and $C(G) = 2 \log 2 - \log 4 = 0$, *however far apart the two sets are*. A
 generator one pixel away from the data and one producing pure noise get the
 same value, and the gradient of $C$ with respect to $\theta$ is zero.
 
-This is the typical case, not a corner case [2]. Natural images concentrate
+This is the typical case, not a corner case [@arjovsky-principled]. Natural images concentrate
 near a low-dimensional manifold in $\mathbb{R}^d$, and the generator maps
 $\mathbb{R}^{d_z}$ into $\mathbb{R}^d$ with $d_z \ll d$, so $P_g$ also lives
 on a low-dimensional set. Two such sets in general position intersect in a
@@ -179,7 +179,7 @@ too little discriminator training gives a wrong signal, too much gives none.
 
 ### The heuristic
 
-Goodfellow et al. already proposed a fix [1]: instead of minimising
+Goodfellow et al. already proposed a fix [@gan]: instead of minimising
 $\mathbb{E}_z[\log(1 - D(G(z)))]$, the generator minimises
 
 $$
@@ -250,7 +250,7 @@ Three parts of the objective invite it.
 3. **Per-sample judgement.** The discriminator scores samples one at a time,
    so it cannot notice that a whole batch is the same image.
 
-Remedies include minibatch discrimination [3], unrolled GANs [4], and the
+Remedies include minibatch discrimination [@improved-techniques], unrolled GANs [@unrolled], and the
 IPM-based GANs below, whose gradient does not vanish when the discriminator is
 strong. What the first two actually compute, and how collapse is diagnosed, is
 in @sec-adv-collapse.
@@ -281,7 +281,7 @@ Different choices of $f$ give familiar divergences (@tbl-fdiv).
 | GAN | $u \log u - (u+1)\log(u+1)$ | $-\log(1 - e^{t})$ | $t < 0$ | $-\log(1 + e^{-v})$ | $-\log\bigl(1 - \sigma(v)\bigr)$ |
 
 : Realisations of the f-GAN, following the lecture [@lecture-slides, p. 59] and
-[5]. $\sigma$ is the logistic function, $V_\omega$ the unconstrained critic
+[@fgan]. $\sigma$ is the logistic function, $V_\omega$ the unconstrained critic
 and $v = V_\omega(x)$; the last two columns are what an implementation needs,
 since $g_f$ is the output activation that lands $V_\omega$ inside
 $\operatorname{dom} f^*$. {#tbl-fdiv}
@@ -314,7 +314,7 @@ D_f(P \Vert Q)
 $$ {#eq-fgan-bound}
 
 The inequality comes only from restricting $T$ to a class $\mathcal{T}$ (a
-neural network family); over all measurable $T$ it is an equality [6], attained
+neural network family); over all measurable $T$ it is an equality [@nguyen2010], attained
 at $T^*(x) = f'(p(x)/q(x))$, where the supremum in @eq-fenchel is reached.
 The right-hand side involves only *expectations*, so it can be estimated from
 samples without knowing either density. That is what makes it usable for a
@@ -331,7 +331,7 @@ further.](figures/lec02/lhk6565-fenchel.png){#fig-fenchel width=95%}
 
 ### f-GAN as the general recipe
 
-Nowozin, Cseke and Tomioka [5] take $P = P_r$, $Q = P_\theta$ and turn
+Nowozin, Cseke and Tomioka [@fgan] take $P = P_r$, $Q = P_\theta$ and turn
 @eq-fgan-bound into a game:
 
 $$
@@ -391,7 +391,7 @@ changes when $f$ changes, is in @sec-adv-fgan.
 
 ### The least-squares objective
 
-Mao et al. [7] replace the log loss by squared error against target labels
+Mao et al. [@lsgan] replace the log loss by squared error against target labels
 $a$ (fake), $b$ (real) and $c$ (what the generator wants the discriminator to
 say about its samples):
 
@@ -438,7 +438,7 @@ with $\chi^2_{\mathrm{Pearson}}(P \Vert Q) = \int (p - q)^2 / q$, the
 f-divergence with $f(u) = (u-1)^2$. It is zero iff $p_g = p_r$. (Mao et al.
 write the arguments in the opposite order; the integral is the same.) The
 popular choice $a = 0$, $b = c = 1$ does not satisfy the two conditions but
-behaves similarly in practice [7]. LS-GAN therefore minimises a Pearson
+behaves similarly in practice [@lsgan]. LS-GAN therefore minimises a Pearson
 $\chi^2$-type divergence, which places it in the f-divergence family.
 
 ## DCGAN: the architecture that made it train
@@ -516,7 +516,7 @@ the information the code may carry.
 ### The mutual information term
 
 A standard GAN is free to use its latent vector in an entangled way. InfoGAN
-[8] splits the input into noise $z$ and a *latent code* $c$ with a known,
+[@infogan] splits the input into noise $z$ and a *latent code* $c$ with a known,
 factored prior (for MNIST: one 10-way categorical code and two continuous
 codes, uniform on $[-1, 1]$), and asks that the code be recoverable from the
 output:
@@ -559,7 +559,7 @@ Gaussian $Q$ gives a squared error.
 
 On MNIST the categorical code aligns with digit class (about 5% error as an
 unsupervised classifier) and the continuous codes with rotation and stroke
-width [8].
+width [@infogan].
 
 ![What the InfoGAN term buys, on MNIST. Each row fixes the noise $z$ and
 sweeps one latent code across its range. (a) In InfoGAN the categorical code
@@ -567,8 +567,8 @@ moves along the digit classes, and the sweep is a clean change of one factor.
 (b) In a plain GAN the same coordinate of the latent vector has no such
 meaning, and the sweep wanders. This is the latent traversal that
 @sec-adv-infogan describes as the standard of evidence for a disentangled
-code. From the course slides [17], after Chen et al.
-[8].](figures/lec02/slides-infogan-mnist.png){#fig-infogan-mnist width=95%}
+code. From the course slides [@lecture-slides], after Chen et al.
+[@infogan].](figures/lec02/slides-infogan-mnist.png){#fig-infogan-mnist width=95%}
 
  Mutual information is invariant under invertible reparametrisations
 of $c$, though, so the objective alone does not decide *which* factor a code
@@ -647,7 +647,7 @@ Equality with the primal is Kantorovich duality [10, Thm. 5.10].
 
 ### The W-GAN objective
 
-Arjovsky, Chintala and Bottou [9] parametrise $f$ by a network $f_w$, the
+Arjovsky, Chintala and Bottou [@wgan] parametrise $f$ by a network $f_w$, the
 *critic*, constrained to be $K$-Lipschitz:
 
 $$
@@ -681,7 +681,7 @@ satisfy. Three ways of enforcing it follow.
 The original W-GAN clips every weight to $[-c, c]$ after each update, with
 $c = 0.01$. The parameter set is then compact, so every $f_w$ is
 $K$-Lipschitz for some $K$. The authors call this "a clearly terrible way" to
-enforce the constraint [9], and Gulrajani et al. [11] document why:
+enforce the constraint [@wgan], and Gulrajani et al. [@wgan-gp] document why:
 
 - **Capacity underuse.** Most weights end up at $\pm c$, so the critic
   learns very simple functions.
@@ -692,7 +692,7 @@ enforce the constraint [9], and Gulrajani et al. [11] document why:
 
 ### WGAN-GP: the gradient penalty {#sec-wgan-gp}
 
-The idea of [11] starts from a property of the optimal critic.
+The idea of [@wgan-gp] starts from a property of the optimal critic.
 
 ::: {#prp-grad-norm}
 ## Optimal critics have unit gradient on transport paths
@@ -728,7 +728,7 @@ batch normalisation.
 
 ### Spectral normalisation
 
-Miyato et al. [12] bound the Lipschitz constant through the layers. For
+Miyato et al. [@spectral-norm] bound the Lipschitz constant through the layers. For
 $f = h_L \circ \cdots \circ h_1$, $\Vert f \Vert_L \le \prod_l \Vert h_l \Vert_L$.
 A linear layer $h(x) = Wx + b$ has $\Vert h \Vert_L = \sigma_{\max}(W)$, the
 spectral norm, and ReLU is 1-Lipschitz. Normalising every weight matrix,
@@ -774,7 +774,7 @@ on disjoint supports.
 
 ### Mean matching
 
-Mroueh, Sercu and Goel [13] choose functions linear on top of a learned
+Mroueh, Sercu and Goel [@mcgan] choose functions linear on top of a learned
 feature map $\Phi_\omega : \mathcal{X} \to \mathbb{R}^m$:
 
 $$
@@ -785,8 +785,8 @@ $$
 $g_\theta(z_i)$ both pass through the same learned feature map $\Phi_\zeta$,
 and what compares them is a linear classifier on top of those features. The
 critic's freedom is therefore split in two: the feature map chooses the space,
-and the linear layer chooses the direction in it. From the course slides [17],
-after Mroueh et al. [13].](figures/lec02/slides-mcgan-arch.png){#fig-mcgan-arch width=85%}
+and the linear layer chooses the direction in it. From the course slides [@lecture-slides],
+after Mroueh et al. [@mcgan].](figures/lec02/slides-mcgan-arch.png){#fig-mcgan-arch width=85%}
 
 
 With $\mu_\omega(P) = \mathbb{E}_{x \sim P}[\Phi_\omega(x)]$, linearity and the
@@ -807,7 +807,7 @@ their means. The separating hyperplane is normal to the difference of the
 means, so the discriminator's update rotates that normal to separate the
 clouds further, and the generator's update pushes its own mean along the
 normal towards the real one. Both players act on the same vector, from
-opposite ends. From the course slides [17], after Mroueh et al. [13, Fig.
+opposite ends. From the course slides [@lecture-slides], after Mroueh et al. [13, Fig.
 2].](figures/lec02/slides-mcgan-geometry.png){#fig-mcgan-geometry width=80%}
 
  A W-GAN critic whose last layer is linear, $f(x) = \langle v, \Phi_\omega(x) \rangle$,
@@ -829,7 +829,7 @@ $$ {#eq-mcgan-cov}
 
 the largest singular value of the difference. Using $k$ orthonormal pairs
 instead gives the sum of the top $k$ singular values. The generator then
-matches the leading directions of the feature covariance [13]. @eq-mcgan-mean
+matches the leading directions of the feature covariance [@mcgan]. @eq-mcgan-mean
 and @eq-mcgan-cov are what is being estimated, not what is coded;
 @sec-adv-mcgan writes the trained objective down.
 
@@ -837,7 +837,7 @@ and @eq-mcgan-cov are what is being estimated, not what is coded;
 
 ### The discriminator as a separating hyperplane
 
-Lim and Ye [14] also write the critic as linear in features,
+Lim and Ye [@geometric-gan] also write the critic as linear in features,
 $f(x) = \langle w, \Phi_\zeta(x) \rangle + b$, and observe that separating real
 from fake features is a *linear classification problem in feature space*. The
 best-understood linear classifier is the support vector machine. The
@@ -858,7 +858,7 @@ contribute.
 a margin of one, and falls linearly as the score moves the wrong way. That
 flat region is what makes @eq-hinge-d depend only on the support vectors: a
 sample comfortably on its own side contributes no gradient at all. From the
-course slides [17].](figures/lec02/slides-hinge-loss.png){#fig-hinge width=70%}
+course slides [@lecture-slides].](figures/lec02/slides-hinge-loss.png){#fig-hinge width=70%}
 
  Dropping the $\tfrac{1}{2}\Vert w \Vert^{2}$ term is not a
 normalisation identity, and it is worth being explicit about what replaces it:
@@ -887,7 +887,7 @@ $w = \sum_i \alpha_i \Phi(x_i) - \sum_j \beta_j \Phi(G(z_j))$ with
 $\alpha_i, \beta_j$ nonzero only on support vectors. Compare McGAN, whose
 direction $\mu_\omega(P) - \mu_\omega(Q)$ averages *all* samples: Geometric
 GAN uses only the *hard* samples near the boundary. Lim and Ye analyse the
-equilibrium of the resulting game in [14]; @sec-adv-geometric states what
+equilibrium of the resulting game in [@geometric-gan]; @sec-adv-geometric states what
 they prove and what it assumes.
 
 ![Both players, in feature space. The solid line is the decision boundary
@@ -900,8 +900,8 @@ clouds; the generator's step (blue) moves its features along the normal $w$
 towards the real side, and its direction is set by the sums over
 $\mathcal{M}$ alone, not over every sample. Compare @fig-mcgan-geometry,
 where the same normal is the difference of *all* the feature means. From the
-course slides [17], after Lim and Ye
-[14].](figures/lec02/slides-geometric-gan-margin.png){#fig-margin width=80%}
+course slides [@lecture-slides], after Lim and Ye
+[@geometric-gan].](figures/lec02/slides-geometric-gan-margin.png){#fig-margin width=80%}
 
 ### Which distance the hinge discriminator estimates
 
@@ -931,11 +931,11 @@ loss can mean a better generator or a weaker discriminator.
 critic loss (without the penalty) estimates $K \cdot W_1(P_r, P_\theta)$,
 which is continuous in $\theta$ (@thm-w1-continuity). Arjovsky et al. show
 that it decreases steadily as samples improve and correlates with visual
-quality [9], which makes it useful for debugging.
+quality [@wgan], which makes it useful for debugging.
 
 **What it does not tell you.**
 
-- *It is only a lower bound within the critic's class.* Arora et al. [15]
+- *It is only a lower bound within the critic's class.* Arora et al. [@arora2017]
   show that a generator with small support can nearly fool a finite-capacity
   critic, so a small value does not certify diversity.
 - *Its scale is arbitrary.* It depends on $K$ --- the clipping constant,
@@ -945,7 +945,7 @@ quality [9], which makes it useful for debugging.
   distances, which do not match human judgement.
 
 In practice samples are also compared with external metrics. The most common,
-the Frechet Inception Distance [16],
+the Frechet Inception Distance [@fid],
 $\mathrm{FID} = \Vert \mu_1 - \mu_2 \Vert_2^2 + \mathrm{Tr}\big(\Sigma_1 + \Sigma_2 - 2(\Sigma_1 \Sigma_2)^{1/2}\big)$,
 is the squared Wasserstein-2 distance between Gaussians fitted to Inception features:
 the same idea as McGAN, but with a fixed rather than learned feature map.
@@ -1025,13 +1025,13 @@ one.
 
 | Model | Distance (optimal discriminator) | Discriminator output |
 |---|---|---|
-| GAN [1] | $2\,\mathrm{JSD} - \log 4$ | probability, sigmoid |
-| GAN, non-saturating [1, 2] | follows $\mathrm{KL}(p_g \Vert p_r) - 2\,\mathrm{JSD}$ | probability, sigmoid |
-| f-GAN [5] | any $D_f$, via @eq-fgan-bound | $g_f(V_\omega(x))$ |
-| LS-GAN [7] | Pearson $\chi^2$, @eq-lsgan-chi2 | linear |
-| W-GAN, WGAN-GP [9, 11] | $W_1$, an IPM | linear, Lipschitz |
-| McGAN [13] | IPM on feature means and covariances | linear in features |
-| Geometric GAN [14] | TV if unconstrained; SVM margin | linear, hinge loss |
+| GAN [@gan] | $2\,\mathrm{JSD} - \log 4$ | probability, sigmoid |
+| GAN, non-saturating [@gan; @arjovsky-principled] | follows $\mathrm{KL}(p_g \Vert p_r) - 2\,\mathrm{JSD}$ | probability, sigmoid |
+| f-GAN [@fgan] | any $D_f$, via @eq-fgan-bound | $g_f(V_\omega(x))$ |
+| LS-GAN [@lsgan] | Pearson $\chi^2$, @eq-lsgan-chi2 | linear |
+| W-GAN, WGAN-GP [@wgan; @wgan-gp] | $W_1$, an IPM | linear, Lipschitz |
+| McGAN [@mcgan] | IPM on feature means and covariances | linear in features |
+| Geometric GAN [@geometric-gan] | TV if unconstrained; SVM margin | linear, hinge loss |
 
 : GAN variants and the statistical distance behind each. {#tbl-summary}
 
@@ -1286,7 +1286,7 @@ supplied anyway.
 | 3D chairs | chair type | rotation, width |
 | CelebA | presence of glasses, hairstyle | azimuth, emotion |
 
-: What InfoGAN's codes align with, by dataset [8]. {#tbl-infogan}
+: What InfoGAN's codes align with, by dataset [@infogan]. {#tbl-infogan}
 
 The evidence in each row is a *latent traversal*: fix $z$, sweep one code
 across its range, and look at the row of images. A code that has captured a
@@ -1306,63 +1306,6 @@ a mean and a variance, with the variance *learned* rather than fixed: a fixed
 variance makes $\log Q$ a plain squared error, and the learned one lets the
 network express how confident the code is recoverable, which the paper found
 necessary for the continuous codes to separate.
-
-## References
-
-[1] I. Goodfellow, J. Pouget-Abadie, M. Mirza, B. Xu, D. Warde-Farley,
-S. Ozair, A. Courville, Y. Bengio. *Generative Adversarial Nets.* NeurIPS
-2014. arXiv:1406.2661.
-
-[2] M. Arjovsky, L. Bottou. *Towards Principled Methods for Training
-Generative Adversarial Networks.* ICLR 2017. arXiv:1701.04862.
-
-[3] T. Salimans, I. Goodfellow, W. Zaremba, V. Cheung, A. Radford, X. Chen.
-*Improved Techniques for Training GANs.* NeurIPS 2016. arXiv:1606.03498.
-
-[4] L. Metz, B. Poole, D. Pfau, J. Sohl-Dickstein. *Unrolled Generative
-Adversarial Networks.* ICLR 2017. arXiv:1611.02163.
-
-[5] S. Nowozin, B. Cseke, R. Tomioka. *f-GAN: Training Generative Neural
-Samplers using Variational Divergence Minimization.* NeurIPS 2016.
-arXiv:1606.00709.
-
-[6] X. Nguyen, M. J. Wainwright, M. I. Jordan. *Estimating Divergence
-Functionals and the Likelihood Ratio by Convex Risk Minimization.* IEEE
-Trans. Information Theory 56(11), 2010. arXiv:0809.0853.
-
-[7] X. Mao, Q. Li, H. Xie, R. Y. K. Lau, Z. Wang, S. P. Smolley. *Least
-Squares Generative Adversarial Networks.* ICCV 2017. arXiv:1611.04076.
-
-[8] X. Chen, Y. Duan, R. Houthooft, J. Schulman, I. Sutskever, P. Abbeel.
-*InfoGAN: Interpretable Representation Learning by Information Maximizing
-Generative Adversarial Nets.* NeurIPS 2016. arXiv:1606.03657.
-
-[9] M. Arjovsky, S. Chintala, L. Bottou. *Wasserstein Generative Adversarial
-Networks.* ICML 2017. arXiv:1701.07875.
-
-[10] C. Villani. *Optimal Transport: Old and New.* Springer, 2009.
-
-[11] I. Gulrajani, F. Ahmed, M. Arjovsky, V. Dumoulin, A. Courville.
-*Improved Training of Wasserstein GANs.* NeurIPS 2017. arXiv:1704.00028.
-
-[12] T. Miyato, T. Kataoka, M. Koyama, Y. Yoshida. *Spectral Normalization
-for Generative Adversarial Networks.* ICLR 2018. arXiv:1802.05957.
-
-[13] Y. Mroueh, T. Sercu, V. Goel. *McGan: Mean and Covariance Feature
-Matching GAN.* ICML 2017. arXiv:1702.08398.
-
-[14] J. H. Lim, J. C. Ye. *Geometric GAN.* arXiv:1705.02894, 2017.
-
-[15] S. Arora, R. Ge, Y. Liang, T. Ma, Y. Zhang. *Generalization and
-Equilibrium in Generative Adversarial Nets (GANs).* ICML 2017.
-arXiv:1703.00573.
-
-[16] M. Heusel, H. Ramsauer, T. Unterthiner, B. Nessler, S. Hochreiter.
-*GANs Trained by a Two Time-Scale Update Rule Converge to a Local Nash
-Equilibrium.* NeurIPS 2017. arXiv:1706.08500.
-
-[17] J. C. Ye. *AI618 Generative Models and Unsupervised Learning: lecture
-slides.* KAIST, Part 1 --- GAN, 2026.
 
 ---
 

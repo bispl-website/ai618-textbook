@@ -2452,62 +2452,38 @@ taking $A = \{h_{1} > h_{2}\}$ and $A = \{h_{1} < h_{2}\}$ in turn forces both
 sets to be $\nu$-null, so $h_{1} = h_{2}$ $\nu$-almost everywhere.
 :::
 
-## References
+## Further reading {#sec-further-reading}
 
-The lecture follows Chapters 1 and 13 of the course text; the transport
+Full bibliographic details are on the book's References page. The lecture
+follows Chapters 1 and 13 of the course text; the transport
 material beyond it is standard and the sources below are where each statement
 used here is proved in full.
 
-- J. C. Ye. *Geometry of Deep Learning: A Signal Processing Perspective*.
-  Springer, 2022. Chapter 1 for metric spaces, convexity and duality;
-  Chapter 13 for statistical distances and optimal transport. Definitions and
-  equation numbers quoted in this chapter follow that text.
-- C. Villani. *Topics in Optimal Transportation*. Graduate Studies in
-  Mathematics 58, American Mathematical Society, 2003. Theorem 1.3 is the
-  general form of @thm-kantorovich-duality; Chapter 1 covers the $c$-transform
-  and $c$-concavity.
-- C. Villani. *Optimal Transport: Old and New*. Grundlehren der mathematischen
-  Wissenschaften 338, Springer, 2009. Chapter 5 for duality, Chapter 6 for the
-  metric structure of $W_{p}$ and the gluing lemma.
-- F. Santambrogio. *Optimal Transport for Applied Mathematicians*.
-  Birkhauser, 2015. Theorem 2.9 proves that the monotone map is optimal for
+- @gdl --- Chapter 1 for metric spaces, convexity and duality; Chapter 13 for
+  statistical distances and optimal transport. Definitions and equation
+  numbers quoted in this chapter follow that text.
+- @villani2003 --- Theorem 1.3 is the general form of
+  @thm-kantorovich-duality; Chapter 1 covers the $c$-transform and
+  $c$-concavity.
+- @villani --- Chapter 5 for duality, Chapter 6 for the metric structure of
+  $W_{p}$ and the gluing lemma.
+- @santambrogio --- Theorem 2.9 proves that the monotone map is optimal for
   costs $h(x-y)$ with $h$ convex, which @thm-monge-1d cites.
-- G. Peyre and M. Cuturi. *Computational Optimal Transport*. Foundations and
-  Trends in Machine Learning 11(5--6):355--607, 2019. arXiv:1803.00567.
-  The linear-programming view of @def-kantorovich and its numerics.
-- Y. Brenier. Polar factorization and monotone rearrangement of vector-valued
-  functions. *Communications on Pure and Applied Mathematics*,
-  44(4):375--417, 1991. The original form of @thm-brenier.
-- R. J. McCann. Existence and uniqueness of monotone measure-preserving maps.
-  *Duke Mathematical Journal*, 80(2):309--323, 1995. Removes the moment
-  hypotheses from Brenier's theorem.
-- I. Csiszar. Information-type measures of difference of probability
-  distributions and indirect observations. *Studia Scientiarum Mathematicarum
-  Hungarica*, 2:299--318, 1967. The origin of @def-f-divergence.
-- B. K. Sriperumbudur, K. Fukumizu, A. Gretton, B. Scholkopf and G. Lanckriet.
-  On integral probability metrics, phi-divergences and binary classification.
-  arXiv:0901.2698, 2009. Proves that total variation is the only non-trivial
+- @peyre-cuturi --- the linear-programming view of @def-kantorovich and its
+  numerics.
+- @brenier --- the original form of @thm-brenier.
+- @mccann --- removes the moment hypotheses from Brenier's theorem.
+- @csiszar --- the origin of @def-f-divergence.
+- @sriperumbudur --- proves that total variation is the only non-trivial
   member of both families, the claim made in @sec-ipm.
-- A. Gretton, K. M. Borgwardt, M. J. Rasch, B. Scholkopf and A. Smola. A kernel
-  two-sample test. *Journal of Machine Learning Research*, 13:723--773, 2012.
-  The source for @prp-mmd and for characteristic kernels.
-- I. J. Goodfellow, J. Pouget-Abadie, M. Mirza, B. Xu, D. Warde-Farley,
-  S. Ozair, A. Courville and Y. Bengio. Generative adversarial nets.
-  *NeurIPS*, 2014. arXiv:1406.2661.
-- S. Nowozin, B. Cseke and R. Tomioka. f-GAN: Training generative neural
-  samplers using variational divergence minimization. *NeurIPS*, 2016.
-  arXiv:1606.00709. Table 2 there lists the generators in the convention
-  discussed after @prp-js-generator.
-- M. Arjovsky and L. Bottou. Towards principled methods for training generative
-  adversarial networks. *ICLR*, 2017. arXiv:1701.04862. The manifold argument
-  of @sec-saturation.
-- M. Arjovsky, S. Chintala and L. Bottou. Wasserstein GAN. *ICML*, 2017.
-  arXiv:1701.07875. Example 1 there is @exm-parallel-lines.
-- Y. Mroueh, T. Sercu and V. Goel. McGan: Mean and covariance feature matching
-  GAN. *ICML*, 2017. arXiv:1702.08398.
-- X. Huang and S. Belongie. Arbitrary style transfer in real-time with adaptive
-  instance normalization. *ICCV*, 2017. arXiv:1703.06868. The layer identified
-  with @eq-adain.
+- @gretton --- the source for @prp-mmd and for characteristic kernels.
+- @gan --- the original adversarial formulation.
+- @fgan --- Table 2 there lists the generators in the convention discussed
+  after @prp-js-generator.
+- @arjovsky-principled --- the manifold argument of @sec-saturation.
+- @wgan --- Example 1 there is @exm-parallel-lines.
+- @mcgan --- mean and covariance feature matching.
+- @adain --- the layer identified with @eq-adain.
 
 ---
 

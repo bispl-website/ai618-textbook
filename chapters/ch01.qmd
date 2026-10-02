@@ -91,11 +91,13 @@ $0/0$ almost everywhere, and we will prove in @sec-saturation that it responds
 by saturating at a constant. Keeping that obstruction in view is what
 organises the rest of the chapter.
 
-![The generator as a push-forward. The latent measure $\nu$ on the left is
-carried to $\mu_{\theta} = G_{\theta \#} \nu$ on the right; the mass that
-$\mu_{\theta}$ assigns to a region $A$ is exactly the mass $\nu$ assigns to the
-latent codes that land in $A$. Nothing here requires $G_{\theta}$ to be
-invertible.](figures/lec01/jungwoo-ahn-fig2.png){#fig-pushforward width=75%}
+![The setting, and the obstruction. The latent measure $\nu$ on $\mathcal{Y}$
+is carried by the generator to $\mu_{\theta} = G_{\theta \#} \nu$, which lives
+on the image $G_{\theta}(\mathcal{Y})$ --- the shaded patch inside $\mathcal{X}$,
+not all of it. The data measure $\mu$ sits elsewhere on the same low-dimensional
+set. Two such supports generically fail to overlap, which is why a discrepancy
+built from a ratio of densities has nothing to compare. From the course slides
+[@lecture-slides, p. 10].](figures/lec01/slides-pushforward.png){#fig-pushforward width=80%}
 
 ## The measure-theoretic minimum {#sec-measure}
 
@@ -135,8 +137,8 @@ $$ {#eq-radon-nikodym}
 The function $g$ is written $d\lambda / d\nu$. A proof is given in
 @sec-appendix-rn rather than here, because the argument is self-contained but
 long enough to interrupt the development. An ordinary probability density
-function is the special case $\nu = $ Lebesgue measure: writing $p = dP/dx$
-recovers $P(A) = \int_{A} p(x) \, dx$.
+function is the special case in which $\nu$ is Lebesgue measure: writing
+$p = dP/dx$ recovers $P(A) = \int_{A} p(x) \, dx$.
 
 ::: {#def-pushforward}
 ## Push-forward of a measure
@@ -157,6 +159,13 @@ $T(x) \sim T_{\#}\mu$. For a generator this is exactly
 require. There is no inverse of $T$ anywhere in it --- only the preimage of a
 set, which exists for any map --- and no density. A generator that collapses a
 whole region of latent space to one image is perfectly well described.
+
+![What the definition says, drawn. The mass $\mu_{\theta}$ assigns to a region
+$A$ is by definition the mass $\nu$ assigns to the latent codes that land in
+$A$, so the preimage $G_{\theta}^{-1}(A)$ --- a set, not an inverse map --- is
+the only thing the construction needs.](figures/lec01/jungwoo-ahn-fig2.png){#fig-preimage width=75%}
+
+@fig-preimage is @eq-pushforward with the sets drawn in.
 
 The following lemma is used repeatedly and is never stated in the lecture, so
 we prove it.

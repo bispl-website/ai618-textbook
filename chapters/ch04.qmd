@@ -169,12 +169,10 @@ q_\phi(z\mid x)=\int\delta\!\left(z-F_\phi^x(u)\right)r(u)\,du ,
 }
 $$ {#eq-general-encoder}
 
-![The general stochastic encoder and decoder. The encoder $F_\phi^x$ combines an observation $x$ with noise $u$ to produce a latent code $z$; the decoder $G_\theta$ maps $z$ to a reconstruction $\hat x$. From the course slides [@lecture-slides-vae, p. 6].](figures/lec04/jungwoopark01-general-encoder.png){#fig-general-encoder width=70%}
-
 This is equation (13.60) of the book. Sampling means drawing $u$ and setting
 $z=F_\phi^x(u)$; inside an integral over $z$, the Dirac delta selects that
 value. The entire difference between a VAE and a flow will be the choice of
-$F_\phi^x$ in @fig-general-encoder.
+$F_\phi^x$ --- @fig-vae-encoder draws the Gaussian one.
 
 ### The general loss
 

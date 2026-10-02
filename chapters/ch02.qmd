@@ -175,7 +175,7 @@ Bottou show that the generator gradient goes to zero as $D$ approaches a
 perfect discriminator [2, Thm. 2.4]. Training therefore has a narrow window:
 too little discriminator training gives a wrong signal, too much gives none.
 
-## The non-saturating loss
+## The non-saturating loss {#sec-nonsat}
 
 ### The heuristic
 
@@ -271,15 +271,20 @@ $$
 By Jensen's inequality, $D_f(P \Vert Q) \ge f\left(\int q \cdot \frac{p}{q}\right) = f(1) = 0$.
 Different choices of $f$ give familiar divergences (@tbl-fdiv).
 
-| Divergence | $f(u)$ | $f^*(t)$ | domain of $f^*$ |
-|---|---|---|---|
-| KL | $u \log u$ | $e^{t-1}$ | $\mathbb{R}$ |
-| Reverse KL | $-\log u$ | $-1 - \log(-t)$ | $t < 0$ |
-| Pearson $\chi^2$ | $(u - 1)^2$ | $t + t^2/4$ | $\mathbb{R}$ |
-| Squared Hellinger | $(\sqrt{u} - 1)^2$ | $t / (1 - t)$ | $t < 1$ |
-| GAN (Jensen--Shannon) | $u \log u - (u+1)\log\frac{u+1}{2}$ | $-\log(2 - e^{t})$ | $t < \log 2$ |
+| Divergence | $f(u)$ | $f^*(t)$ | $\operatorname{dom} f^*$ | $g_f(v)$ | $f^*(g_f(v))$ |
+|---|---|---|---|---|---|
+| KL | $u \log u$ | $e^{t-1}$ | $\mathbb{R}$ | $v$ | $e^{v-1}$ |
+| Reverse KL | $-\log u$ | $-1 - \log(-t)$ | $t < 0$ | $-e^{-v}$ | $-1 + v$ |
+| Pearson $\chi^2$ | $(u - 1)^2$ | $t + t^2/4$ | $\mathbb{R}$ | $v$ | $v + v^2/4$ |
+| Squared Hellinger | $(\sqrt{u} - 1)^2$ | $t / (1 - t)$ | $t < 1$ | $1 - e^{-v}$ | $e^{v} - 1$ |
+| Jensen--Shannon | $u \log u - (u+1)\log\frac{u+1}{2}$ | $-\log(2 - e^{t})$ | $t < \log 2$ | $\log 2 - \log(1 + e^{-v})$ | $-\log\bigl(2 - 2\sigma(v)\bigr)$ |
+| GAN | $u \log u - (u+1)\log(u+1)$ | $-\log(1 - e^{t})$ | $t < 0$ | $-\log(1 + e^{-v})$ | $-\log\bigl(1 - \sigma(v)\bigr)$ |
 
-: Common f-divergences and their conjugates, following [5]. {#tbl-fdiv}
+: Realisations of the f-GAN, following the lecture [@lecture-slides, p. 59] and
+[5]. $\sigma$ is the logistic function, $V_\omega$ the unconstrained critic
+and $v = V_\omega(x)$; the last two columns are what an implementation needs,
+since $g_f$ is the output activation that lands $V_\omega$ inside
+$\operatorname{dom} f^*$. {#tbl-fdiv}
 
 ### The Fenchel conjugate and the variational lower bound
 
@@ -339,7 +344,8 @@ where $V_\omega$ is an unconstrained network and $g_f$ is an output activation
 mapping $\mathbb{R}$ into the domain of $f^*$ (for KL and Pearson,
 $g_f(v) = v$; for reverse KL, $g_f(v) = -e^{-v}$).
 
-**GAN is the case $f = f_{\mathrm{GAN}}$.** Its conjugate needs
+**The original GAN, via the normalised generator.** Taking the
+Jensen--Shannon row of @tbl-fdiv, its conjugate needs
 $t < \log 2$, so take $g_f(v) = \log 2 + \log \sigma(v) = \log\big(2\sigma(v)\big)$.
 Writing $D(x) = \sigma(V_\omega(x))$ gives $T = \log(2D)$ and
 $f^*(T) = -\log(2 - 2D) = -\log 2 - \log(1 - D)$, so
@@ -354,17 +360,26 @@ which is @eq-gan shifted by a constant --- and it is the same constant that
 Maximising over $\omega$ and minimising over $\theta$ is therefore the same
 problem as @eq-gan.
 
-A word on that constant, because the tables in the literature do not agree
-with @tbl-fdiv here. The f-GAN paper lists the GAN generator as
-$u \log u - (u+1)\log(u+1)$, without the $\tfrac{1}{2}$ inside the logarithm.
-That version has $f(1) = -\log 4 \ne 0$, so it fails the hypothesis of
-@def-fdiv and the Jensen argument above does not apply to it: the divergence
-it generates is $2\,\mathrm{JSD} - \log 4$, which is negative whenever the two
-distributions are close. It reproduces @eq-gan on the nose, which is why it is
-convenient, but a reader who takes @def-fdiv seriously would conclude that the
-GAN divergence is non-negative, and it is not. @tbl-fdiv uses the normalised
-generator, so every row satisfies $f(1) = 0$; this is the same normalisation
-clash as the factor of two in @prp-js-generator of the previous chapter.
+A word on that constant, because it is why @tbl-fdiv carries two rows that
+look like the same thing. The **GAN** row uses
+$u \log u - (u+1)\log(u+1)$, which is what the f-GAN paper and the lecture
+both use [@lecture-slides, pp. 56--59], and it reproduces @eq-gan on the nose:
+$g_f(v) = -\log(1+e^{-v})$ gives $f^*(g_f(v)) = -\log(1 - \sigma(v))$, and the
+variational objective is exactly $\mathbb{E}_{P_r}[\log D] +
+\mathbb{E}_{P_\theta}[\log(1-D)]$ with $D = \sigma(V_\omega)$, with no
+constant to carry. That is its convenience and it is the reason to prefer it
+when deriving the original GAN.
+
+What it is not is an f-divergence in the sense of @def-fdiv, because
+$f(1) = -\log 4 \ne 0$. The Jensen argument above does not apply to it, and
+the quantity it generates is $2\,\mathrm{JSD} - \log 4$, which is negative
+whenever the two distributions are close. A reader who takes @def-fdiv
+seriously would conclude that the GAN divergence is non-negative, and it is
+not. The **Jensen--Shannon** row is the same generator normalised so that
+$f(1) = 0$; it costs the $\log 4$ and buys back non-negativity. This is the
+same normalisation clash as the factor of two in @prp-js-generator of the
+previous chapter, and the honest thing is to carry both and say which one is
+being used.
 
 So the original GAN is not special: *any* f-divergence gives a GAN. The price
 is that every f-divergence depends only on the density ratio, so it cannot see
@@ -425,6 +440,76 @@ write the arguments in the opposite order; the integral is the same.) The
 popular choice $a = 0$, $b = c = 1$ does not satisfy the two conditions but
 behaves similarly in practice [7]. LS-GAN therefore minimises a Pearson
 $\chi^2$-type divergence, which places it in the f-divergence family.
+
+## DCGAN: the architecture that made it train
+
+Everything so far has been about the objective. None of it says what $G$ and
+$D$ should be, and for the first two years after @eq-gan that was the binding
+constraint: the objective was right and the models would not converge. DCGAN
+[@dcgan] is the paper that settled the architecture, and it is worth a section
+because every model in the rest of this chapter and the next is built on it.
+
+### The generator
+
+![The DCGAN generator. A 100-dimensional uniform $z$ is projected and reshaped to a $4\times4\times1024$ tensor, then four fractionally-strided convolutions take it to $64\times64\times3$. There is no fully connected layer after the projection and no pooling anywhere. From [@dcgan, Fig. 1]; the lecture slides reproduce it at [@lecture-slides, p. 64].](figures/lec02/dcgan-architecture.png){#fig-dcgan-arch width=85%}
+
+@fig-dcgan-arch is the whole design. Spatial resolution doubles at each step
+while the channel count halves, so the tensor is reshaped from deep and small
+to shallow and large by learned upsampling rather than by interpolation.
+
+### Five rules
+
+The paper's contribution is not one architecture but a set of constraints that
+made the family trainable [@dcgan]:
+
+1. Replace pooling with **strided convolutions** in the discriminator and
+   **fractionally-strided convolutions** in the generator, so the network
+   learns its own downsampling and upsampling.
+2. Use **batch normalisation** in both networks.
+3. Remove **fully connected hidden layers** in deeper architectures.
+4. In the generator use **ReLU** everywhere except the output, which uses
+   **tanh**.
+5. In the discriminator use **LeakyReLU** everywhere.
+
+Rules 1 and 3 are the same idea twice: take out the layers that do not
+respect spatial structure. Rule 2 is the one that interacts with the theory of
+this chapter. Batch normalisation keeps activations in a range where the
+discriminator's gradient is informative, which attacks the saturation of
+@sec-jsd-saturation from the architecture side rather than from the loss side
+--- the non-saturating loss of @sec-nonsat and the Wasserstein critic of
+@sec-wgan are the two loss-side attacks on the same problem. Rules 4
+and 5 are of a piece with it: a generator ReLU can output zero gradient on a
+whole half-space, and in the discriminator, where the gradient is the signal
+passed back to $G$, the leak is what keeps it alive.
+
+Not every rule survived. Batch normalisation in the discriminator is now
+usually replaced, because it couples the examples in a minibatch and the
+gradient penalty of @sec-wgan-gp is defined per example; the usual substitutes
+are layer or instance normalisation, which @sec-normalization of the next
+chapter treats properly.
+
+### What the latent space turned out to be
+
+![Vector arithmetic in the latent space. In each block, three samples of a visual concept are averaged in $z$, the averages are combined, and the result is decoded. The bottom two rows do the same arithmetic on pixels instead, which produces superpositions rather than faces. From [@dcgan, Fig. 7]; the lecture slides show the first block at [@lecture-slides, p. 66].](figures/lec02/dcgan-vector-arithmetic.png){#fig-dcgan-arithmetic width=55%}
+
+The result in @fig-dcgan-arithmetic was not designed for and is the reason
+DCGAN is remembered. Averaging the $z$ vectors of smiling women, subtracting
+the average for neutral women, adding the average for neutral men, and
+decoding gives smiling men. Nothing in @eq-gan asks for this: the objective
+constrains the push-forward $\mu_\theta = G_{\theta\#}\nu$ as a distribution
+and says nothing about how $G_\theta$ arranges the latent space internally.
+
+The bottom rows are the control, and they are what makes the claim
+non-trivial. The same arithmetic in pixel space gives ghosted overlays,
+because pixels have no such structure. So the linear structure is something
+the generator built, not something the data has.
+
+This is the first appearance of a question the next two chapters are about.
+If directions in $z$ carry meaning, can they be made to carry *chosen*
+meanings? InfoGAN below answers by adding a term that rewards it;
+@sec-generators in the next chapter answers by changing where the latent code
+enters the network; and the $\beta$-VAE of @sec-beta-vae answers by pricing
+the information the code may carry.
 
 ## InfoGAN
 
@@ -491,7 +576,7 @@ captures; that comes from the prior, the architecture and the data. The other
 datasets, and how $\lambda$ and the continuous-code head are set, are in
 @sec-adv-infogan.
 
-## W-GAN
+## W-GAN {#sec-wgan}
 
 ### The Wasserstein-1 distance
 
@@ -605,7 +690,7 @@ enforce the constraint [9], and Gulrajani et al. [11] document why:
 
 @sec-adv-clipping describes the evidence behind both.
 
-### WGAN-GP: the gradient penalty
+### WGAN-GP: the gradient penalty {#sec-wgan-gp}
 
 The idea of [11] starts from a property of the optimal critic.
 

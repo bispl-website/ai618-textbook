@@ -908,11 +908,6 @@ contrasts are different measurements of the same anatomy, so what is missing
 from one is usually present in another. A model that reads only one of them
 throws away exactly the redundancy the problem provides.
 
-## References
-
-::: {#refs}
-:::
-
 ---
 
 *Based on the scribe note of Jeongchan Kim, with material from Daegyu Sung,

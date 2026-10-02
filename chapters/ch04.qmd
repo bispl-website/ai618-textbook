@@ -1017,11 +1017,6 @@ log-determinants becomes an integral, and the network defining the dynamics no
 longer needs the explicitly invertible coupling architecture that NICE, Real
 NVP and Glow were built around [@sde].
 
-## References
-
-::: {#refs}
-:::
-
 ---
 
 *Based on the scribe note of Jungwoo Park, with material from Youngjin Shin

@@ -625,11 +625,8 @@ $$ {#eq-realnvp-nll}
 
 ![Real NVP on two moons. Inference (top) carries the data to an approximately Gaussian cloud; generation (bottom) carries Gaussian samples back. The two directions are the same layers read forwards and backwards.](figures/lec04/Jaden-Shin-1214-realnvp-moons.png){#fig-moons width=75%}
 
-![The two directions of the model in the plane: data to latent across the top, prior samples back to data along the bottom. The figure's $f$ is $F_\phi$ in our notation. After Dinh et al. [@realnvp, Fig. 1].](figures/lec04/jungwoopark01-realnvp-mapping.png){#fig-realnvp-mapping width=80%}
-
-@fig-moons and @fig-realnvp-mapping show the same fact from two angles: a
-trained flow is one bijection, and inference and generation are the two ways of
-reading it.
+@fig-moons makes the point that a trained flow is one bijection: inference
+and generation are not two models but two ways of reading the same one.
 
 ## Glow {#sec-glow}
 

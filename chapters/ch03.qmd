@@ -176,7 +176,31 @@ $$
 X\underbrace{\textcolor{red}{T}}_{\text{channel axis}}+B.}
 $$ {#eq-unified}
 
-At index level, $Y_{nc}=\sum_{m,j}A_{nm}X_{mj}T_{jc}+B_{nc}$. This immediately distinguishes dense spatial mixing, diagonal spatial gating, and channel mixing. In @fig-axes, each row isolates one selected output row or channel so the action of $A$ or $T$ is visually unambiguous.
+At index level, $Y_{nc}=\sum_{m,j}A_{nm}X_{mj}T_{jc}+B_{nc}$, which immediately
+distinguishes dense spatial mixing, diagonal spatial gating, and channel
+mixing. In @fig-axes each row isolates one selected output row or channel, so
+the action of $A$ or $T$ is visually unambiguous.
+
+The point of writing it this way is that the operations of this chapter are
+not four unrelated mechanisms but four choices of which factor is active and
+where it is computed from [@lecture-slides, pp. 96--97]:
+
+| Operation | Form | $A$ | $T$ | computed from |
+|:---|:---|:---|:---|:---|
+| Instance norm, AdaIN, WCT | $Y=XT+B$ | $I$ | channel mixing or scaling | $X$, and a style input for AdaIN and WCT |
+| Self-attention | $Y=AX$ | dense, position mixing | $I$ | $X$ alone |
+| Cross-attention | $Y=AX$ | dense, generally rectangular | $I$ | queries from $X$, keys and values from another input |
+| Channel attention (SENet) | $Y=XT$ | $I$ | diagonal | $X$, pooled over position |
+
+: The operations of this chapter as instances of @eq-unified. {#tbl-unified}
+
+Two rows in @tbl-unified are worth separating because they are easy to
+conflate. Channel attention [@senet] and AdaIN both act through a diagonal
+$T$, but AdaIN's scale comes from a *style image* and SENet's comes from the
+same feature map pooled over position --- the first imports information, the
+second redistributes it. And self- and cross-attention differ only in
+where the keys come from, which is the whole of the step from a generator
+that stylises one image to the translation models of @sec-translation.
 
 ![Illustration of how left and right multiplication act on different indices in $Y=AXT+B$; $B$ is omitted for clarity. Each row visualizes one selected output row or one selected output channel. Dense spatial attention mixes many input positions into one output position, diagonal spatial attention gates a position without within-layer position mixing, and diagonal channel modulation rescales one channel across all positions.](figures/lec03/Jeongchan-Kim-axes.png){#fig-axes width=100%}
 

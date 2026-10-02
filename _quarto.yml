@@ -22,9 +22,9 @@ book:
           - chapters/ch03.qmd
           - chapters/ch04.qmd
           - chapters/ch05.qmd
-          - chapters/ch06.qmd
       - part: "Diffusion Models"
         chapters:
+          - chapters/ch06.qmd
           - chapters/ch07.qmd
           - chapters/ch08.qmd
           - chapters/ch09.qmd

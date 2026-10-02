@@ -176,10 +176,12 @@ $$
 X\underbrace{\textcolor{red}{T}}_{\text{channel axis}}+B.}
 $$ {#eq-unified}
 
-At index level, $Y_{nc}=\sum_{m,j}A_{nm}X_{mj}T_{jc}+B_{nc}$, which immediately
-distinguishes dense spatial mixing, diagonal spatial gating, and channel
-mixing. In @fig-axes each row isolates one selected output row or channel, so
-the action of $A$ or $T$ is visually unambiguous.
+At index level, $Y_{nc}=\sum_{m,j}A_{nm}X_{mj}T_{jc}+B_{nc}$. Reading the two
+sums separately is what distinguishes the mechanisms. The sum over $m$ runs
+over input *positions*, so a dense $A$ gathers many positions into one output
+position while a diagonal $A$ only gates each position in place. The sum over
+$j$ runs over input *channels*, so a dense $T$ mixes channels while a diagonal
+$T$ rescales each one across every position at once.
 
 The point of writing it this way is that the operations of this chapter are
 not four unrelated mechanisms but four choices of which factor is active and
@@ -201,8 +203,6 @@ same feature map pooled over position --- the first imports information, the
 second redistributes it. And self- and cross-attention differ only in
 where the keys come from, which is the whole of the step from a generator
 that stylises one image to the translation models of @sec-translation.
-
-![Illustration of how left and right multiplication act on different indices in $Y=AXT+B$; $B$ is omitted for clarity. Each row visualizes one selected output row or one selected output channel. Dense spatial attention mixes many input positions into one output position, diagonal spatial attention gates a position without within-layer position mixing, and diagonal channel modulation rescales one channel across all positions.](figures/lec03/Jeongchan-Kim-axes.png){#fig-axes width=100%}
 
 The lecturer's word *dual* describes complementary tensor axes, not optimization duality. For fixed $T$, $\operatorname{col}(XT)\subseteq\operatorname{col}(X)$; for fixed $A$, $\operatorname{row}(AX)\subseteq\operatorname{row}(X)$. However, statistics-dependent $A,T,B$ must be recomputed when their inputs change. Associativity $(AX)T=A(XT)$ for fixed matrices does **not** imply that complete normalization and attention layers commute, or that separate axes guarantee independent semantic factors.
 

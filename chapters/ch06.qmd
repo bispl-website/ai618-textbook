@@ -1,5 +1,5 @@
 ---
-title: "Score-based Generative Models with SDEs"
+title: "Denoising Diffusion Probabilistic Models"
 ---
 
 ::: {.callout-note}

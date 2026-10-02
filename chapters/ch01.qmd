@@ -1117,6 +1117,18 @@ $$ {#eq-transport-constraint}
 that is, if $\nu = T_{\#}\mu$ in the sense of @def-pushforward.
 :::
 
+![A transportation map. Every bit of mass under $\mu$ on $\mathcal{X}$ is
+assigned a destination by $T$, and the mass that arrives is $\nu$ on
+$\mathcal{Y}$. The constraint @eq-transport-constraint is the whole of
+Monge's requirement: nothing is said about how $T$ is built, only about where
+the mass ends up. From the course slides [@lecture-slides, p. 36].](figures/lec01/slides-transport-map.png){#fig-transport-map width=75%}
+
+@fig-transport-map also shows what will go wrong. A map sends each source
+point somewhere; it cannot send one point to two places. When $\nu$ has mass
+where no single destination will do --- the two humps on the right, fed from
+one hump on the left --- a transport map may fail to exist at all, which is
+@prp-monge-fails below.
+
 ::: {#def-monge}
 ## Monge's problem
 Given a cost $c : \mathcal{X} \times \mathcal{Y} \to [0,\infty]$, Monge's

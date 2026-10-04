@@ -568,7 +568,7 @@ moves along the digit classes, and the sweep is a clean change of one factor.
 meaning, and the sweep wanders. This is the latent traversal that
 @sec-adv-infogan describes as the standard of evidence for a disentangled
 code. From the course slides [@lecture-slides], after Chen et al.
-[@infogan].](figures/lec02/slides-infogan-mnist.png){#fig-infogan-mnist width=95%}
+[@infogan].](figures/lec02/inhyeok-jeong-infogan-digits.png){#fig-infogan-mnist width=95%}
 
  Mutual information is invariant under invertible reparametrisations
 of $c$, though, so the objective alone does not decide *which* factor a code
@@ -901,7 +901,7 @@ towards the real side, and its direction is set by the sums over
 $\mathcal{M}$ alone, not over every sample. Compare @fig-mcgan-geometry,
 where the same normal is the difference of *all* the feature means. From the
 course slides [@lecture-slides], after Lim and Ye
-[@geometric-gan].](figures/lec02/slides-geometric-gan-margin.png){#fig-margin width=80%}
+[@geometric-gan].](figures/lec02/inhyeok-jeong-margin.png){#fig-margin width=80%}
 
 ### Which distance the hinge discriminator estimates
 

@@ -1784,6 +1784,14 @@ closed form.
 
 ::: {#prp-gaussian-ot}
 ## Optimal transport between Gaussians
+
+![Transport between two Gaussians. The map @eq-gaussian-map carries $\mu$ on the left to $\nu$ on the right by matching means and reshaping the covariance. The boxed special case is what happens when both covariances are isotropic: it is @eq-adain, the layer that normalises a feature map and rescales it to another's statistics. From the course slides [@lecture-slides, p. 40].](figures/lec01/swy99-lecture-gaussian.png){#fig-gaussian-ot width=75%}
+
+@fig-gaussian-ot is worth keeping in view through the next two sections,
+because the step from the general map to the boxed one is the whole of the
+connection to adaptive instance normalisation: the matrix square roots
+collapse to a ratio of scalars the moment the covariances commute.
+
 Let $\mu = \mathcal{N}(m_{U}, \Sigma_{U})$ and
 $\nu = \mathcal{N}(m_{V}, \Sigma_{V})$ with $\Sigma_{U}$ positive definite.
 Put

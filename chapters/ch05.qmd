@@ -1,5 +1,5 @@
 ---
-title: "Self-supervised Denoising: Noise2Noise, Noise2Self and Noise2Score"
+title: "Self-supervised Denoising"
 ---
 
 ## Overview

@@ -509,6 +509,8 @@ copy either, only BM3D and Noise2Void are applicable at all, and Noise2Void is
 much faster at inference (about $0.1$--$1.3$ s against $4.6$--$33.2$ s for
 BM3D on the slides' examples).
 
+![Noise2Void against BM3D, supervised training ("traditional") and Noise2Noise, on the five datasets of the lecture. The top two rows have a ground truth and are scored by PSNR. The bottom three --- cryo-TEM and two fluorescence-microscopy sets --- have none: the ground-truth column reads "does not exist", supervised training has no clean target, and on two of the three Noise2Noise has no second noisy copy either, so only BM3D and Noise2Void produce an image at all. These are the cases the method exists for, and they are the ones a PSNR table cannot report. From slide 16 of the course slides [@lecture-slides-ssl], originally from @krull2019.](figures/lec05/slides-n2v-microscopy.png){#fig-n2v-microscopy width=100%}
+
 A student asked how the model knows which part of the image is noise. The
 answer is that it does not need to: the model assumes every pixel is signal plus
 noise, and the independence of the noise is the only thing that distinguishes
@@ -635,7 +637,9 @@ $\tilde{n}$ averages out over training like the randomness of a minibatch. @fig-
 On one BSD68 image at $\sigma = 50$ (input $14.76$ dB) the slides report BM3D $26.14$ dB,
 a SURE-trained network $26.46$ dB, and the same network trained with clean
 targets (MSE) $26.85$ dB: SURE does not reach supervised quality, but it is
-close and it needs no clean data.
+close and it needs no clean data. @fig-sure-bsd68 is that comparison.
+
+![SURE on a natural image: BSD68 at $\sigma = 50$, with the noisy input at $14.76$ dB. (c) is the network trained with the SURE loss and no clean data, (d) the same with a transformed divergence estimate, and (e) the same architecture trained on clean targets. The insets show that the $0.4$ dB separating (c) from (e) is visible mainly in fine texture. From slide 19 of the course slides [@lecture-slides-ssl], originally Fig. 5 of @soltanayev2018.](figures/lec05/slides-sure-bsd68.png){#fig-sure-bsd68 width=100%}
 
 ## A side-by-side comparison
 
@@ -1199,6 +1203,13 @@ $$
 Substituting and rearranging gives the claim.
 :::
 
+The boundary condition is not a formality to be waved through. Several of the
+noise models in @tbl-tweedie live on a half-line --- Poisson, Gamma,
+exponential --- and on a one-sided or bounded support the coordinatewise
+integration by parts leaves a term at the finite end as well, which has to be
+checked rather than discarded; it vanishes when $p(y)\Psi_\Theta(y) \to 0$ there
+too. The decay-at-infinity example above covers only the unbounded case.
+
 So the SURE network, written in residual form, is trained to output the score,
 and the denoised image it produces is $y + \sigma^2 l'(y)$, once more the Gaussian
 Tweedie formula (by @thm-ism). The lecture's conclusion (slide 34): **Noise2X and SURE are score-based
@@ -1254,8 +1265,24 @@ one principled pipeline.
 
 ## Where the independence assumption fails {#sec-independence}
 
-Every method in this lecture rests on an independence or zero-mean assumption,
-and each fails in a recognizable way when it does not hold.
+Every identity in this chapter is carried by one assumption, and it is worth
+seeing them in one place before looking at what happens when they fail.
+
+| Result | The assumption that carries the equality |
+|:---|:---|
+| Supervised squared error (@lem-mmse) | the conditional expectation $\mathbb{E}[x \mid y]$ exists |
+| Noise2Noise (@thm-n2n) | the target noise has zero conditional mean, $\mathbb{E}[w_2 \mid x, y_1] = 0$ |
+| Noise2Self / Noise2Void (@thm-n2s) | the hidden values are withheld from the network, and the noise is independent across the partition |
+| SURE (@thm-sure) | additive Gaussian noise of known $\sigma$, and $F_\Theta$ weakly differentiable with integrable divergence |
+| Tweedie's formula (@thm-tweedie) | the likelihood is a known exponential family, and the posterior normalization may be differentiated under the integral |
+| DAE as score estimator (@prp-dae) | the perturbation is Gaussian, and the score is read in the limit $\sigma_a \to 0$ |
+| Implicit score matching (@thm-ism) | the boundary terms of the integration by parts vanish |
+
+: What each result assumes. Every row is an independence, a zero-mean or a
+regularity condition; none of them is checkable from the noisy data alone.
+{#tbl-assumptions}
+
+Each fails in a recognizable way when it does not hold.
 
 - **Noise2Noise** needs $\mathbb{E}[w_2 \mid x, y_1] = 0$. If the two copies share a
   noise component --- fixed-pattern noise of a sensor, a common bias, a
@@ -1605,5 +1632,5 @@ than a second network.
 
 ---
 
-*Based on the scribe note of Hyeonjae Kim, with material from Donggyu Kim
-and Mingeon Kim; edited by Jong Chul Ye.*
+*Based on the scribe note of Hyeonjae Kim, with material from Donggyu Kim,
+Mingeon Kim and Jeonghun Lee; edited by Jong Chul Ye.*

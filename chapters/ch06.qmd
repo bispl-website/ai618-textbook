@@ -806,6 +806,45 @@ two lines are the whole method; everything above derives them.
 
 Because $1-\alpha_t=\beta_t$, the coefficient in @ho2020, Algorithm 2 is exactly $\beta_t/\sqrt{1-\bar\alpha_t}$. The final step sets $z=0$: the output is $\mu_\theta(x_1,1)$, the mean of the Gaussian inside the decoder, reported without noise [@ho2020, Sec. 3.3]. Training costs one network evaluation per sampled time, but ancestral sampling needs $T$ sequential evaluations.
 
+Written out, the two algorithms are shorter than their derivation. Each line
+below is one of the equations above: `x_t` is @eq-one-step-renoising, `loss` is
+@eq-simple-loss, and the reverse update is @eq-ddpm-sampling with
+$\sigma_t^2=\tilde\beta_t$.
+
+```{.python}
+import torch
+
+def ddpm_training_step(model, x_0, alpha_bar):
+    """One training iteration (Algorithm 1)."""
+    T = len(alpha_bar) - 1
+    t = torch.randint(1, T + 1, (1,)).item()          # t ~ Unif{1,...,T}
+    epsilon = torch.randn_like(x_0)                   # the target, known to us
+    x_t = (torch.sqrt(alpha_bar[t]) * x_0             # one jump, no chain
+           + torch.sqrt(1 - alpha_bar[t]) * epsilon)
+    return torch.mean((epsilon - model(x_t, t)) ** 2)
+
+@torch.no_grad()
+def ddpm_sample(model, shape, alpha, alpha_bar, sigma):
+    """Ancestral sampling (Algorithm 2)."""
+    T = len(alpha) - 1
+    x_t = torch.randn(shape)                          # x_T ~ N(0, I)
+    for t in range(T, 0, -1):
+        z = torch.randn_like(x_t) if t > 1 else torch.zeros_like(x_t)
+        beta_t = 1 - alpha[t]
+        x_t = (1 / torch.sqrt(alpha[t])
+               * (x_t - beta_t / torch.sqrt(1 - alpha_bar[t]) * model(x_t, t))
+               + sigma[t] * z)
+    return x_t
+```
+
+Two details are worth reading off the code. Training never simulates the chain:
+one draw of $t$ and one of $\epsilon$ give $x_t$ directly, which is why a
+thousand-step model costs no more per iteration than a ten-step one. Sampling
+does the opposite, $T$ sequential network evaluations with no way to
+parallelize over $t$, and that asymmetry is what the rest of the chapter, and
+much of the literature after it, works to remove.
+
+
 @fig-swiss-roll shows the whole procedure on a two-dimensional example, in the spirit of the first figure of @sohl2015 [Sec. 2, Fig. 1]. The forward chain spreads the data into noise, ancestral sampling carries the noise back, and the drift field shows how the reverse mean pulls samples towards the data: diffusion moves **the whole probability mass**, not a single blurred sample.
 
 ![Diffusion moves the whole probability mass, not a single sample. Top: forward samples of a Swiss roll at $t=0$, $60$ and $T$. Middle: 600 ancestral DDPM samples ($\sigma_t^2=\tilde\beta_t$) recorded at the same times; generation reads this row from right to left. Bottom: the reverse drift $\mu(x_t,t)-x_t$ at $t=1$, $60$ and $T$, rescaled per panel. The reverse process uses the exact score of the empirical law of 1500 Swiss-roll points, so no network is trained, and the samples at $t=0$ land on those training points: the figure shows transport of mass, not generalization. Values from `swiss_roll_figure()` (@sec-swiss-code).](figures/lec06/mumbumble-swiss-roll.png){#fig-swiss-roll width=100%}
@@ -1607,5 +1646,6 @@ which also agrees. Both generative steps substitute the same $\hat x_0$ for $x_0
 
 ---
 
-*Based on the scribe note of Hyewon Park, with material from Donghyeon Kim
-and Chankyu Lee; edited by Jong Chul Ye.*
+*Based on the scribe note of Hyewon Park, with material from Donghyeon Kim,
+Seojeong Gu and Chankyu Lee --- the four scribes of lecture 06; edited by Jong
+Chul Ye.*

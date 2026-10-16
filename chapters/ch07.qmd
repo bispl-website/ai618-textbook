@@ -8,3 +8,22 @@ Lecture 07 of AI618, given 2026-10-06. This chapter is merged from
 the scribe notes for that lecture; until those are written and graded it stands
 empty.
 :::
+
+<!-- Where DDIM goes, decided 2026-10-16 by the instructor.
+
+     Lecture 07 opens with the DDIM construction, slides 17-25, so its scribe
+     notes will carry it. The book does not follow that boundary. DDIM is
+     defined entirely in DDPM's terms -- same noisy marginals, same network,
+     same loss -- so the construction lives next to DDPM in chapter 6
+     (@sec-ddim), and the DDIM material in the lecture 07 notes is merged
+     there, not here. Chapter 6 therefore draws on two lectures' notes, and its
+     credit line should name the lecture 07 scribes whose material is used.
+
+     What belongs here is the part that only makes sense once the SDE exists:
+     slide 36's statement that SMLD, DDPM and DDIM are special cases of one
+     SDE, and the reading of the deterministic sampler as a discretisation of
+     the probability-flow ODE. Open with a one-line recall and a cross
+     reference to @sec-ddim rather than restating the family.
+
+     Chapter 6 keeps the title "Denoising Diffusion Probabilistic Models" even
+     though DDIM is half of it. -->

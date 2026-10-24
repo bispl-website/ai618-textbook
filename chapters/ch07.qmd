@@ -2,12 +2,25 @@
 title: "Score-based Generative Models with SDEs"
 ---
 
-::: {.callout-note}
-## Not yet written
-Lecture 07 of AI618, given 2026-10-06. This chapter is merged from
-the scribe notes for that lecture; until those are written and graded it stands
-empty.
-:::
+
+<!--
+DRAFT seeded by scripts/promote.py from the strongest lec07 scribe note.
+Base note: HaJunHyun. Merge sources: HaJunHyun, deb-kit2, euijinshin, Jahyeok-Koo.
+
+This repository is public and this comment ships in the page source, so it
+carries no scores and no per-note criticism. Both live in
+drafts/lec07-merge.md, which .gitignore keeps out of the repository.
+
+Before this chapter is publishable:
+
+1. Fill the gaps listed in drafts/lec07-merge.md, which also says which of
+   the other notes covered each one.
+2. Resolve every suspected error in the worksheet against the lecture itself.
+3. Reconcile notation with the neighbouring chapters.
+4. Copy-edit. The scribe repository never penalised English fluency, so some
+   base notes need a real pass here.
+5. Replace this comment and the contributor list below with the final credit.
+-->
 
 <!-- Where DDIM goes, decided 2026-10-16 by the instructor.
 
@@ -27,3 +40,535 @@ empty.
 
      Chapter 6 keeps the title "Denoising Diffusion Probabilistic Models" even
      though DDIM is half of it. -->
+
+::: {.callout-important}
+## Draft
+This chapter is a merge in progress and has not been edited or checked.
+:::
+
+
+## Overview
+
+The lecture opens by completing the discrete picture with DDIM [@ddim], which keeps DDPM's marginals $q(x_t\mid x_0)$ while dropping the Markov property of the forward process, so one trained network can be sampled in many ways --- from a deterministic sampler ($\eta=0$) to DDPM itself ($\eta=1$). That construction is built in @sec-ddim, next to DDPM, and @sec-recall recalls the three facts from it that this chapter uses.
+
+This chapter is what comes after: the lecture moves to continuous time, following @sde. Score matching with Langevin dynamics (SMLD) of @song2019ncsn and DDPM turn out to be discretizations of two stochastic differential equations, and running such an SDE backwards only requires the score $\nabla_{x}\log p_t$ at every noise level. So training a diffusion model is the same as training a score function, and for the VP SDE the denoising score matching loss coincides with the DDPM loss.
+
+Finally, the lecture gives a geometric explanation of why diffusion models work better than GANs. Diffusion is a scale-space of the data distribution. In high dimension the samples at each noise level lie on a thin shell around the data manifold, and a good sampler moves from one shell to the next.
+
+Most of the claims below are checked numerically in @sec-worked, on a one-dimensional example where every score is known exactly.
+
+## Notation
+
+| Symbol | Meaning |
+|---|---|
+| $x_0\sim p_0 = p_{\text{data}}$, $x\in\mathbb{R}^n$ | clean data |
+| $\alpha_t = 1-\beta_t$, $\bar\alpha_t=\prod_{s\le t}\alpha_s$, $\bar\alpha_0=1$ | DDPM noise schedule |
+| $\gamma_t$, $\eta$, $\tilde\beta_t$ | standard deviation of the reverse step of the $\eta$ family, $\gamma_t=\eta\sqrt{\tilde\beta_t}$, with $\tilde\beta_t$ the posterior *variance* of @sec-ddim |
+| $\epsilon_\theta(x_t,t)$, $\hat{x}_t$ | noise predictor and Tweedie estimate of $x_0$ |
+| $p_t$, $p_{0t}(x_t\mid x_0)$ | marginal of $x(t)$ and transition kernel (written $p_{0i}$ on the slides) |
+| $s_\theta(x,t)$ | score network (written $s_\theta(x,i)$ on the slides) |
+| $f$, $g$, $w$, $\bar{w}$ | drift, diffusion coefficient, forward and reverse Wiener processes |
+| $\sigma_t$, $\beta(t)$ | VE noise level and VP noise rate |
+| $\Delta = \nabla\cdot\nabla$ | Laplacian |
+
+: Notation for the continuous-time formulation. Symbols shared with
+  the discrete chapters keep their meaning there. {#tbl-notation-sde}
+
+Throughout this chapter $t$ increases with the noise level, whereas slides 43, 46 index time in the opposite direction. We write fresh Gaussian noise as $z$ (slides 23, 24 write $\epsilon$), so that $\epsilon$ always means the noise that produced $x_t$. The DDIM standard deviation is $\gamma_t$, written $\sigma_t$ on slides 17, 23. Slide 24 writes $\epsilon^{(t)}_{\theta^*}$ and $x^{(t)}_{\theta^*}$ for what we call $\epsilon_\theta(x_t,t)$ and $\hat{x}_t$, and slide 32 indexes the SMLD sampler by $i$, as we do in @eq-ve-sampler. Fresh noise is $z$ and $\epsilon$ is the noise that produced $x_t$, the same split the discrete chapters use.
+
+## What chapter 6 already gives us {#sec-recall}
+
+The lecture opens with the DDIM construction of slides 17--25. This book does
+not keep that boundary: DDIM is defined entirely in DDPM's terms --- the same
+noisy marginals, the same network, the same loss --- so it is built next to
+DDPM in @sec-ddim rather than restated here. Three results from there are used
+throughout this chapter, and it is worth having them in view.
+
+**The $\eta$ family.** For any $\gamma$ with $0\le\gamma_t^2\le1-\bar\alpha_{t-1}$
+there is a forward process, non-Markov in general, with DDPM's marginals
+$q(x_t\mid x_0)$ and the same noise-regression loss, so one trained network
+serves every member. Writing $\gamma_t=\eta\sqrt{\tilde\beta_t}$ indexes the
+family by a single $\eta$, with $\eta=1$ the DDPM ancestral sampler and
+$\eta=0$ a deterministic map from $x_T$ to $x_0$ (@sec-ddim-exact). Skipping
+steps along a subsequence $\tau_1<\cdots<\tau_S$ is @sec-skip.
+
+**The reverse step in three parts.** Every member of the family writes one
+reverse step as Tweedie's denoiser, parametric noise and stochastic noise,
+@eq-denoise-renoise. Slide 54 restates this decomposition once the SDE is in
+place, and @sec-manifold is where this chapter does so.
+
+**Noise prediction and the score are the same object.**
+$s_\theta=-\epsilon_\theta/\sqrt{1-\bar\alpha_t}$, with Tweedie's formula as
+its companion identity (@eq-epsilon-score-conversion). This is what lets the
+discrete chapters and the continuous one below be read as one theory, and the
+VP SDE below uses it to show that the DDPM loss *is* denoising score matching.
+
+What belongs to this chapter is everything that only makes sense once the SDE
+exists: that SMLD, DDPM and DDIM are three discretizations of one equation
+(slide 36), that the deterministic sampler is a discretization of the
+probability flow ODE, and the geometric argument of slides 39--54 for why any
+of it works.
+
+## The SDE formulation
+
+### Forward and reverse SDEs
+
+We now let the number of steps go to infinity. Starting from $x(0)\sim p_0$, the data evolve according to the Ito SDE
+
+$$
+dx = f(x,t)\,dt + g(t)\,dw,\qquad
+\text{which means}\qquad x(t+\Delta t)\approx x(t)+f\,\Delta t + g\sqrt{\Delta t}\,z
+$$ {#eq-forward-sde}
+
+for small $\Delta t$, where $f$ and $g$ are chosen so that $x(T)\sim p_T$ is a simple Gaussian. The second form is the Euler-Maruyama step.
+
+To reverse the process we need to know how the density $p_t$ evolves in time. This evolution is governed by the Fokker-Planck equation (the general version is on slide 51 and in @sec-fp),
+
+$$
+\partial_t p_t = -\nabla\cdot(f\,p_t) + \tfrac12 g^2\Delta p_t = -\nabla\cdot\Big(\big[f-\tfrac12 g^2\nabla\log p_t\big]p_t\Big),
+$$ {#eq-fp}
+
+where the second form uses $\nabla p_t = p_t\nabla\log p_t$. To derive the equation, take a smooth test function $\varphi$. Ito's formula gives $\frac{d}{dt}\mathbb{E}\varphi(x) = \mathbb{E}[\nabla\varphi\cdot f + \frac12g^2\Delta\varphi]$, because the noise term has mean zero. The left side is $\int\varphi\,\partial_tp_t\,dx$. On the right, integrating by parts moves the derivatives from $\varphi$ onto $p_t$ and gives $\int\varphi\,[-\nabla\cdot(fp_t)+\frac12g^2\Delta p_t]\,dx$. Since the two agree for every $\varphi$, @eq-fp follows [@sarkka2019].
+
+::: {#thm-reverse}
+## Reverse-time SDE
+If we run
+$$
+dx = \big[f(x,t) - g(t)^2\nabla_{x}\log p_t(x)\big]dt + g(t)\,d\bar{w}
+$$ {#eq-reverse-sde}
+backwards in time from $x(T)\sim p_T$ (so that $dt<0$), then the solution has marginal $p_t$ at every time $t$ [@anderson1982]. In particular, $x(0)\sim p_0$.
+:::
+
+::: {.proof}
+We only show that the marginals agree, which is all that sampling requires. Anderson's theorem also identifies the law of whole paths. Let $q_\tau = p_{T-\tau}$. From @eq-fp we get
+$\partial_\tau q_\tau = \nabla\cdot([f-\frac12g^2\nabla\log q_\tau]q_\tau) = -\nabla\cdot([-f+g^2\nabla\log q_\tau]q_\tau) + \frac12g^2\Delta q_\tau$,
+where we added and subtracted $\frac12g^2\Delta q_\tau = \nabla\cdot(\frac12g^2q_\tau\nabla\log q_\tau)$. This is the Fokker-Planck equation of $dx = [-f+g^2\nabla\log p_{T-\tau}]d\tau + g\,dw_\tau$, and substituting $t = T-\tau$ gives @eq-reverse-sde.
+:::
+
+The reverse drift is thus the forward drift minus $g^2$ times the score, and the score is the only unknown quantity. The reversal holds in distribution, not for individual paths. If we follow a forward path and then run the reverse SDE from its end point, we do not return to where we started, but the distribution at every time is the same. The figure on slide 29 makes this point, and @fig-sde shows it on our example.
+
+### The probability flow ODE
+
+@eq-fp is a continuity equation with velocity $f-\frac12g^2\nabla\log p_t$, so the deterministic ODE
+
+$$
+\frac{dx}{dt} = f(x,t) - \tfrac12 g(t)^2\nabla\log p_t(x)
+$$ {#eq-pf-ode}
+
+has the same marginals as the SDE. Its trajectories are the white curves in the figure on slide 29.
+
+For the VP SDE introduced below, this ODE is closely connected to DDIM. Change variables to $\bar{x} = x/\sqrt{\bar\alpha}$ and $\sigma = \sqrt{(1-\bar\alpha)/\bar\alpha}$. Then $\bar{x} = x_0+\sigma\epsilon$, so $\sigma$ is the VE noise level of the rescaled variable. Using $\dot{\bar\alpha} = -\beta\bar\alpha$ and @eq-epsilon-score-conversion, we find
+
+$$
+\frac{d\bar{x}}{dt} = -\frac{\beta\,\nabla\log p_t}{2\sqrt{\bar\alpha}} = \frac{\beta\,\epsilon^*}{2\sqrt{\bar\alpha(1-\bar\alpha)}},\qquad
+\frac{d\sigma}{dt} = \frac{\beta}{2\sqrt{\bar\alpha(1-\bar\alpha)}},
+\qquad\text{so}\qquad \frac{d\bar{x}}{d\sigma} = \epsilon^*.
+$$ {#eq-pf-sigma}
+
+Taking one Euler step of this ODE from $\sigma_t$ to $\sigma_{t-1}$ and multiplying by $\sqrt{\bar\alpha_{t-1}}$ gives $x_{t-1} = \sqrt{\bar\alpha_{t-1}}\hat{x}_t + \sqrt{1-\bar\alpha_{t-1}}\epsilon_\theta$, which is exactly the $\eta=0$ DDIM step. So DDIM is the Euler method for the probability flow ODE written in the variables $(\sigma,\bar{x})$, which is the sense in which slide 36 calls DDIM a special case of the SDE framework.
+
+![The two-mode example under the VP SDE with exact scores, with $p_t$ shown in grey. (a) Forward SDE paths. (b) Reverse SDE paths started from $\mathcal{N}(0,1)$. They differ from the forward paths but have the same marginals, and they reach the two modes in proportions 0.2 and 0.8. (c) Probability flow ODE paths, which are deterministic and never cross. This is a numerical version of the figure on slide 29.](figures/lec07/HaJunHyun-sde-paths.pdf){#fig-sde width=100%}
+
+### Which score do we need?
+
+The reverse drift in @eq-reverse-sde at time $t$ requires the score of $p_t$, not the score $\nabla\log p_0$ of the clean data, so the score has to be learned at every noise level and not only at $t=0$.
+
+The clean score is also hard to learn. An empirical distribution has no score at all, and the low-density regions between modes contain very few samples. The clean score carries information about the relative weight of the modes only in these regions, which a sampler rarely visits, and elsewhere it simply pulls towards the nearer mode, as panel (a) of @fig-score shows. Transitions between modes happen at high noise levels, where the modes have merged. The figure of @kim2023dmcmc on slides 30, 43 illustrates this, with an MCMC chain that crosses between modes at a high noise level before the reverse process brings it back down. Langevin dynamics with the clean score does have $p_0$ as its stationary distribution, but crossing the gap takes far longer than any practical run [@song2019ncsn]. In panel (b) of @fig-score, 2000 steps started from $\mathcal{N}(0,1)$ leave 49 percent of the samples on the mode of weight 0.2 and 51 percent on the mode of weight 0.8, which is where the starting points fell. The reverse SDE recovers the correct proportions.
+
+![(a) The exact score of the two-mode example at $t=0$, $0.25$ and $0.5$. At $t=0$ it is a steep pull towards the nearer mode with an abrupt switch in between, while at larger $t$ it becomes a smooth field that connects the modes. (b) Samples from Langevin dynamics with the clean score (2000 steps of size 0.01 from $\mathcal{N}(0,1)$) compared with the reverse SDE.](figures/lec07/HaJunHyun-score-levels.pdf){#fig-score width=100%}
+
+### Score matching
+
+The objective on slide 31, which we call explicit score matching (ESM), is
+
+$$
+J_{\text{ESM}}(\theta) = \mathbb{E}_t\,\mathbb{E}_{x_t\sim p_t}\big\Vert s_\theta(x_t,t)-\nabla\log p_t(x_t)\big\Vert_2^2 .
+$$ {#eq-esm}
+
+It cannot be computed, because $p_t = \int p_{0t}(\cdot\mid x_0)p_0(x_0)dx_0$ depends on the unknown $p_0$. The lecture instead conditions on $x_0$, for which the kernel $p_{0t}(x_t\mid x_0)$ is known, and this leads to
+
+$$
+J_{\text{DSM}}(\theta) = \mathbb{E}_t\,\mathbb{E}_{x_0\sim p_0}\,\mathbb{E}_{x_t\sim p_{0t}(\cdot\mid x_0)}\big\Vert s_\theta(x_t,t)-\nabla_{x_t}\log p_{0t}(x_t\mid x_0)\big\Vert_2^2 .
+$$ {#eq-dsm}
+
+Slides 31, 33, 35 leave the expectation over $x_0$ implicit.
+
+::: {#thm-dsm}
+## Denoising score matching
+If differentiation in $x_t$ can be exchanged with integration over $x_0$, then for every $t$ the two objectives differ only by a constant $C_t$ that does not depend on $\theta$ [@vincent2011]. They therefore have the same gradient and the same minimizer, $s_{\theta^*}(\cdot,t) = \nabla\log p_t$.
+:::
+
+::: {.proof}
+Expand both squares. The term $\mathbb{E}\Vert s_\theta(x_t)\Vert^2$ is the same in both objectives, since $x_t\sim p_t$ in each case. The cross terms also agree, because
+$$
+\begin{aligned}
+\mathbb{E}_{p_t}[s_\theta\cdot\nabla\log p_t] &= \int s_\theta\cdot\nabla p_t\,dx\\
+&= \iint s_\theta(x)\cdot\nabla_{x}\log p_{0t}(x\mid x_0)\,p_{0t}(x\mid x_0)\,p_0(x_0)\,dx_0\,dx\\
+&= \mathbb{E}_{x_0,x_t}[s_\theta\cdot\nabla\log p_{0t}].
+\end{aligned}
+$$
+The remaining terms do not involve $\theta$. The minimizer of the DSM objective is the conditional mean $\mathbb{E}[\nabla\log p_{0t}(x_t\mid x_0)\mid x_t]$, which by the same exchange equals $\nabla p_t/p_t$.
+:::
+
+The constant $C_t$ is the expected conditional variance of the target, so the DSM loss remains positive even at the optimum. In @sec-worked, at $t=0.3$, the difference $J_{\text{DSM}}-J_{\text{ESM}}$ is about 0.570 for three different models.
+
+### SMLD as the VE SDE
+
+SMLD perturbs the data at noise levels $\sigma_1<\dots<\sigma_N$, and the perturbed samples can be built step by step as $x_i = x_{i-1}+\sqrt{\sigma_i^2-\sigma_{i-1}^2}\,z$. If we set $\sigma_i=\sigma(i\Delta t)$, then $\sqrt{\sigma^2(t+\Delta t)-\sigma^2(t)}\approx\sqrt{\tfrac{d[\sigma^2]}{dt}\Delta t}$, and the chain becomes the Euler-Maruyama discretization of
+
+$$
+dx = \sqrt{\frac{d[\sigma^2(t)]}{dt}}\,dw,\qquad\text{so}\qquad f=0,\quad g=\sqrt{\frac{d[\sigma^2(t)]}{dt}},\quad x_t = x_0+\sigma_tz.
+$$ {#eq-ve-sde}
+
+Since $\int_0^tg^2 = \sigma_t^2-\sigma_0^2$, the kernel is $\mathcal{N}(x_0,(\sigma_t^2-\sigma_0^2)I)\approx\mathcal{N}(x_0,\sigma_t^2I)$. Its variance becomes very large, hence the name variance exploding. Differentiating $\log p_{0t}(x_t\mid x_0) = -\Vert x_t-x_0\Vert^2/2\sigma_t^2+\text{const}$, as slide 33 does, gives $\nabla\log p_{0t} = -(x_t-x_0)/\sigma_t^2$. With the weight $\sigma_t^2$, @eq-dsm becomes
+
+$$
+\min_\theta\ \mathbb{E}\Big\Vert\sigma_t\,s_\theta(x_t,t)+\frac{x_t-x_0}{\sigma_t}\Big\Vert^2 = \min_\theta\ \mathbb{E}\big\Vert\sigma_t\,s_\theta(x_t,t)+z\big\Vert^2 .
+$$ {#eq-ve-loss}
+
+To obtain the sampler, set $f=0$ in @eq-reverse-sde. A step from $t_i$ to $t_{i-1}$ has $g^2|\Delta t|\approx\sigma_i^2-\sigma_{i-1}^2$, which gives the update on slide 32,
+
+$$
+x_{i-1} = x_i + (\sigma_i^2-\sigma_{i-1}^2)\,s_\theta(x_i,i) + \sqrt{\sigma_i^2-\sigma_{i-1}^2}\,z.
+$$ {#eq-ve-sampler}
+
+Apart from a factor of 2 in the noise variance, this has the form of a Langevin step (@eq-langevin) with step size $\sigma_i^2-\sigma_{i-1}^2$, which is why the slides call it a Langevin sampler.
+
+### DDPM as the VP SDE
+
+With $\beta_i = \beta(t_i)\Delta t$ and $\sqrt{1-u} = 1-\frac u2+O(u^2)$, the chain $x_i = \sqrt{1-\beta_i}\,x_{i-1}+\sqrt{\beta_i}\,z_{i-1}$ becomes (slide 34)
+
+$$
+\begin{aligned}
+x(t+\Delta t) &= \sqrt{1-\beta(t+\Delta t)\Delta t}\,x(t) + \sqrt{\beta(t+\Delta t)\Delta t}\,z(t)\\
+&\approx x(t) - \tfrac12\beta(t)\Delta t\,x(t) + \sqrt{\beta(t)\Delta t}\,z(t),
+\end{aligned}
+$$
+
+with errors of order $\Delta t^2$ in the drift and $\Delta t^{3/2}$ in the noise. This is the Euler-Maruyama discretization of
+
+$$
+dx = -\tfrac12\beta(t)\,x\,dt+\sqrt{\beta(t)}\,dw.
+$$ {#eq-vp-sde}
+
+Because the SDE is linear, $x_t$ given $x_0$ is Gaussian. Its mean solves $\dot{m} = -\frac12\beta m$. For a single centred coordinate $y$, Ito's formula gives $d(y^2) = (-\beta y^2+\beta)dt + 2\sqrt\beta\,y\,dw$, so the variance solves $\dot v = -\beta(v-1)$ with $v(0)=0$. Together these give
+
+$$
+p_{0t}(x_t\mid x_0) = \mathcal{N}\big(\sqrt{\bar\alpha(t)}\,x_0,(1-\bar\alpha(t))I\big),\qquad \bar\alpha(t) = e^{-\int_0^t\beta(s)ds},
+$$ {#eq-vp-kernel}
+
+which is the continuous limit of $\bar\alpha_i = \prod(1-\beta_j)$. If the data have unit covariance, then so does $x_t$ for every $t$, hence the name variance preserving.
+
+For the loss (slide 35), $\nabla\log p_{0t} = -(x_t-\sqrt{\bar\alpha_t}x_0)/(1-\bar\alpha_t) = -\epsilon/\sqrt{1-\bar\alpha_t}$. With the weight $1-\bar\alpha_t$, @eq-dsm becomes
+
+$$
+\min_\theta\ \mathbb{E}\big\Vert\sqrt{1-\bar\alpha_t}\,s_\theta(x_t,t)+\epsilon\big\Vert^2 = \min_\theta\ \mathbb{E}\big\Vert\epsilon_\theta(x_t,t)-\epsilon\big\Vert^2,\qquad
+\epsilon_\theta = -\sqrt{1-\bar\alpha_t}\,s_\theta .
+$$ {#eq-vp-loss}
+
+The DDPM loss is denoising score matching for the VP SDE, in agreement with @eq-epsilon-score-conversion. The samplers also agree. The reverse Euler-Maruyama step $x_{i-1} = x_i+\frac12\beta_ix_i+\beta_is_\theta+\sqrt{\beta_i}z$ coincides with the DDPM ancestral step $\frac{1}{\sqrt{1-\beta_i}}(x_i+\beta_is_\theta)+\sqrt{\beta_i}z$ up to terms of order $\beta_i^2$.
+
+### One SDE, many models
+
+Slide 36 summarizes the general recipe. Choosing an SDE determines the transition kernel, the kernel determines the DSM loss, and the learned score determines the reverse sampler. @tbl-ve-vp shows the recipe for SMLD and DDPM. Both are special cases, as is DDIM through @eq-pf-sigma, and training a diffusion model amounts to training a score function.
+
+| | VE SDE (SMLD) | VP SDE (DDPM) |
+|---|---|---|
+| $f(x,t)$ and $g(t)$ | $0$ and $\sqrt{d[\sigma^2]/dt}$ | $-\frac12\beta(t)x$ and $\sqrt{\beta(t)}$ |
+| kernel $p_{0t}$ | $\mathcal{N}(x_0,\sigma_t^2I)$ | $\mathcal{N}(\sqrt{\bar\alpha_t}x_0,(1-\bar\alpha_t)I)$ |
+| DSM target and weight | $-z/\sigma_t$ and $\sigma_t^2$ | $-\epsilon/\sqrt{1-\bar\alpha_t}$ and $1-\bar\alpha_t$ |
+| prior $p_T$ | $\mathcal{N}(0,\sigma_{\max}^2I)$ | $\mathcal{N}(0,I)$ |
+
+: SMLD and DDPM as two instances of @eq-forward-sde. {#tbl-ve-vp}
+
+### Time embedding
+
+One network has to serve a thousand noise levels, or a continuum of them, which
+is what slide 38 means by calling the time embedding the key. The network
+$\epsilon_\theta(x_t,t)$ is a U-Net and $t$ reaches it along a separate path,
+in three steps.
+
+First the scalar $t$ is lifted to a vector by sinusoidal features
+[@ho2020], or by random Gaussian Fourier features in continuous time [@sde],
+
+$$
+e(t) = \big[\sin(\omega_1t),\cos(\omega_1t),\dots,
+            \sin(\omega_{d/2}t),\cos(\omega_{d/2}t)\big]^\top ,
+$$ {#eq-time-features}
+
+a scalar being too weak an input to condition a large network on. Then $e(t)$
+passes through two or more fully connected layers with a smooth nonlinearity,
+giving a learned embedding $h(t)$. Finally $h(t)$ is injected into *every*
+resolution block of the encoder, the bottleneck and the decoder, either added
+to the block's features after a projection or used to scale and shift a
+normalization layer,
+$\mathrm{AdaGN}(u,t) = \kappa(t)\,\mathrm{GroupNorm}(u)+\xi(t)$ [@dhariwal2021].
+
+Injecting $t$ at every scale rather than once at the input is what the
+architecture needs, as @fig-unet-time shows: the coarse layers carry global structure, which is what
+survives at large $t$, and the outer layers carry edges and texture, which only
+matter at small $t$. A single network conditioned on $t$ can move between those
+regimes; $N$ separate networks would each see $1/N$ of the data and share
+nothing.
+
+![The time-conditioned U-Net of slide 38. The noisy image $x_t$ passes through a multi-scale encoder-decoder that predicts $\epsilon_\theta(x_t,t)$, while the scalar $t$ is encoded by @eq-time-features, transformed by fully connected layers, and injected into every resolution block.](figures/lec07/deb-kit2-fig3-unet-time-embedding.pdf){#fig-unet-time width=95%}
+
+The network is trained only on inputs whose actual noise level matches $t$, so if a sampler produces an $x_t$ with the wrong noise level, the network receives an input it has never seen and errors appear. @sec-manifold gives a geometric picture of this effect.
+
+## Why diffusion models?
+
+### Limitations of GANs
+
+Slide 39 describes a GAN geometrically [@gdl]. A latent distribution $\nu$ on a latent space $\mathcal{Y}$ is pushed by the generator $G_\theta$ into the data space $\mathcal{X}$, and $\theta$ is chosen to bring the result close to the data distribution $\mu$,
+
+$$
+\min_\theta\ \mathrm{dist}(\mu_\theta,\mu)\qquad\text{subject to}\qquad\mu_\theta = G_{\theta\#}\nu .
+$$
+
+The distance is not computed directly but estimated by the discriminator, which turns training into a min-max game. Slide 40 shows what can go wrong when $\mu$ has several modes. The pushforward $\mu_\theta$ settles on one of them and misses the others, which is called mode collapse. Two effects contribute. A continuous $G_\theta$ maps a connected latent space onto a connected set, so it cannot cover well-separated modes without also putting mass between them. In addition, the adversarial game lets the generator stay on whichever modes the discriminator currently accepts.
+
+Slide 41, titled "GAN overfitting" and taken from DiffusionCLIP [@kim2022diffusionclip], shows what this means in practice. GAN-based editing methods first invert an image to a latent code, and even their reconstructions lose the hand in front of the face and the details of the castle. Most training faces are frontal and unoccluded, so inverting and regenerating projects the image onto a range that is dominated by the majority of the data. Deterministic DDIM, on the other hand, follows an ODE flow (@eq-pf-sigma) and can be inverted almost exactly by iterating $x_{t+1} = \sqrt{\bar\alpha_{t+1}}\hat{x}_t+\sqrt{1-\bar\alpha_{t+1}}\epsilon_\theta(x_t,t)$, which is why DiffusionCLIP keeps the hand. @fig-gan-scale-space puts the two pictures side by side. Finally, slide 42 points out that a GAN is a single-step sampler. The network has to represent the entire map from noise to data, and a sample comes from one pass through it, so there is no intermediate state at which an error could be corrected.
+
+![(a) A GAN learns one push-forward $\mu_\theta = G_{\theta\#}\nu$ from the latent prior $\nu$ on $\mathcal{Y}$ into the data space; when $\mu$ has separated modes a continuous $G_\theta$ cannot cover them all, which is mode collapse (slides 39-42). (b) Forward diffusion instead builds a scale-space $p_t = p_0 * \mathcal{N}(0,\sigma_t^2I)$ in which the modes merge into one well-conditioned distribution, and reverse Langevin dynamics transports samples back down the scales along $\nabla\log p_t$ (slides 43-46). The chapter's argument is that the second picture has intermediate states and the first does not.](figures/lec07/deb-kit2-fig4-gan-vs-scale-space.pdf){#fig-gan-scale-space width=100%}
+
+### Scale-space in the distribution domain
+
+Scale-space theory (slide 44) represents a signal $f$ at all scales $t\ge0$ by blurring it with a Gaussian,
+
+$$
+L_t = h_t*f,\qquad h_t(x) = \frac{1}{(2\pi t)^{n/2}}e^{-\Vert x\Vert^2/2t}.
+$$ {#eq-scale-space}
+
+The Gaussian is the only kernel that satisfies the scale-space axioms [@koenderink1984; @lindeberg1994], namely linearity, shift invariance, the semigroup property $h_s*h_t = h_{s+t}$, rotational symmetry, and non-enhancement of local extrema (maxima never increase and minima never decrease, and in one dimension no new extrema appear). Moving to coarser scales smooths away fine structure.
+
+Slide 45 recalls the density of a sum of independent random variables. For independent $X$ and $Y$ with densities $f_X$ and $f_Y$, we have $F_{X+Y}(a) = \int\!\int_{-\infty}^{a-y}f_X(x)f_Y(y)\,dx\,dy = \int F_X(a-y)f_Y(y)\,dy$, and differentiating in $a$ gives
+
+$$
+f_{X+Y}(a) = \int f_X(a-y)\,f_Y(y)\,dy = (f_X*f_Y)(a).
+$$ {#eq-conv}
+
+Applying @eq-conv to the VE step $x_t = x_{t-1}+\sqrt{\sigma_t^2-\sigma_{t-1}^2}\,z$ gives
+
+$$
+p_t = p_{t-1}*h_{\sigma_t^2-\sigma_{t-1}^2} = p_0*h_{\sigma_t^2},
+$$ {#eq-dist-scale-space}
+
+where the second equality follows from the semigroup property with $\sigma_0 = 0$. The forward process is the scale-space of @eq-scale-space applied to the density $p_0$, at scale $\sigma_t^2$. Slide 43 writes the first equality as $p(x_{t-1}) = p(x_t)*h(x_t)$, with its time index reversed. For VP the same holds after rescaling $x$ by $1/\sqrt{\bar\alpha_t}$. The figure on slide 43, from @kim2023dmcmc, shows why this is useful. Separate modes merge at coarse scales, where a sampler can move between them before following the scales back down. The bottom panels of that slide compare running the reverse SDE or ODE from pure noise at $\sigma=348$, which often fails to produce a clean face, with starting it from an MCMC chain run at much lower noise levels ($\sigma$ between 1.41 and 2.03), which gives clean faces.
+
+### Iterative denoising as the dual representation
+
+The convolution in @eq-dist-scale-space acts on densities. On samples, the same operation simply adds i.i.d. noise to every pixel. Slide 46 puts the two side by side as $p(x_{t-1}) = p(x_t)*p(\sigma_t\epsilon_t)$ and $x_{t-1} = x_t+\sigma_t\epsilon_t$, again with the time index reversed, and calls the second the dual representation of the first. The figure on that slide shows the score field of a two-mode density, with arrows pointing towards the modes. Undoing a convolution of densities is an ill-posed deconvolution problem, but on samples it becomes iterative denoising guided by the score. One example is Langevin dynamics,
+
+$$
+x_{i+1}\leftarrow x_i+\delta\,\nabla_{x}\log p(x_i)+\sqrt{2\delta}\,z_i,\qquad i=0,1,\dots,K,
+$$ {#eq-langevin}
+
+which we write with step size $\delta$ because $\epsilon$ already denotes the noise (the slide uses $\epsilon$). @sec-fp explains why this procedure samples from $p$ when the step size is small and the number of steps is large.
+
+### The Gaussian shell theorem and the hypercylinder
+
+::: {#thm-shell}
+## Gaussian shell theorem
+Let $X = (X_1,\dots,X_n)$ have i.i.d. $\mathcal{N}(0,\sigma^2)$ entries. Then $\Vert X\Vert^2/n\to\sigma^2$ in probability, so $\Vert X\Vert\approx\sigma\sqrt n$ and the mass concentrates on the sphere of radius $\sigma\sqrt n$ (slide 47).
+:::
+
+::: {.proof}
+We have $\mathbb{E}\Vert X\Vert^2 = n\sigma^2$ and $\mathrm{Var}\Vert X\Vert^2 = n\,\mathrm{Var}(X_i^2) = 2n\sigma^4$. By Chebyshev's inequality, $P(|\Vert X\Vert^2/n-\sigma^2|>r)\le2\sigma^4/(nr^2)$, which tends to zero. This is the law of large numbers mentioned on the slide. Since the square root is continuous, $\Vert X\Vert/\sqrt n\to\sigma$.
+:::
+
+The relative width of the shell shrinks like $1/\sqrt{2n}$, while its absolute width tends to the constant $\sigma/\sqrt2$ [@vershynin2018]. Although the density is largest at the origin, in high dimension the samples are almost never close to it. The $\chi^2$ curves on slide 47 and panel (a) of @fig-shell show the same concentration.
+
+Slide 48 considers data lying on a $k$-dimensional linear subspace $V$, perturbed by noise with $p(y\mid x) = \mathcal{N}(x,\sigma^2I)$. Write $y = x+\sigma z$ and let $P_\perp$ be the projection onto the orthogonal complement of $V$. Since $P_\perp x=0$, the distance from $y$ to $V$ is $\Vert P_\perp y\Vert = \sigma\Vert P_\perp z\Vert$. Here $P_\perp z$ is a standard Gaussian in $n-k$ dimensions, so @thm-shell gives
+
+$$
+\mathrm{dist}(y,V)\approx\sigma\sqrt{n-k}.
+$$ {#eq-cylinder}
+
+The component along $V$ is unconstrained, so $p(y)$ concentrates on a hypercylinder of radius $\sigma\sqrt{n-k}$ around $V$, as panel (b) of @fig-shell shows.
+
+![(a) The norm of an $n$-dimensional standard Gaussian divided by $\sqrt n$, which concentrates at 1 as $n$ grows. (b) The distance to a $k$-dimensional subspace after adding $\mathcal{N}(0,I)$ noise in $n=1000$ dimensions. It concentrates at $\sqrt{n-k}$ (dashed lines) with the same width for every $k$.](figures/lec07/HaJunHyun-shell.pdf){#fig-shell width=100%}
+
+### Transitions between noisy manifolds {#sec-manifold}
+
+Locally, a curved data manifold $\mathcal{M}$ of dimension $k$ looks like a subspace. As long as the tube radius $\sigma_i\sqrt{n-k}$ is small compared with the radius of curvature of $\mathcal{M}$, @eq-cylinder implies that samples at noise level $\sigma_i$ lie in a thin tube
+
+$$
+\mathcal{M}_i = \{y\mid\mathrm{dist}(y,\mathcal{M})\approx\sigma_i\sqrt{n-k}\}
+$$
+
+around $\mathcal{M}$ [slide 49, after @chung2022mcg]. For the VP process, $\mathcal{M}_i$ surrounds $\sqrt{\bar\alpha_i}\,\mathcal{M}$ at radius $\sqrt{1-\bar\alpha_i}\sqrt{n-k}$. The noise levels give a sequence of thin shells $\mathcal{M}_1,\mathcal{M}_2,\dots,\mathcal{M}_\infty$ at increasing distance from $\mathcal{M}$. Slide 50, reproduced in @fig-manifolds, draws them as nested contours ending at $\mathcal{N}(a_\infty x_0,b_\infty^2I)$, where $a_\infty$ and $b_\infty$ are the limiting signal scale and noise level, and slide 50 calls them discrete orbits. Forward diffusion moves outwards through these shells and reverse diffusion moves inwards.
+
+![The nested noisy manifolds, reproduced from slide 50. Forward diffusion (red arrows) moves from the data manifold $\mathcal{M}$ out through the shells $\mathcal{M}_1,\dots,\mathcal{M}_i,\dots$ towards $\mathcal{N}(a_\infty x_0,b_\infty^2I)$, and reverse diffusion (blue arrows) moves back inwards.](figures/lec07/HaJunHyun-slide50-manifolds.pdf){#fig-manifolds width=60%}
+
+The network at time $t$ has only been trained on inputs from $\mathcal{M}_t$. If a step misses the next shell, the network receives inputs it has never seen, and the error accumulates from step to step. This is the time embedding remark of slide 38 in geometric form. The decomposition on slide 54, which is @eq-denoise-renoise again, is designed to avoid this. Tweedie's formula maps $x_t$ to the clean estimate $\hat{x}_t$, and the step then adds noise of total variance $1-\bar\alpha_{t-1}$. When this noise behaves like an isotropic Gaussian, @thm-shell puts the result at the right distance, on $\mathcal{M}_{t-1}$. Slide 55 summarizes this as "retaining the correct manifold transition is the key". Landing on the right shell is necessary but not sufficient, since the renoise-only sampler of @tbl-toy does so at every step and is still biased. A GAN has no intermediate shells and must map $\nu$ onto $\mathcal{M}$ in a single step.
+
+The same decomposition also holds in continuous time. In the variables of @eq-pf-sigma, the VP SDE becomes a VE SDE, because $d(x/\sqrt{\bar\alpha}) = \sqrt{\beta/\bar\alpha}\,dw$ and $d[\sigma^2]/dt = \beta/\bar\alpha$, and by @eq-epsilon-score-conversion its score is $-\epsilon^*/\sigma$. Tweedie's formula reads $\bar{x} = \hat{x}+\sigma\epsilon^*$ in these variables. One reverse Euler-Maruyama step from $\sigma$ to $\sigma'<\sigma$, as in @eq-ve-sampler, therefore gives
+
+$$
+\begin{aligned}
+\bar{x}' &= \bar{x} - (\sigma^2-\sigma'^2)\frac{\epsilon^*}{\sigma} + \sqrt{\sigma^2-\sigma'^2}\,z\\
+&= \underbrace{\hat{x}}_{\text{Tweedie's denoiser}} + \underbrace{\frac{\sigma'^2}{\sigma}\,\epsilon^*}_{\text{parametric noise}} + \underbrace{\sqrt{\sigma^2-\sigma'^2}\,z}_{\text{stochastic noise}},
+\end{aligned}
+$$ {#eq-continuous-decomp}
+
+while one Euler step of the probability flow ODE gives $\bar{x}' = \hat{x}+\sigma'\epsilon^*$ with no stochastic term. The reverse SDE step has the same three parts as @eq-ddim-step. Its parametric coefficient $\sigma'^2/\sigma$ is exactly that of $\eta=1$, while its stochastic coefficient differs only by the factor $\sigma/\sigma'$, which tends to one as the step becomes small compared with $\sigma'$. Its total noise variance $\sigma'^2+(\sigma^2-\sigma'^2)^2/\sigma^2$ matches the target $\sigma'^2$ up to second order in the step. In continuous time the probability flow ODE and the reverse SDE are the members $\eta=0$ and $\eta=1$ of the $\eta$ family.
+
+### The Fokker-Planck equation {#sec-fp}
+
+For a general SDE $dX_t = \mu(X_t,t)dt+\sigma(X_t,t)dW_t$ (slide 51), the density evolves according to
+
+$$
+\frac{\partial p}{\partial t} = -\sum_{i=1}^n\frac{\partial}{\partial x_i}\big[\mu_i p\big] + \sum_{i,j=1}^n\frac{\partial^2}{\partial x_i\partial x_j}\big[D_{ij}p\big],\qquad D = \tfrac12\sigma\sigma^\top .
+$$ {#eq-fp-general}
+
+The SDE describes a single sample path, while @eq-fp-general describes the density, which is again the duality between samples and densities from slide 46. With $\sigma = g(t)I$ we have $D = \frac12g^2I$ and recover @eq-fp.
+
+Slide 52 treats the Wiener process. It takes $\mu=0$ and $D=I$, which means $\sigma=\sqrt2\,I$, and @eq-fp-general reduces to the heat equation $\partial_tp = \Delta p$. Its solution is $p(\cdot,t) = p(\cdot,0)*h_{2t}$ with $h_{2t}(x) = (4\pi t)^{-n/2}e^{-\Vert x\Vert^2/4t}$, because the Gaussian of @eq-scale-space satisfies $\partial_t h_t = \frac12\Delta h_t$. So the solution of the Fokker-Planck equation is the scale-space, as the slide says. The kernel written on the slide, $(2\pi t)^{-1/2}\exp(-\Vert x\Vert^2/2t^2)$, should be replaced by this one. For a standard Wiener process ($\sigma=I$, so $D=\frac12I$) the equation is $\partial_tp = \frac12\Delta p$ and the kernel is $h_t$ itself.
+
+Slide 53 treats overdamped Langevin dynamics. It writes the SDE $dx = -\frac{1}{k_BT}\nabla U\,dt+dW$ together with the Fokker-Planck equation
+
+$$
+\partial_tp = \tfrac12\nabla\cdot\Big(\frac{p}{k_BT}\nabla U+\nabla p\Big).
+$$
+
+The flux vanishes when $\nabla\log p = -\nabla U/k_BT$, so the stationary density of this equation is $p\propto e^{-U/k_BT}$, which is the conclusion on the slide. The SDE and the equation do not quite match, however. With noise $dW$ we have $D=\frac12I$, and @eq-fp-general puts the factor $\frac12$ only on $\nabla p$, so the SDE exactly as written would have stationary density $e^{-2U/k_BT}$. The lines on the slide agree if the drift is halved, or if the noise is changed to $\sqrt2\,dW$, which doubles the right-hand side of the equation and leaves its stationary density unchanged. We use the second correction. Now set $k_BT=1$ and $U = -\log p_{\text{data}}$. The slide writes $U = \nabla\log p$ at this point, but the potential must be minus the log density. The stationary distribution is then $e^{-U} = p_{\text{data}}$, and the SDE becomes $dx = \nabla\log p_{\text{data}}\,dt+\sqrt2\,dW$, whose Euler-Maruyama step with step size $\delta$ is exactly @eq-langevin. With a small step size and many steps, Langevin dynamics samples the density at a single fixed scale. Reversing the whole scale-space requires either annealing over decreasing noise levels, as in SMLD, or the reverse SDE, and panel (b) of @fig-score shows why.
+
+### Summary
+
+Diffusion models are a scale-space of the data distribution, and iterative denoising is its dual representation on samples. The Gaussian shell theorem turns the noise levels into discrete orbits $\mathcal{M}_i$, and the continuous description is the Fokker-Planck equation, which for pure noise is the scale-space itself. A diffusion sampler relies on each reverse step staying on the correct manifold, which the denoise and renoise decomposition and a network that knows the noise level are designed to achieve. Single-step GANs have no such intermediate manifolds, and this is where diffusion models gain over them.
+
+## A worked example in one dimension {#sec-worked}
+
+Take $p_0 = 0.2\,\mathcal{N}(-2,0.25^2)+0.8\,\mathcal{N}(2,0.25^2)$ and the VP SDE with $\beta(t) = 0.1+19.9t$ on $[0,1]$ as in @sde, so that $\bar\alpha(t) = e^{-0.1t-9.95t^2}$. If we write $p_0 = \sum_j\pi_j\mathcal{N}(m_j,\rho_j^2)$, then @eq-vp-kernel shows that $p_t$ is again a Gaussian mixture, with means $\sqrt{\bar\alpha_t}m_j$ and variances $v_j = \bar\alpha_t\rho_j^2+1-\bar\alpha_t$. Let $r_j(x)$ be the responsibility of component $j$, which is proportional to $\pi_j$ times the density of $\mathcal{N}(\sqrt{\bar\alpha_t}m_j,v_j)$ at $x$. The exact score is then $\sum_jr_j(x)(\sqrt{\bar\alpha_t}m_j-x)/v_j$, and @eq-epsilon-score-conversion gives the optimal noise predictor. The script below uses NumPy and SciPy and runs in about 20 seconds. It performs all the numerical checks quoted in this note.
+
+```{.python}
+import numpy as np
+from scipy.stats import wasserstein_distance
+
+rng = np.random.default_rng(0)
+randn = lambda shape: rng.standard_normal(shape)
+W, MU, S = np.array([0.2, 0.8]), np.array([-2.0, 2.0]), np.array([0.25, 0.25])
+B0, B1 = 0.1, 20.0
+beta = lambda t: B0 + t * (B1 - B0)
+abar = lambda t: np.exp(-(B0 * t + 0.5 * (B1 - B0) * t**2))
+
+def score(x, t):
+    a = abar(t); m = np.sqrt(a) * MU; v = a * S**2 + 1 - a
+    x = np.asarray(x, float)[..., None]
+    logn = np.log(W) - 0.5 * (x - m)**2 / v - 0.5 * np.log(v)
+    r = np.exp(logn - np.logaddexp.reduce(logn, axis=-1)[..., None])
+    return np.sum(r * (m - x) / v, axis=-1)
+eps_star = lambda x, t: -np.sqrt(1 - abar(t)) * score(x, t)
+def sample_p0(n):
+    k = rng.choice(2, size=n, p=W); return MU[k] + S[k] * randn(n)
+
+def reverse_sde(x, n):
+    ts = np.linspace(1, 0, n + 1); dt = 1 / n
+    for t in ts[:-1]:
+        b = beta(t)
+        drift = 0.5 * b * x + b * score(x, t)
+        x = x + drift * dt + np.sqrt(b * dt) * randn(x.shape)
+    return x
+
+def ddim(x, n, eta=0.0, eta_max=False):
+    ts = np.linspace(1, 0, n + 1)
+    for t, s in zip(ts[:-1], ts[1:]):
+        at, as_ = abar(t), abar(s); e = eps_star(x, t)
+        x0 = (x - np.sqrt(1 - at) * e) / np.sqrt(at)
+        bt2 = (1 - as_) / (1 - at) * (1 - at / as_)
+        g2 = (1 - as_) if eta_max else eta**2 * bt2
+        x = (np.sqrt(as_) * x0 + np.sqrt(1 - as_ - g2) * e
+             + np.sqrt(g2) * randn(x.shape))
+    return x
+
+def langevin(x, t, n=2000, step=0.01):
+    for _ in range(n):
+        x = x + step * score(x, t) + np.sqrt(2 * step) * randn(x.shape)
+    return x
+
+t, n = 0.3, 1_000_000
+x0, eps = sample_p0(n), randn(n)
+xt = np.sqrt(abar(t)) * x0 + np.sqrt(1 - abar(t)) * eps
+for a, b in [(-1.0, 0.0), (-0.5, 0.3), (0.2, -1.0)]:
+    s = a * xt + b
+    esm = np.mean((s - score(xt, t))**2)
+    dsm = np.mean((s + eps / np.sqrt(1 - abar(t)))**2)
+    print(f"theta=({a:+.1f},{b:+.1f})  ESM={esm:.4f}  DSM={dsm:.4f}  "
+          f"DSM-ESM={dsm - esm:.4f}")
+
+ref, xT = sample_p0(400_000), randn(20_000)
+def report(name, x):
+    w1 = wasserstein_distance(x, ref)
+    print(f"{name:30s} mass(x>0)={np.mean(x > 0):.3f}  W1={w1:.3f}  "
+          f"sd={np.std(x):.2f}")
+report("Langevin, clean score only", langevin(randn(20_000), t=0.0))
+report("reverse SDE, 1000 steps", reverse_sde(xT, 1000))
+for n in (10, 50, 500):
+    report(f"DDIM eta=0, {n} steps", ddim(xT, n, eta=0.0))
+    report(f"DDIM eta=1 (DDPM), {n} steps", ddim(xT, n, eta=1.0))
+    report(f"eta=eta_max, {n} steps", ddim(xT, n, eta_max=True))
+
+ts = np.linspace(1, 0, 1001); worst = 0.0
+for t, s in zip(ts[:-1], ts[1:]):
+    at, as_ = abar(t), abar(s); al = at / as_
+    bt2 = (1 - as_) / (1 - at) * (1 - al)
+    ddim_e = -np.sqrt(as_ * (1 - at) / at) + np.sqrt(1 - as_ - bt2)
+    ddpm_e = -(1 - al) / np.sqrt(al * (1 - at))
+    worst = max(worst, abs(np.sqrt(as_ / at) - 1 / np.sqrt(al)),
+                abs(ddim_e - ddpm_e))
+print(f"largest coefficient difference, eta=1 vs DDPM = {worst:.1e}")
+
+def ddim_invert(x, n):
+    ts = np.linspace(0, 1, n + 1)
+    for t, u in zip(ts[:-1], ts[1:]):
+        t = max(t, 1e-6); at, au = abar(t), abar(u); e = eps_star(x, t)
+        x = (np.sqrt(au) * (x - np.sqrt(1 - at) * e) / np.sqrt(at)
+             + np.sqrt(1 - au) * e)
+    return x
+x0 = sample_p0(5000)
+for n in (10, 50, 500):
+    err = np.mean(np.abs(ddim(ddim_invert(x0, n), n) - x0))
+    print(f"inversion, {n} steps, mean |error| = {err:.3f}")
+
+for d in (10, 100, 1000, 10000):
+    r = np.linalg.norm(randn((2000, d)), axis=1) / np.sqrt(d)
+    print(f"n={d:5d}  |X|/sqrt(n) mean={r.mean():.3f} sd={r.std():.4f}")
+d, k = 1000, 100
+x = np.zeros((2000, d)); x[:, :k] = 5 * randn((2000, k))
+y = x + randn((2000, d))
+dist = np.linalg.norm(y[:, k:], axis=1)
+print(f"dist(y, V) / sqrt(n-k) mean={np.mean(dist) / np.sqrt(d - k):.3f}")
+
+for _ in range(3):
+    w1 = wasserstein_distance(sample_p0(20_000), ref)
+    print(f"W1 between a fresh sample of p0 and the reference = {w1:.3f}")
+```
+
+For the comparison between DSM and ESM we used linear models $s_\theta(x)=ax+b$. The ESM and DSM losses of the three models are (1.301, 1.870), (0.502, 1.072) and (2.274, 2.846), and their differences 0.5695, 0.5699 and 0.5713 agree up to Monte Carlo error, as @thm-dsm predicts. The coefficients of the $\eta=1$ sampler and of DDPM agree to within $9\times10^{-16}$, which confirms the reduction of @eq-ddpm-in-ddim-form. The DDIM round trip $x_0\to x_T\to x_0$ has a mean error of 0.295, 0.069 and 0.007 with 10, 50 and 500 steps, so the inversion that DiffusionCLIP relies on becomes almost exact. For the shell theorem with $n = 10$, 100, 1000 and 10000, the ratio $\Vert X\Vert/\sqrt n$ has means 0.969, 0.999, 1.000 and 1.000, and its standard deviations 0.221, 0.071, 0.023 and 0.007 are in line with $1/\sqrt{2n}$. The distance to a 100-dimensional subspace in $n=1000$ dimensions is $0.999\sqrt{n-k}$.
+
+@tbl-toy compares the samplers by the mass on the larger mode, the 1-Wasserstein distance (W1) to a reference sample of $p_0$, and the standard deviation. The reverse SDE and DDIM start from the same 20,000 draws of $\mathcal{N}(0,1)$, and Langevin starts from an independent set. For comparison, a fresh sample of $p_0$ of the same size is between 0.005 and 0.015 away from the reference sample in W1, which is the noise floor for this column.
+
+| sampler | steps | mass on $x>0$ (true 0.8) | W1 | std (true 1.62) |
+|---|---|---|---|---|
+| Langevin, clean score only | 2000 | 0.509 | 1.155 | 2.01 |
+| reverse SDE | 1000 | 0.799 | 0.005 | 1.62 |
+| DDIM, $\eta=0$ | 10 / 50 / 500 | 0.813 / 0.798 / 0.795 | 0.128 / 0.020 / 0.021 | 1.52 / 1.61 / 1.63 |
+| DDIM, $\eta=1$ (DDPM) | 10 / 50 / 500 | 0.844 / 0.805 / 0.805 | 0.252 / 0.054 / 0.028 | 1.42 / 1.59 / 1.60 |
+| $\eta=\eta_{\max}$ (renoise only) | 10 / 50 / 500 | 0.891 / 0.890 / 0.884 | 0.441 / 0.413 / 0.381 | 1.23 / 1.26 / 1.29 |
+
+: Samplers on the two-mode example with the exact score. {#tbl-toy}
+
+Langevin with the clean score alone does not mix between the modes within 2000 steps, so its mode weights are wrong. With few steps the deterministic sampler is the most accurate (a W1 of 0.128 against 0.252 at 10 steps), a reason DDIM is popular for fast sampling. The renoise-only step with the posterior-mean denoiser remains biased even with many steps.
+
+## Connections and further reading
+
+In the score-based view, conditioning (the topic of lecture 08) amounts to adding a term to the score in @eq-reverse-sde. The manifold picture also underlies many diffusion-based solvers for inverse problems [@chung2022mcg; @chung2024dds].
+
+## References
+
+::: {#refs}
+:::
+
+---
+
+*Scribe notes for this lecture: HaJunHyun, deb-kit2, euijinshin, Jahyeok-Koo.*

@@ -28,6 +28,19 @@ That writes `drafts/lec07-merge.md` (ranking, gap union, suspected errors — gi
 top note with a TODO at every gap. Both are starting points; a human does the
 merge.
 
+A course doubles back on itself, so a new chapter often re-explains what an
+earlier one already covered. `scripts/overlap.py` says where to look before
+the merge is finished:
+
+```bash
+python scripts/overlap.py --chapter chapters/ch07.qmd --show-passages
+```
+
+It reports duplicate crossref labels first — two chapters defining `{#eq-foo}`
+is a build problem, not a style one — then prose overlap section by section,
+then headings in common. It sees repeated *wording*, not a repeated idea in new
+words, so a quiet report means nothing mechanical to fix, not nothing to merge.
+
 ## Building
 
 ```bash
@@ -53,6 +66,7 @@ references.bib           shared bibliography — cite into it, not inline
 figures/                 figures used across chapters; PDF or PNG, no SVG
 drafts/                  merge worksheets (git-ignored)
 scripts/promote.py       grades -> merge worksheet + seeded chapter
+scripts/overlap.py       a chapter against the chapters before it
 ```
 
 ## Contributing

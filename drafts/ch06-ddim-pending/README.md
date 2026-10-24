@@ -32,3 +32,8 @@ The figures here are referenced by no chapter and are kept only for that pass:
 - `HaJunHyun-slide18-graphical.pdf` -- DDPM and DDIM graphical models, slide 18
 - `HaJunHyun-ddim-eta.pdf` -- the eta family on the two-mode example
 - `HaJunHyun-slide24-decomposition.pdf` -- the geometry of one reverse step
+
+The figures are PNG at 250 dpi. The book's chapters are PNG throughout: Quarto
+embeds a PDF figure with `<embed>`, which the HTML build shows as a plug-in box
+rather than an image. Chapter 7 was merged with PDF figures at first and the
+web build was broken until they were converted.

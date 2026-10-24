@@ -1,26 +1,7 @@
 ---
-title: "Score-based Generative Models with SDEs"
+title: "Score-Based Diffusion: The SDE Formulation and Why It Works"
 ---
 
-
-<!--
-DRAFT seeded by scripts/promote.py from the strongest lec07 scribe note.
-Base note: HaJunHyun. Merge sources: HaJunHyun, deb-kit2, euijinshin, Jahyeok-Koo.
-
-This repository is public and this comment ships in the page source, so it
-carries no scores and no per-note criticism. Both live in
-drafts/lec07-merge.md, which .gitignore keeps out of the repository.
-
-Before this chapter is publishable:
-
-1. Fill the gaps listed in drafts/lec07-merge.md, which also says which of
-   the other notes covered each one.
-2. Resolve every suspected error in the worksheet against the lecture itself.
-3. Reconcile notation with the neighbouring chapters.
-4. Copy-edit. The scribe repository never penalised English fluency, so some
-   base notes need a real pass here.
-5. Replace this comment and the contributor list below with the final credit.
--->
 
 <!-- Where DDIM goes, decided 2026-10-16 by the instructor.
 
@@ -40,11 +21,6 @@ Before this chapter is publishable:
 
      Chapter 6 keeps the title "Denoising Diffusion Probabilistic Models" even
      though DDIM is half of it. -->
-
-::: {.callout-important}
-## Draft
-This chapter is a merge in progress and has not been edited or checked.
-:::
 
 
 ## Overview
@@ -167,7 +143,7 @@ $$ {#eq-pf-sigma}
 
 Taking one Euler step of this ODE from $\sigma_t$ to $\sigma_{t-1}$ and multiplying by $\sqrt{\bar\alpha_{t-1}}$ gives $x_{t-1} = \sqrt{\bar\alpha_{t-1}}\hat{x}_t + \sqrt{1-\bar\alpha_{t-1}}\epsilon_\theta$, which is exactly the $\eta=0$ DDIM step. So DDIM is the Euler method for the probability flow ODE written in the variables $(\sigma,\bar{x})$, which is the sense in which slide 36 calls DDIM a special case of the SDE framework.
 
-![The two-mode example under the VP SDE with exact scores, with $p_t$ shown in grey. (a) Forward SDE paths. (b) Reverse SDE paths started from $\mathcal{N}(0,1)$. They differ from the forward paths but have the same marginals, and they reach the two modes in proportions 0.2 and 0.8. (c) Probability flow ODE paths, which are deterministic and never cross. This is a numerical version of the figure on slide 29.](figures/lec07/HaJunHyun-sde-paths.pdf){#fig-sde width=100%}
+![The two-mode example under the VP SDE with exact scores, with $p_t$ shown in grey. (a) Forward SDE paths. (b) Reverse SDE paths started from $\mathcal{N}(0,1)$. They differ from the forward paths but have the same marginals, and they reach the two modes in proportions 0.2 and 0.8. (c) Probability flow ODE paths, which are deterministic and never cross. This is a numerical version of the figure on slide 29.](figures/lec07/HaJunHyun-sde-paths.png){#fig-sde width=100%}
 
 ### Which score do we need?
 
@@ -175,7 +151,7 @@ The reverse drift in @eq-reverse-sde at time $t$ requires the score of $p_t$, no
 
 The clean score is also hard to learn. An empirical distribution has no score at all, and the low-density regions between modes contain very few samples. The clean score carries information about the relative weight of the modes only in these regions, which a sampler rarely visits, and elsewhere it simply pulls towards the nearer mode, as panel (a) of @fig-score shows. Transitions between modes happen at high noise levels, where the modes have merged. The figure of @kim2023dmcmc on slides 30, 43 illustrates this, with an MCMC chain that crosses between modes at a high noise level before the reverse process brings it back down. Langevin dynamics with the clean score does have $p_0$ as its stationary distribution, but crossing the gap takes far longer than any practical run [@song2019ncsn]. In panel (b) of @fig-score, 2000 steps started from $\mathcal{N}(0,1)$ leave 49 percent of the samples on the mode of weight 0.2 and 51 percent on the mode of weight 0.8, which is where the starting points fell. The reverse SDE recovers the correct proportions.
 
-![(a) The exact score of the two-mode example at $t=0$, $0.25$ and $0.5$. At $t=0$ it is a steep pull towards the nearer mode with an abrupt switch in between, while at larger $t$ it becomes a smooth field that connects the modes. (b) Samples from Langevin dynamics with the clean score (2000 steps of size 0.01 from $\mathcal{N}(0,1)$) compared with the reverse SDE.](figures/lec07/HaJunHyun-score-levels.pdf){#fig-score width=100%}
+![(a) The exact score of the two-mode example at $t=0$, $0.25$ and $0.5$. At $t=0$ it is a steep pull towards the nearer mode with an abrupt switch in between, while at larger $t$ it becomes a smooth field that connects the modes. (b) Samples from Langevin dynamics with the clean score (2000 steps of size 0.01 from $\mathcal{N}(0,1)$) compared with the reverse SDE.](figures/lec07/HaJunHyun-score-levels.png){#fig-score width=100%}
 
 ### Score matching
 
@@ -311,7 +287,7 @@ matter at small $t$. A single network conditioned on $t$ can move between those
 regimes; $N$ separate networks would each see $1/N$ of the data and share
 nothing.
 
-![The time-conditioned U-Net of slide 38. The noisy image $x_t$ passes through a multi-scale encoder-decoder that predicts $\epsilon_\theta(x_t,t)$, while the scalar $t$ is encoded by @eq-time-features, transformed by fully connected layers, and injected into every resolution block.](figures/lec07/deb-kit2-fig3-unet-time-embedding.pdf){#fig-unet-time width=95%}
+![The time-conditioned U-Net of slide 38. The noisy image $x_t$ passes through a multi-scale encoder-decoder that predicts $\epsilon_\theta(x_t,t)$, while the scalar $t$ is encoded by @eq-time-features, transformed by fully connected layers, and injected into every resolution block.](figures/lec07/deb-kit2-fig3-unet-time-embedding.png){#fig-unet-time width=95%}
 
 The network is trained only on inputs whose actual noise level matches $t$, so if a sampler produces an $x_t$ with the wrong noise level, the network receives an input it has never seen and errors appear. @sec-manifold gives a geometric picture of this effect.
 
@@ -329,7 +305,7 @@ The distance is not computed directly but estimated by the discriminator, which 
 
 Slide 41, titled "GAN overfitting" and taken from DiffusionCLIP [@kim2022diffusionclip], shows what this means in practice. GAN-based editing methods first invert an image to a latent code, and even their reconstructions lose the hand in front of the face and the details of the castle. Most training faces are frontal and unoccluded, so inverting and regenerating projects the image onto a range that is dominated by the majority of the data. Deterministic DDIM, on the other hand, follows an ODE flow (@eq-pf-sigma) and can be inverted almost exactly by iterating $x_{t+1} = \sqrt{\bar\alpha_{t+1}}\hat{x}_t+\sqrt{1-\bar\alpha_{t+1}}\epsilon_\theta(x_t,t)$, which is why DiffusionCLIP keeps the hand. @fig-gan-scale-space puts the two pictures side by side. Finally, slide 42 points out that a GAN is a single-step sampler. The network has to represent the entire map from noise to data, and a sample comes from one pass through it, so there is no intermediate state at which an error could be corrected.
 
-![(a) A GAN learns one push-forward $\mu_\theta = G_{\theta\#}\nu$ from the latent prior $\nu$ on $\mathcal{Y}$ into the data space; when $\mu$ has separated modes a continuous $G_\theta$ cannot cover them all, which is mode collapse (slides 39-42). (b) Forward diffusion instead builds a scale-space $p_t = p_0 * \mathcal{N}(0,\sigma_t^2I)$ in which the modes merge into one well-conditioned distribution, and reverse Langevin dynamics transports samples back down the scales along $\nabla\log p_t$ (slides 43-46). The chapter's argument is that the second picture has intermediate states and the first does not.](figures/lec07/deb-kit2-fig4-gan-vs-scale-space.pdf){#fig-gan-scale-space width=100%}
+![(a) A GAN learns one push-forward $\mu_\theta = G_{\theta\#}\nu$ from the latent prior $\nu$ on $\mathcal{Y}$ into the data space; when $\mu$ has separated modes a continuous $G_\theta$ cannot cover them all, which is mode collapse (slides 39-42). (b) Forward diffusion instead builds a scale-space $p_t = p_0 * \mathcal{N}(0,\sigma_t^2I)$ in which the modes merge into one well-conditioned distribution, and reverse Langevin dynamics transports samples back down the scales along $\nabla\log p_t$ (slides 43-46). The chapter's argument is that the second picture has intermediate states and the first does not.](figures/lec07/deb-kit2-fig4-gan-vs-scale-space.png){#fig-gan-scale-space width=100%}
 
 ### Scale-space in the distribution domain
 
@@ -386,7 +362,7 @@ $$ {#eq-cylinder}
 
 The component along $V$ is unconstrained, so $p(y)$ concentrates on a hypercylinder of radius $\sigma\sqrt{n-k}$ around $V$, as panel (b) of @fig-shell shows.
 
-![(a) The norm of an $n$-dimensional standard Gaussian divided by $\sqrt n$, which concentrates at 1 as $n$ grows. (b) The distance to a $k$-dimensional subspace after adding $\mathcal{N}(0,I)$ noise in $n=1000$ dimensions. It concentrates at $\sqrt{n-k}$ (dashed lines) with the same width for every $k$.](figures/lec07/HaJunHyun-shell.pdf){#fig-shell width=100%}
+![(a) The norm of an $n$-dimensional standard Gaussian divided by $\sqrt n$, which concentrates at 1 as $n$ grows. (b) The distance to a $k$-dimensional subspace after adding $\mathcal{N}(0,I)$ noise in $n=1000$ dimensions. It concentrates at $\sqrt{n-k}$ (dashed lines) with the same width for every $k$.](figures/lec07/HaJunHyun-shell.png){#fig-shell width=100%}
 
 ### Transitions between noisy manifolds {#sec-manifold}
 
@@ -398,7 +374,7 @@ $$
 
 around $\mathcal{M}$ [slide 49, after @chung2022mcg]. For the VP process, $\mathcal{M}_i$ surrounds $\sqrt{\bar\alpha_i}\,\mathcal{M}$ at radius $\sqrt{1-\bar\alpha_i}\sqrt{n-k}$. The noise levels give a sequence of thin shells $\mathcal{M}_1,\mathcal{M}_2,\dots,\mathcal{M}_\infty$ at increasing distance from $\mathcal{M}$. Slide 50, reproduced in @fig-manifolds, draws them as nested contours ending at $\mathcal{N}(a_\infty x_0,b_\infty^2I)$, where $a_\infty$ and $b_\infty$ are the limiting signal scale and noise level, and slide 50 calls them discrete orbits. Forward diffusion moves outwards through these shells and reverse diffusion moves inwards.
 
-![The nested noisy manifolds, reproduced from slide 50. Forward diffusion (red arrows) moves from the data manifold $\mathcal{M}$ out through the shells $\mathcal{M}_1,\dots,\mathcal{M}_i,\dots$ towards $\mathcal{N}(a_\infty x_0,b_\infty^2I)$, and reverse diffusion (blue arrows) moves back inwards.](figures/lec07/HaJunHyun-slide50-manifolds.pdf){#fig-manifolds width=60%}
+![The nested noisy manifolds, reproduced from slide 50. Forward diffusion (red arrows) moves from the data manifold $\mathcal{M}$ out through the shells $\mathcal{M}_1,\dots,\mathcal{M}_i,\dots$ towards $\mathcal{N}(a_\infty x_0,b_\infty^2I)$, and reverse diffusion (blue arrows) moves back inwards.](figures/lec07/HaJunHyun-slide50-manifolds.png){#fig-manifolds width=60%}
 
 The network at time $t$ has only been trained on inputs from $\mathcal{M}_t$. If a step misses the next shell, the network receives inputs it has never seen, and the error accumulates from step to step. This is the time embedding remark of slide 38 in geometric form. The decomposition on slide 54, which is @eq-denoise-renoise again, is designed to avoid this. Tweedie's formula maps $x_t$ to the clean estimate $\hat{x}_t$, and the step then adds noise of total variance $1-\bar\alpha_{t-1}$. When this noise behaves like an isotropic Gaussian, @thm-shell puts the result at the right distance, on $\mathcal{M}_{t-1}$. Slide 55 summarizes this as "retaining the correct manifold transition is the key". Landing on the right shell is necessary but not sufficient, since the renoise-only sampler of @tbl-toy does so at every step and is still biased. A GAN has no intermediate shells and must map $\nu$ onto $\mathcal{M}$ in a single step.
 
@@ -564,11 +540,8 @@ Langevin with the clean score alone does not mix between the modes within 2000 s
 
 In the score-based view, conditioning (the topic of lecture 08) amounts to adding a term to the score in @eq-reverse-sde. The manifold picture also underlies many diffusion-based solvers for inverse problems [@chung2022mcg; @chung2024dds].
 
-## References
-
-::: {#refs}
-:::
-
 ---
 
-*Scribe notes for this lecture: HaJunHyun, deb-kit2, euijinshin, Jahyeok-Koo.*
+*Based on the scribe note of Junhyun Ha, with the architecture of the time
+embedding and two figures from Debjyoti Mondal; Euijin Shin and Jahyeok Koo
+were also scribes of lecture 07. Edited by Jong Chul Ye.*

@@ -678,6 +678,5 @@ exact reverse chain is posterior sampling.
 
 ---
 
-*Based on the scribe note of Myungjo Kwak, with the figures from Doyoung
-Jung. Wonjin Nam and Jihoo Jung were also scribes of lecture 08. Edited by
-Jong Chul Ye.*
+*Based on the scribe note of Myungjo Kwak, with the materials from Doyoung
+Jung, Wonjin Nam and Jihoo Jung. Edited by Jong Chul Ye.*

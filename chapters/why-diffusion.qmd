@@ -197,6 +197,5 @@ Diffusion models are a scale-space of the data distribution, and iterative denoi
 ---
 
 *Based on the scribe notes of Junhyun Ha, Debjyoti Mondal, Euijin Shin and
-Jahyeok Koo of lecture 07, with the propositions, the mode-merging figure and
-the finite-dimensional statements from Myungjo Kwak, Doyoung Jung, Wonjin Nam
-and Jihoo Jung of lecture 08. Edited by Jong Chul Ye.*
+Jahyeok Koo of lecture 07, with the materials from Myungjo Kwak, Doyoung Jung,
+Wonjin Nam and Jihoo Jung of lecture 08. Edited by Jong Chul Ye.*

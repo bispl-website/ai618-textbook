@@ -1,682 +1,206 @@
 ---
-title: "Conditional Diffusion Models"
+title: "Why Diffusion Models"
 ---
 
 <!--
-Lecture 08, slides 55-72 of `Part-4-Diffusion-Model-Theory.pptx`. Slides
-43-54 were lectured again at the start of this class but are the chapter
-*Why Diffusion Models*, which this one assumes rather than repeats.
+Not a lecture chapter. Lectures 07 and 08 both ran through this material --
+slides 39-55 of `Part-4-Diffusion-Model-Theory.pptx` -- and the instructor
+decided on 2026-10-25 to lift it out of chapter 7 and keep it as a chapter of
+its own, merged from both lectures' scribe notes, so that chapter 7 is the
+score-SDE formulation and chapter 9 is conditional diffusion.
 
-Base note: Myungjo Kwak (95.0 of 100). Merged in: the three-way comparison
-that closes the unconditional part (slide 56), which no note carried; the
-figures from Doyoung Jung's note, whose fifteen are the only complete set
-and are already PNG. Declined: the inverse-problems material of slides 73
-onwards, which belongs to a later lecture and is left as the pointer in
-@sec-guidance.
-
-Wonjin Nam's note states the ILVR filter the other way round --- "stronger
-low-pass filtering gives the model more freedom" --- which the grader
-flagged; the direction here is the base note's and is the one the results
-figure shows. The slide gives ILVR as ICLR 2021; it is ICCV 2021, and the
-bibliography says so.
+It takes the chapter number that the Latent Diffusion stub held, which the
+instructor removed on the same day: latent diffusion is covered in chapter 9
+as the way a text condition enters. Chapter N therefore no longer means
+lecture N from here on.
 -->
 
-## Overview
 
-Every diffusion model so far in this book samples $p(x)$. This chapter asks
-for $p(x \mid c)$: a super-resolved image given a low-resolution one, a
-picture given a caption, a face given a reference. The lecture gives two
-routes, and the chapter follows the same division. **Conditional training**
-puts the condition into the network and learns $\nabla\log p(x_t \mid c)$
-from paired data; it is what SR3, Stable Diffusion and every text-to-image
-system does, and it costs a training run for each kind of condition.
-**Guidance** leaves a pretrained unconditional model untouched and injects
-the condition into the sampler instead --- through the initial point
-(SDEdit) or at every step (ILVR) --- which buys one model for many tasks at
-the price of sampling from something that is not quite the posterior.
+## Limitations of GANs
 
-Nothing in the machinery changes. The sampler is still @eq-ddim-step, the
-network still predicts noise, and the manifolds of
-[Why Diffusion Models](why-diffusion.qmd) still have to be hit in the right
-order. What changes is which score the sampler is given. The chapter ends
-with a two-dimensional example in which every score is known in closed form,
-so each claim --- that conditional training learns the conditional score,
-that ILVR satisfies its constraint exactly, that SDEdit is posterior
-sampling --- is checked against an exact answer rather than against a
-trained network.
-
-## Where unconditional generation stood
-
-Slide 56 puts three models side by side before the conditioning begins:
-DDPM [@ho2020], StyleGAN2-ADA [@karras2020ada] and the reverse SDE [@sde].
-By 2020 the two diffusion constructions had caught up with the best GAN on
-unconditional image synthesis, which is what makes the question of this
-lecture worth asking: conditioning a model is only interesting once the
-model itself is good enough that the conditioned samples are worth looking
-at. The rest of the lecture never returns to GANs.
-
-## Conditional training {#sec-cond-train}
-
-We now want samples from $p(x \mid c)$ for a condition
-$c$. A sampler needs only the target's score at every level (@thm-reverse), here $\nabla_{x_t}\log p(x_t \mid c)$.
-Bayes' rule, with $p(c)$ independent of $x_t$, splits it:
+Slide 39 describes a GAN geometrically [@gdl]. A latent distribution $\nu$ on a latent space $\mathcal{Y}$ is pushed by the generator $G_\theta$ into the data space $\mathcal{X}$, and $\theta$ is chosen to bring the result close to the data distribution $\mu$,
 
 $$
-\nabla_{x_t}\log p(x_t \mid c)
-= \nabla_{x_t}\log p(x_t) + \nabla_{x_t}\log p(c \mid x_t) .
-$$ {#eq-bayes-score}
-
-**Conditional training** (this section) learns the left side directly from
-paired data $(x_0, c)$ by giving $c$ to the
-network. **Guidance** (@sec-guidance) keeps an unconditional model for the
-first term on the right and supplies the second at sampling time.
-
-### SR3: super-resolution by conditional training
-
-In SR3 [@saharia2022sr3] the condition is a low-resolution image
-$x$ and the target a high-resolution image $y$. In this
-subsection $y_t$ is the image chain ($y_0$ clean,
-$y_T \sim \mathcal{N}(0, I)$), $\gamma_t$ plays
-the role of $\bar\alpha_t$ and $f_\theta$ is the noise predictor. The
-forward chain is the VP process on $y$; the reverse chain
-$p_\theta(y_{t-1} \mid y_t, x)$ sees the
-condition at every step.
-
-**Training (Algorithm 1).** Draw $(x, y_0) \sim p(x, y)$,
-$\gamma \sim p(\gamma)$ and $\epsilon \sim \mathcal{N}(0, I)$,
-and take a gradient step on
-$\Vert f_\theta(x, \sqrt{\gamma}\,y_0 + \sqrt{1 - \gamma}\,\epsilon, \gamma) - \epsilon \Vert_p^p$,
-$p \in \{1, 2\}$.
-
-**Inference (Algorithm 2).** From $y_T \sim \mathcal{N}(0, I)$,
-for $t = T, \dots, 1$,
-
-$$
-y_{t-1} = \frac{1}{\sqrt{\alpha_t}}\left( y_t - \frac{1 - \alpha_t}{\sqrt{1 - \gamma_t}}\, f_\theta(x, y_t, \gamma_t) \right) + \sqrt{1 - \alpha_t}\,z,
-\qquad z \sim \mathcal{N}(0, I) \ (z = 0 \text{ at } t = 1) .
-$$ {#eq-sr3-step}
-
-![SR3 as the lecture draws it on slides 58-59. Above, the chain runs on the target $y$ while the low-resolution $x$ is held fixed, so the forward kernel is the ordinary $q(y_t\mid y_{t-1})$ and only the reverse kernel $p_\theta(y_{t-1}\mid y_t,x)$ sees the condition. Below, Algorithm 1 trains $f_\theta$ on the noise it must subtract and Algorithm 2 is the DDPM step with $f_\theta(x,y_t,\gamma_t)$ in place of $\epsilon_\theta$. Reproduced from the slides [@lecture-slides-diffusion; @saharia2022sr3].](figures/lec08/dodoyou0125-sr3-algorithms.png){#fig-sr3 width=100%}
-
-Three points are left implicit on the slide.
-
-**(i) The loss learns the conditional score.** For $p = 2$, the argument of
-@eq-bayes-optimal conditioned on $x$ makes the minimiser
-$\mathbb{E}[\epsilon \mid y_\gamma, x]$, and
-@thm-tweedie with the prior $p(y_0 \mid x)$ (valid because
-the noise is independent of $(x, y_0)$) gives
-
-$$
-f^\star(x, y_\gamma, \gamma) = -\sqrt{1 - \gamma}\;\nabla_{y_\gamma}\log p(y_\gamma \mid x) ,
-$$ {#eq-cond-score}
-
-the left side of @eq-bayes-score; nothing else in the machinery changes.
-(For $p = 1$ the minimiser is a conditional median, not exactly a score.)
-
-**(ii) Noise-level conditioning.** SR3 feeds the network $\gamma$ itself,
-drawn from a continuous range during training, so the same network serves
-any inference schedule. This is the time-embedding mechanism of @fig-unet-time with $\gamma$ in place
-of $t$.
-
-**(iii) Algorithm 2 is the DDPM step.** With $y \to x$,
-$\gamma_t = \bar\alpha_t$ and $f_\theta \to \epsilon_\theta$,
-the posterior mean of @prp-ddim-marginal is
-$\frac{\sqrt{\bar\alpha_{t-1}}(1 - \alpha_t)}{1 - \bar\alpha_t}x_0 + \frac{\sqrt{\alpha_t}(1 - \bar\alpha_{t-1})}{1 - \bar\alpha_t}x_t$.
-Substituting the Tweedie estimate
-$x_0 \approx (x_t - \sqrt{1 - \bar\alpha_t}\,\epsilon_\theta)/\sqrt{\bar\alpha_t}$,
-the coefficient of $x_t$ is
-
-$$
-\frac{1}{1 - \bar\alpha_t}\left( \frac{1 - \alpha_t}{\sqrt{\alpha_t}} + \sqrt{\alpha_t}(1 - \bar\alpha_{t-1}) \right)
-= \frac{1 - \alpha_t + \alpha_t - \bar\alpha_t}{\sqrt{\alpha_t}\,(1 - \bar\alpha_t)}
-= \frac{1}{\sqrt{\alpha_t}},
+\min_\theta\ \mathrm{dist}(\mu_\theta,\mu)\qquad\text{subject to}\qquad\mu_\theta = G_{\theta\#}\nu .
 $$
 
-and that of $\epsilon_\theta$ is
-$-(1 - \alpha_t)/(\sqrt{\alpha_t}\sqrt{1 - \bar\alpha_t})$: the mean of
-@eq-sr3-step. The only difference from @eq-ddim-step with $\eta = 1$ is the
-noise variance, $1 - \alpha_t$ instead of $\tilde\beta_t^2 \le 1 - \alpha_t$;
-both are standard choices in @ho2020.
+The distance is not computed directly but estimated by the discriminator, which turns training into a min-max game. Slide 40 shows what can go wrong when $\mu$ has several modes. The pushforward $\mu_\theta$ settles on one of them and misses the others, which is called mode collapse. Two effects contribute. A continuous $G_\theta$ maps a connected latent space onto a connected set, so it cannot cover well-separated modes without also putting mass between them. In addition, the adversarial game lets the generator stay on whichever modes the discriminator currently accepts.
 
-**How the condition enters.** SR3 upsamples $x$ bicubically and
-concatenates it with $y_t$ along the channels, so the U-Net sees the
-condition pixel-aligned. The slide's example super-resolves $64 \times 64$
-to $1024 \times 1024$; the output is sharp because each step denoises
-towards a *sample* of $p(y \mid x)$ rather than regressing
-to its blurry mean.
+Slide 41, titled "GAN overfitting" and taken from DiffusionCLIP [@kim2022diffusionclip], shows what this means in practice. GAN-based editing methods first invert an image to a latent code, and even their reconstructions lose the hand in front of the face and the details of the castle. Most training faces are frontal and unoccluded, so inverting and regenerating projects the image onto a range that is dominated by the majority of the data. Deterministic DDIM, on the other hand, follows an ODE flow (@eq-pf-sigma) and can be inverted almost exactly by iterating $x_{t+1} = \sqrt{\bar\alpha_{t+1}}\hat{x}_t+\sqrt{1-\bar\alpha_{t+1}}\epsilon_\theta(x_t,t)$, which is why DiffusionCLIP keeps the hand. @fig-gan-scale-space puts the two pictures side by side. Finally, slide 42 points out that a GAN is a single-step sampler. The network has to represent the entire map from noise to data, and a sample comes from one pass through it, so there is no intermediate state at which an error could be corrected.
 
-### Latent diffusion with a text condition
+![(a) A GAN learns one push-forward $\mu_\theta = G_{\theta\#}\nu$ from the latent prior $\nu$ on $\mathcal{Y}$ into the data space; when $\mu$ has separated modes a continuous $G_\theta$ cannot cover them all, which is mode collapse (slides 39-42). (b) Forward diffusion instead builds a scale-space $p_t = p_0 * \mathcal{N}(0,\sigma_t^2I)$ in which the modes merge into one well-conditioned distribution, and reverse Langevin dynamics transports samples back down the scales along $\nabla\log p_t$ (slides 43-46). The chapter's argument is that the second picture has intermediate states and the first does not.](figures/lec07/deb-kit2-fig4-gan-vs-scale-space.png){#fig-gan-scale-space width=100%}
 
-Pixel-space diffusion at high resolution is expensive, and a text prompt is
-not pixel-aligned. Latent diffusion [@rombach2022ldm], the model behind
-Stable Diffusion, addresses both.
+## Scale-space in the distribution domain
 
-**Latent space.** A pretrained autoencoder maps an image
-$x \in \mathbb{R}^{H \times W \times 3}$ to
-$z = \mathcal{E}(x) \in \mathbb{R}^{h \times w \times c}$, with
-downsampling factor $f = H/h$ and $\mathcal{D}(z) \approx x$.
-Diffusion runs entirely on $z$, so each U-Net pass costs a factor $f^2$
-fewer positions (64 for $f = 8$), and more for attention, which is quadratic
-in the number of positions.
-
-**Conditioning.** An encoder $\tau_\theta$ maps the condition (text, a
-semantic map, an image) to $L$ tokens, $\tau_\theta(c) \in \mathbb{R}^{L \times d_\tau}$,
-and the objective is the conditional noise-prediction loss on latents,
-$\mathbb{E}\Vert \epsilon - \epsilon_\theta(z_t, t, \tau_\theta(c)) \Vert_2^2$
-with $z_t = \sqrt{\bar\alpha_t}\,\mathcal{E}(x) + \sqrt{1 - \bar\alpha_t}\,\epsilon$,
-whose minimiser is the conditional latent score by @eq-cond-score.
-
-**Cross-attention.** A feature map is flattened into $hw$ tokens
-$\varphi(z_t) \in \mathbb{R}^{hw \times d_\varphi}$, and each $QKV$ block
-computes
+Scale-space theory (slide 44) represents a signal $f$ at all scales $t\ge0$ by blurring it with a Gaussian,
 
 $$
-\operatorname{softmax}\!\left( \frac{Q K^\top}{\sqrt{d}} \right) V,
-\qquad
-Q = \varphi(z_t) W_Q, \quad K = \tau_\theta(c) W_K, \quad V = \tau_\theta(c) W_V .
-$$
+L_t = h_t*f,\qquad h_t(x) = \frac{1}{(2\pi t)^{n/2}}e^{-\Vert x\Vert^2/2t}.
+$$ {#eq-scale-space}
 
-$Q$ has one row per image position and $K, V$ one per token, so after the
-row-wise softmax $QK^\top \in \mathbb{R}^{hw \times L}$ gives every image
-position a distribution over the tokens (*which words matter here*), and the
-output is a weighted average of token values. Nothing depends on $L$ except
-the size of the sums, so prompts of any length work and no spatial
-alignment is needed. The "switch" on the slide picks the route: spatially
-aligned conditions are concatenated with $z_t$ as in SR3, and sequences
-such as text enter through cross-attention.
+The Gaussian is the only kernel that satisfies the scale-space axioms [@koenderink1984; @lindeberg1994], namely linearity, shift invariance, the semigroup property $h_s*h_t = h_{s+t}$, rotational symmetry, and non-enhancement of local extrema (maxima never increase and minima never decrease, and in one dimension no new extrema appear). Moving to coarser scales smooths away fine structure.
 
-![The latent diffusion architecture of slide 61. The encoder $\mathcal{E}$ and decoder $\mathcal{D}$ move between pixel space and the latent space in which the diffusion runs; the conditioning encoder $\tau_\theta$ feeds the $QKV$ cross-attention blocks of the denoising U-Net, and the switch selects concatenation for spatially aligned conditions. Reproduced from the slides [@lecture-slides-diffusion; @rombach2022ldm].](figures/lec08/dodoyou0125-ldm-architecture.png){#fig-ldm width=95%}
+The slides state that uniqueness without proof [@koenderink1984; @lindeberg1994]. Two of the axioms are used directly later, so we record them.
 
-### Text-conditioned training
+::: {#prp-heat}
+## The Gaussian scale-space solves the heat equation
+For $t>0$, $\partial_t h_t = \tfrac12\Delta h_t$, and hence $L_t = h_t*f$ satisfies $\partial_tL_t = \tfrac12\Delta L_t$ for bounded continuous $f$, with $L_t\to f$ as $t\to0$.
+:::
 
-The slide states the text-conditioned loss with pictures (a cat image, noise
-images, the word "Cat"); with the time argument restored it is
+::: {.proof}
+With $r = \Vert x\Vert$, $\log h_t = -\tfrac{n}{2}\log(2\pi t)-r^2/2t$ gives $\partial_th_t = \big(-\tfrac{n}{2t}+\tfrac{r^2}{2t^2}\big)h_t$, while $\partial_i^2h_t = \big(-\tfrac1t+\tfrac{x_i^2}{t^2}\big)h_t$, so $\tfrac12\Delta h_t = \tfrac12\big(-\tfrac{n}{t}+\tfrac{r^2}{t^2}\big)h_t = \partial_th_t$. The derivatives are integrable and $f$ is bounded, so they pass inside the convolution by dominated convergence. As $t\to0$ the density $h_t$ concentrates at the origin, so $h_t*f\to f$ at every point of continuity.
+:::
 
-$$
-\Big\Vert \epsilon_\theta\big( \sqrt{\bar\alpha_t}\,x_0 + \sqrt{1 - \bar\alpha_t}\,\epsilon, \, t, \, c \big) - \epsilon \Big\Vert_2^2 .
-$$ {#eq-text-loss}
+::: {#prp-semigroup}
+## Semigroup property
+$h_s*h_t = h_{s+t}$ for all $s,t>0$.
+:::
 
-Its TL;DR, "Train a diffusion model to estimate noise only when noise is
-added to a video along with the corresponding text", has two key words. The
-target is *only noise*: the text is an input, never a target, so the model
-denoises *knowing* the caption. And training needs the *corresponding* pairs
-$(x_0, c)$, after which
-$\epsilon_{\theta^\star}(x_t, t, c) = -\sqrt{1 - \bar\alpha_t}\,\nabla\log p(x_t \mid c)$
-by @eq-cond-score. The loss is written for an image, and the same recipe
-with $x_0$ a video clip gives text-to-video. Sampling is
-@eq-ddim-step with $\epsilon_\theta(x_t, t, c)$,
-and every guarantee of the unconditional sampler carries over with
-$p(x_0 \mid c)$ in place of $p_0$.
+::: {.proof}
+The Fourier transform of $h_t$ is $e^{-t\Vert\omega\Vert^2/2}$ and takes convolution to multiplication; the product of the transforms for $s$ and $t$ is the transform for $s+t$, and the transform is injective on integrable functions.
+:::
 
-The remaining slides show results, which we describe since they are
-third-party images. **eDiff-I** [@balaji2022ediffi] keeps the content of the
-prompt "A {X} photo / painting of a penguin working as a fruit vendor in a
-tropical village" fixed while X sets the style; it trains separate *expert*
-denoisers for different ranges of $t$, which fits the shell picture of [Why Diffusion Models](why-diffusion.qmd), since the inputs at different levels
-live on almost disjoint tubes. A comparison of
-Midjourney, Stable Diffusion 2 and DALL-E 2 [@ramesh2022dalle2] shows
-systems that differ in data, encoders and scale but not in the principle of
-@eq-text-loss. **Sora** [@brooks2024sora] applies it to video latents with a
-transformer, generating a walk down a neon-lit Tokyo street from a
-paragraph-long prompt.
+For two modes one can say exactly when the blur merges them, which is the mechanism the whole argument rests on.
 
-The price of conditional training is **paired data and a training run for
-each kind of condition**: a super-resolution model cannot inpaint.
-@sec-guidance removes this restriction by putting the condition into the
-sampler instead of the network.
+::: {#prp-merge}
+## When two Gaussian modes merge
+Let $p_0 = \tfrac12\mathcal{N}(-m,s^2)+\tfrac12\mathcal{N}(m,s^2)$ on $\mathbb{R}$ with $m>0$. Then $p_t = \tfrac12\mathcal{N}(-m,v)+\tfrac12\mathcal{N}(m,v)$ with $v = s^2+t$, and $p_t$ is bimodal if and only if $m^2>v$. The modes merge at the critical scale $t^\star = m^2-s^2$.
+:::
 
-## Guidance-based approaches {#sec-guidance}
+::: {.proof}
+By @prp-semigroup the convolution acts on each component, giving the stated $p_t$. Up to a constant $p_t\propto e_1+e_2$ with $e_{1,2} = e^{-(x\mp m)^2/2v}$. Setting the derivative to zero and using $e_1/e_2 = e^{2mx/v}$ gives $x(e_1+e_2) = m(e_1-e_2)$, that is $x = m\tanh(mx/v)$. Zero is always a solution; the right-hand side is odd, concave on $x>0$, bounded by $m$, and has slope $m^2/v$ at the origin, so a nonzero solution exists exactly when $m^2/v>1$, and then $x=0$ is the minimum between two maxima.
+:::
 
-Guidance needs neither paired data nor retraining. It takes a pretrained
-**unconditional** model, which supplies $\nabla\log p(x_t)$, and
-injects the condition at sampling time: SDEdit through the *initialisation*,
-ILVR at *every step* by replacing low frequencies, and inverse-problem
-solvers at every step through the *likelihood* term of @eq-bayes-score. All
-three sample, exactly or approximately, from a posterior with the diffusion
-model as the prior.
+![The scale-space of a bimodal density loses a mode at exactly the critical scale $t^\star = m^2-s^2$ of @prp-merge. Left: $p_t(x)$ over $(x,t)$ for $m=2$, $s=0.5$, with the local maxima in red merging at the dashed line $t^\star = 3.75$. Right: slices at four scales, the dashed one at $t^\star$ flat at the top.](figures/lec08/Kwak-MJ-scalespace-1d.png){#fig-mode-merge width=100%}
 
-### SDEdit: conditioning through the initial point
+The count of modes therefore falls as the scale grows, which is "no new extrema" in its one-dimensional form, and @fig-mode-merge shows a sampler's reason for climbing the scale-space: above $t^\star$ there is one mode to find, and the two are recovered on the way back down.
 
-SDEdit [@meng2022sdedit] starts from a guide image $x^{g}$, such
-as a crude stroke painting with the right layout but no realism, and uses no
-condition-specific training. It **perturbs** the guide to an intermediate
-level $t_0$ with @eq-forward-marginal,
-$x_{t_0} = \sqrt{\bar\alpha_{t_0}}\,x^{g} + \sqrt{1 - \bar\alpha_{t_0}}\,\epsilon$,
-and then **reverses** with the unconditional sampler @eq-ddim-step from
-$t_0$ to $0$. (The paper writes this for the VE-SDE; the VP form is the same
-idea.) On the slide, natural images (green) and stroke paintings (blue) are
-far apart at level $0$ but overlap after perturbation, so the noisy guide is
-a typical point of the noisy image distribution, and the reverse process
-carries it to the images: the merging of modes established in [Why Diffusion Models](why-diffusion.qmd).
-
-**What SDEdit samples.** Suppose the reverse chain is exact (the DDPM step
-with $\theta^\star$ approximates it). The forward chain is Markov, so the
-reverse transitions from $t_0$ compose to the law of $x_0$ given
-$x_{t_0}$:
+Slide 45 recalls the density of a sum of independent random variables. For independent $X$ and $Y$ with densities $f_X$ and $f_Y$, we have $F_{X+Y}(a) = \int\!\int_{-\infty}^{a-y}f_X(x)f_Y(y)\,dx\,dy = \int F_X(a-y)f_Y(y)\,dy$, and differentiating in $a$ gives
 
 $$
-p(x_0 \mid x_{t_0})
-\;\propto\; q(x_{t_0} \mid x_0)\,p_0(x_0)
-\;\propto\; \exp\left( -\frac{\bar\alpha_{t_0}}{2(1 - \bar\alpha_{t_0})}\,
-\Big\Vert \frac{x_{t_0}}{\sqrt{\bar\alpha_{t_0}}} - x_0 \Big\Vert^2 \right) p_0(x_0) .
-$$ {#eq-sdedit-posterior}
+f_{X+Y}(a) = \int f_X(a-y)\,f_Y(y)\,dy = (f_X*f_Y)(a).
+$$ {#eq-conv}
 
-Since $x_{t_0}/\sqrt{\bar\alpha_{t_0}} = x^{g} + s_{t_0}\epsilon$,
-SDEdit is posterior sampling with prior $p_0$ and a Gaussian likelihood
-centred on the noisy guide, weighted by the signal-to-noise ratio
-$\mathrm{SNR}(t_0) = \bar\alpha_{t_0}/(1 - \bar\alpha_{t_0})$. This makes
-the slide's trade-off exact: a small $t_0$ (high SNR) is **faithful** to the
-guide but stays unrealistic if the guide is far from the data, and a large
-$t_0$ is **realistic** but forgets the guide, becoming an unconditional
-sample as $t_0 \to T$. The next slide's examples (stroke painting to image,
-compositing, stroke editing) all use this one algorithm; only the guide
-changes.
-
-![SDEdit on slides 69-70. The stroke painting (left) is perturbed by the forward SDE until its law overlaps that of natural images, and the reverse SDE then carries it back down; the contours above the images are the distributions of photographs (green) and of strokes (blue), which meet only after the perturbation. Reproduced from the slides [@lecture-slides-diffusion; @meng2022sdedit].](figures/lec08/dodoyou0125-sdedit-overview.png){#fig-sdedit width=100%}
-
-### ILVR: conditioning at every step
-
-ILVR [@choi2021ilvr] conditions on a reference image $y$ through its
-low frequencies ($x$ is again the image chain). With
-$\phi = \phi_N$ a linear low-pass filter (downsample by $N$, upsample back),
-one step is
+Applying @eq-conv to the VE step $x_t = x_{t-1}+\sqrt{\sigma_t^2-\sigma_{t-1}^2}\,z$ gives
 
 $$
-x'_{t-1} \sim p_\theta(x'_{t-1} \mid x_t), \qquad
-y_{t-1} \sim q(y_{t-1} \mid y), \qquad
-x_{t-1} = \phi(y_{t-1}) + (I - \phi)(x'_{t-1}) :
-$$ {#eq-ilvr}
+p_t = p_{t-1}*h_{\sigma_t^2-\sigma_{t-1}^2} = p_0*h_{\sigma_t^2},
+$$ {#eq-dist-scale-space}
 
-an unconditional proposal, the reference noised to the same level, and a
-merge that keeps the proposal's high frequencies and the noisy reference's
-low frequencies. Three facts explain the step.
+where the second equality follows from the semigroup property with $\sigma_0 = 0$. The forward process is the scale-space of @eq-scale-space applied to the density $p_0$, at scale $\sigma_t^2$. Slide 43 writes the first equality as $p(x_{t-1}) = p(x_t)*h(x_t)$, with its time index reversed. For VP the same holds after rescaling $x$ by $1/\sqrt{\bar\alpha_t}$. The figure on slide 43, from @kim2023dmcmc, shows why this is useful. Separate modes merge at coarse scales, where a sampler can move between them before following the scales back down. The bottom panels of that slide compare running the reverse SDE or ODE from pure noise at $\sigma=348$, which often fails to produce a clean face, with starting it from an MCMC chain run at much lower noise levels ($\sigma$ between 1.41 and 2.03), which gives clean faces.
 
-**(i) The low frequencies are matched exactly.** If $\phi^2 = \phi$ --- for
-example $N \times N$ block averaging $D$ followed by nearest-neighbour
-upsampling $U$, where $DU = I$, and $\phi = UD$ is even an
-orthogonal projection since $D = N^{-2}U^\top$ --- then
-$\phi(x_{t-1}) = \phi^2(y_{t-1}) + (\phi - \phi^2)(x'_{t-1}) = \phi(y_{t-1})$.
-At the last step the reference is almost noise-free, so
-$\phi_N(x_0) \approx \phi_N(y)$.
+## Iterative denoising as the dual representation
 
-**(ii) It is a projection onto the noisy constraint set.** For an orthogonal
-projection $\phi$, the closest point to $x'$ in
-$\{x : \phi x = \phi y_{t-1}\}$ is
-$x' - \phi x' + \phi y_{t-1}$, which is
-@eq-ilvr: a *hard* data-consistency step for the noise-free linear problem
-$\mathcal{A} = \phi_N$.
-
-**(iii) It stays on the right tube.** Both pieces carry noise of level
-$t - 1$, so $x_{t-1}$ has the noise level the next network expects (the
-noisy manifolds of [Why Diffusion Models](why-diffusion.qmd)). Inserting the *clean* $\phi(y)$ instead would put
-the input off $\mathcal{M}_{t-1}$.
-
-$N$ controls how much is imposed, since the range of $\phi_N$ has dimension
-$n/N^2$: small $N$ gives near copies of the reference, large $N$ fixes only
-coarse layout and colour. The results slide shows this for
-$N = 4, \dots, 64$, and the same algorithm for image translation,
-paint-to-image and scribble editing.
-
-![ILVR across the downsampling factor, from slide 72. (a) With $N=4$ the output is nearly the reference; by $N=64$ only the coarse layout and colour survive and the identity is gone, which is $\phi_N$ having range of dimension $n/N^2$. (b-d) The same algorithm as image translation, paint-to-image and scribble editing. Reproduced from the slides [@lecture-slides-diffusion; @choi2021ilvr].](figures/lec08/dodoyou0125-ilvr-results.png){#fig-ilvr width=100%}
-
-
-### Inverse problems, in one paragraph
-
-The same route reaches further than SDEdit and ILVR. An imaging system
-$\mathcal{A}$ --- a camera, a microscope, an MRI scanner --- produces
-$y = \mathcal{A}(x) + n$, and recovering $x$ is ill-posed, so a prior is
-needed; a diffusion model is one. Writing the posterior score as
+The convolution in @eq-dist-scale-space acts on densities. On samples, the same operation simply adds i.i.d. noise to every pixel. Slide 46 puts the two side by side as $p(x_{t-1}) = p(x_t)*p(\sigma_t\epsilon_t)$ and $x_{t-1} = x_t+\sigma_t\epsilon_t$, again with the time index reversed, and calls the second the dual representation of the first. The figure on that slide shows the score field of a two-mode density, with arrows pointing towards the modes. Undoing a convolution of densities is an ill-posed deconvolution problem, but on samples it becomes iterative denoising guided by the score. One example is Langevin dynamics,
 
 $$
-\nabla_{x_t}\log p(x_t \mid y)
-= \underbrace{\nabla_{x_t}\log p(x_t)}_{\text{pretrained network}}
-+ \underbrace{\nabla_{x_t}\log p(y \mid x_t)}_{\text{measurement}}
-$$ {#eq-posterior-score}
+x_{i+1}\leftarrow x_i+\delta\,\nabla_{x}\log p(x_i)+\sqrt{2\delta}\,z_i,\qquad i=0,1,\dots,K,
+$$ {#eq-langevin}
 
-splits the work: the first term is the unconditional network through
-@eq-epsilon-score-conversion, and the second is the hard part, because
-$y$ and $x_t$ are conditionally independent given $x_0$, so
-$p(y \mid x_t) = \int p(y \mid x_0)p(x_0 \mid x_t)\,dx_0$ involves the
-intractable $p(x_0 \mid x_t)$. Diffusion posterior sampling
-[@chung2023dps] approximates it by Tweedie's $\hat{x}_0$, and the
-accelerated solvers [@chung2024dds] build on that. Those slides belong to a
-later lecture; here @eq-posterior-score is needed only because the worked
-example below samples the exact posterior to check the approximations
-against.
+which we write with step size $\delta$ because $\epsilon$ already denotes the noise (the slide uses $\epsilon$). @sec-fp explains why this procedure samples from $p$ when the step size is small and the number of steps is large.
 
+## The Gaussian shell theorem and the hypercylinder
 
-![Guidance on a two-dimensional prior with the exact score. (a)
-Unconditional samples lie on the crescent. (b, c) SDEdit from the guide
-(star): a small $t_0$ is faithful but leaves the output short of the data, a
-large $t_0$ is realistic but ignores the guide, the trade-off of
-@eq-sdedit-posterior. (d) ILVR keeping the first coordinate pins
-$x_1 = y_1$ (dashed line) and fills in $x_2$ from the prior. (e) Exact
-posterior samples for the same constraint. 400 samples per
-panel.](figures/lec08/Kwak-MJ-guidance-2d.png){#fig-guidance-2d width=100%}
+::: {#thm-shell}
+## Gaussian shell theorem
+Let $X = (X_1,\dots,X_n)$ have i.i.d. $\mathcal{N}(0,\sigma^2)$ entries. Then $\Vert X\Vert^2/n\to\sigma^2$ in probability, so $\Vert X\Vert\approx\sigma\sqrt n$ and the mass concentrates on the sphere of radius $\sigma\sqrt n$ (slide 47).
+:::
 
-## Worked example: conditional sampling with an exact score {#sec-example}
+::: {.proof}
+We have $\mathbb{E}\Vert X\Vert^2 = n\sigma^2$ and $\mathrm{Var}\Vert X\Vert^2 = n\,\mathrm{Var}(X_i^2) = 2n\sigma^4$. By Chebyshev's inequality, $P(|\Vert X\Vert^2/n-\sigma^2|>r)\le2\sigma^4/(nr^2)$, which tends to zero. This is the law of large numbers mentioned on the slide. Since the square root is continuous, $\Vert X\Vert/\sqrt n\to\sigma$.
+:::
 
-A trained network only approximates the score, and its errors would blur any
-check. We therefore take data whose score is known *exactly* at every
-level, a Gaussian mixture, replace the network by its ideal value
-$\theta^\star$, and test the sampler @eq-ddim-step, conditional sampling
-@eq-posterior-score, ILVR @eq-ilvr and SDEdit @eq-sdedit-posterior against
-closed-form answers. The code needs only numpy; paste the blocks into one
-Python session in order (a few seconds in total). It is the computation
-behind @fig-guidance-2d.
+The relative width of the shell shrinks like $1/\sqrt{2n}$, while its absolute width tends to the constant $\sigma/\sqrt2$ [@vershynin2018]: for a $256\times256\times3$ image the shell is about $0.16\%$ of its own radius thick, which is why it is drawn as a surface rather than a region. The $\chi^2$ curves on slide 47 and panel (a) of @fig-shell show the same concentration.
 
-### Three closed forms
-
-Let $p_0 = \sum_{k=1}^{K} w_k\,\mathcal{N}(\mu_k, \Sigma_k)$
-on $\mathbb{R}^{d}$ with positive definite $\Sigma_k$.
-
-**(a) Noisy marginals.** Given component $k$, $x_t$ is a linear map
-of independent Gaussians, so
+The density of $X$ is nevertheless largest at the origin, and the two statements are reconciled by the radial density. Writing $R = \Vert X\Vert$ and integrating over the sphere,
 
 $$
-p_t(x) = \sum_{k} w_k\,\mathcal{N}\big(x;\, \sqrt{\bar\alpha_t}\mu_k,\, \bar\alpha_t\Sigma_k + (1 - \bar\alpha_t)I\big) .
-$$ {#eq-gmm-noised}
+f_R(r)\propto r^{n-1}e^{-r^2/2\sigma^2},\qquad r\ge0,
+$$ {#eq-radial}
 
-**(b) Score.** For a mixture with terms $\mathcal{N}_k$ of means
-$m_k$ and covariances $C_k$,
-$\nabla\mathcal{N}_k = -\mathcal{N}_k\,C_k^{-1}(x - m_k)$, so
+whose maximum for $n>1$ is at $r = \sigma\sqrt{n-1}$. The Cartesian density falls off from the origin, but the volume factor $r^{n-1}$ grows faster until that radius, and in high dimension the product is sharply peaked there. The concentration is an asymptotic statement and not a small-$n$ one: a simulation at $n=3$ puts $\mathbb{E}\Vert X\Vert/(\sigma\sqrt n)$ at about $0.94$, still noticeably below one.
+
+Slide 48 considers data lying on a $k$-dimensional linear subspace $V$, perturbed by noise with $p(y\mid x) = \mathcal{N}(x,\sigma^2I)$. Write $y = x+\sigma z$ and let $P_\perp$ be the projection onto the orthogonal complement of $V$. Since $P_\perp x=0$, the distance from $y$ to $V$ is $\Vert P_\perp y\Vert = \sigma\Vert P_\perp z\Vert$. Here $P_\perp z$ is a standard Gaussian in $n-k$ dimensions, so @thm-shell gives
 
 $$
-\nabla_{x}\log p(x)
-= -\sum_k r_k(x)\,C_k^{-1}(x - m_k),
-\qquad
-r_k(x) = \frac{w_k\mathcal{N}_k(x)}{\sum_j w_j\mathcal{N}_j(x)} ,
-$$ {#eq-gmm-score}
+\mathrm{dist}(y,V)\approx\sigma\sqrt{n-k}.
+$$ {#eq-cylinder}
 
-with the responsibilities $r_k$ computed from logarithms to avoid
-underflow. With @eq-gmm-noised and @eq-epsilon-score-conversion this gives the ideal
-$\epsilon_{\theta^\star}^{(t)}$ at every level.
+The component along $V$ is unconstrained, so $p(y)$ concentrates on a hypercylinder of radius $\sigma\sqrt{n-k}$ around $V$, as panel (b) of @fig-shell shows. Here the approximation can be replaced by an exact law: $P_\perp z$ is standard Gaussian in $n-k$ dimensions, so
 
-**(c) Linear-Gaussian conditioning.** For $y = Ax_0 + n$,
-$n \sim \mathcal{N}(0, \sigma_{n}^2I)$,
-component $k$ conditions to
-$\mathcal{N}(\mu_k + G_k(y - A\mu_k), \Sigma_k - G_k A\Sigma_k)$
-with $S_k = A\Sigma_k A^\top + \sigma_{n}^2I$
-and $G_k = \Sigma_k A^\top S_k^{-1}$
-($x_0 - G_ky$ is uncorrelated with, hence
-independent of, $y$), and its weight becomes proportional to
-$w_k\,\mathcal{N}(y; A\mu_k, S_k)$. So
-$p(x_0 \mid y)$ is again a mixture. Since $x_t$
-and $y$ are conditionally independent given $x_0$,
-running the sampler on this posterior mixture uses the exact left side of
-@eq-posterior-score. The SDEdit law @eq-sdedit-posterior is case (c) with
-$A = \sqrt{\bar\alpha_{t_0}}\,I$,
-$\sigma_{n}^2 = 1 - \bar\alpha_{t_0}$ and $y = x_{t_0}$.
+$$
+\frac{\mathrm{dist}(y,V)^2}{\sigma^2}\sim\chi^2_{n-k}
+$$ {#eq-chisq}
 
-### Step 1: the Gaussian shell
+exactly, for every $n$ and $k$, and @eq-cylinder is its concentration. The same calculation also factorises the noisy density itself: with $P$ the projection onto $V$,
 
-The Gaussian shell theorem of [Why Diffusion Models](why-diffusion.qmd) predicts that $\Vert X\Vert/(\sigma\sqrt{n})$
-has mean close to $1$ and standard deviation close to $1/\sqrt{2n}$.
+$$
+p(y) = \big(p*\mathcal{N}(0,\sigma^2I_k)\big)(Py)\cdot(2\pi\sigma^2)^{-(n-k)/2}e^{-\Vert P_\perp y\Vert^2/2\sigma^2},
+$$
 
-```{.python}
-import numpy as np
+a blurred copy of the data density along $V$ times a fixed Gaussian across it. The noise is doing two different things in the two directions, and only the second is the shell.
 
-rng = np.random.default_rng(618)
+![(a) The norm of an $n$-dimensional standard Gaussian divided by $\sqrt n$, which concentrates at 1 as $n$ grows. (b) The distance to a $k$-dimensional subspace after adding $\mathcal{N}(0,I)$ noise in $n=1000$ dimensions. It concentrates at $\sqrt{n-k}$ (dashed lines) with the same width for every $k$.](figures/lec07/HaJunHyun-shell.png){#fig-shell width=100%}
 
-# (1) Gaussian shell: ||X|| / (sigma sqrt(n)), X ~ N(0, sigma^2 I_n)
-sigma = 0.5
-for n in [3, 100, 10_000]:
-    X = sigma * rng.standard_normal((2000, n))
-    r = np.linalg.norm(X, axis=1) / (sigma * np.sqrt(n))
-    print(f"n = {n:6d}: mean {r.mean():.4f}, std {r.std():.4f}, "
-          f"1/sqrt(2n) = {1 / np.sqrt(2 * n):.4f}")
-```
+## Transitions between noisy manifolds {#sec-manifold}
 
-Output:
+Locally, a curved data manifold $\mathcal{M}$ of dimension $k$ looks like a subspace. As long as the tube radius $\sigma_i\sqrt{n-k}$ is small compared with the radius of curvature of $\mathcal{M}$, @eq-cylinder implies that samples at noise level $\sigma_i$ lie in a thin tube
 
-```{.text}
-n =      3: mean 0.9351, std 0.3963, 1/sqrt(2n) = 0.4082
-n =    100: mean 0.9953, std 0.0704, 1/sqrt(2n) = 0.0707
-n =  10000: mean 1.0002, std 0.0069, 1/sqrt(2n) = 0.0071
-```
+$$
+\mathcal{M}_i = \{y\mid\mathrm{dist}(y,\mathcal{M})\approx\sigma_i\sqrt{n-k}\}
+$$
 
-### Step 2: the prior and the exact sampler
+around $\mathcal{M}$ [slide 49, after @chung2022mcg]. For the VP process, $\mathcal{M}_i$ surrounds $\sqrt{\bar\alpha_i}\,\mathcal{M}$ at radius $\sqrt{1-\bar\alpha_i}\sqrt{n-k}$. The noise levels give a sequence of thin shells $\mathcal{M}_1,\mathcal{M}_2,\dots,\mathcal{M}_\infty$ at increasing distance from $\mathcal{M}$. Slide 50, reproduced in @fig-manifolds, draws them as nested contours ending at $\mathcal{N}(a_\infty x_0,b_\infty^2I)$, where $a_\infty$ and $b_\infty$ are the limiting signal scale and noise level, and slide 50 calls them discrete orbits. Forward diffusion moves outwards through these shells and reverse diffusion moves inwards.
 
-The prior is the crescent of @fig-guidance-2d: $K = 7$ components on an arc
-of radius $2.5$ centred at $(0, -1)$, with standard deviation $0.3$ along
-the arc and about $0.063$ across it. `reverse` is @eq-ddim-step with the
-ideal network, on a VP schedule with $T = 200$ and $\beta_t$ linear from
-$10^{-4}$ to $0.06$ ($\bar\alpha_T \approx 2 \times 10^{-3}$). `report`
-prints the mean and standard deviation of each coordinate and the mean
-distance from the arc ("off-arc"), a measure of realism.
+![The nested noisy manifolds, reproduced from slide 50. Forward diffusion (red arrows) moves from the data manifold $\mathcal{M}$ out through the shells $\mathcal{M}_1,\dots,\mathcal{M}_i,\dots$ towards $\mathcal{N}(a_\infty x_0,b_\infty^2I)$, and reverse diffusion (blue arrows) moves back inwards.](figures/lec07/HaJunHyun-slide50-manifolds.png){#fig-manifolds width=60%}
 
-```{.python}
-# (2) Prior: a thin crescent in R^2 built from K = 7 Gaussians.
-ang = np.linspace(0.15 * np.pi, 0.85 * np.pi, 7)
-tang = np.stack([-np.sin(ang), np.cos(ang)], 1)        # (K, 2) tangent
-nrm = np.stack([np.cos(ang), np.sin(ang)], 1)          # (K, 2) normal
-prior = (np.full(7, 1 / 7),                            # weights (K,)
-         np.stack([2.5 * np.cos(ang), 2.5 * np.sin(ang) - 1], 1),
-         0.09 * np.einsum("ki,kj->kij", tang, tang)    # covs (K, 2, 2)
-         + 0.004 * np.einsum("ki,kj->kij", nrm, nrm))
+The network at time $t$ has only been trained on inputs from $\mathcal{M}_t$. If a step misses the next shell, the network receives inputs it has never seen, and the error accumulates from step to step. This is the time embedding remark of slide 38 in geometric form. The decomposition on slide 54, which is @eq-denoise-renoise again, is designed to avoid this. Tweedie's formula maps $x_t$ to the clean estimate $\hat{x}_t$, and the step then adds noise of total variance $1-\bar\alpha_{t-1}$. When this noise behaves like an isotropic Gaussian, @thm-shell puts the result at the right distance, on $\mathcal{M}_{t-1}$. Slide 55 summarizes this as "retaining the correct manifold transition is the key". Landing on the right shell is necessary but not sufficient, since the renoise-only sampler of @tbl-toy does so at every step and is still biased. A GAN has no intermediate shells and must map $\nu$ onto $\mathcal{M}$ in a single step.
 
+The same decomposition also holds in continuous time. In the variables of @eq-pf-sigma, the VP SDE becomes a VE SDE, because $d(x/\sqrt{\bar\alpha}) = \sqrt{\beta/\bar\alpha}\,dw$ and $d[\sigma^2]/dt = \beta/\bar\alpha$, and by @eq-epsilon-score-conversion its score is $-\epsilon^*/\sigma$. Tweedie's formula reads $\bar{x} = \hat{x}+\sigma\epsilon^*$ in these variables. One reverse Euler-Maruyama step from $\sigma$ to $\sigma'<\sigma$, as in @eq-ve-sampler, therefore gives
 
-def gmm_sample(B: int, gmm: tuple) -> np.ndarray:
-    w, mu, cov = gmm
-    k = rng.choice(len(w), B, p=w / w.sum())
-    z = rng.standard_normal((B, mu.shape[1]))
-    L = np.linalg.cholesky(cov)
-    return mu[k] + np.einsum("bij,bj->bi", L[k], z)
+$$
+\begin{aligned}
+\bar{x}' &= \bar{x} - (\sigma^2-\sigma'^2)\frac{\epsilon^*}{\sigma} + \sqrt{\sigma^2-\sigma'^2}\,z\\
+&= \underbrace{\hat{x}}_{\text{Tweedie's denoiser}} + \underbrace{\frac{\sigma'^2}{\sigma}\,\epsilon^*}_{\text{parametric noise}} + \underbrace{\sqrt{\sigma^2-\sigma'^2}\,z}_{\text{stochastic noise}},
+\end{aligned}
+$$ {#eq-continuous-decomp}
 
+while one Euler step of the probability flow ODE gives $\bar{x}' = \hat{x}+\sigma'\epsilon^*$ with no stochastic term. The reverse SDE step has the same three parts as @eq-ddim-step. Its parametric coefficient $\sigma'^2/\sigma$ is exactly that of $\eta=1$, while its stochastic coefficient differs only by the factor $\sigma/\sigma'$, which tends to one as the step becomes small compared with $\sigma'$. Its total noise variance $\sigma'^2+(\sigma^2-\sigma'^2)^2/\sigma^2$ matches the target $\sigma'^2$ up to second order in the step. In continuous time the probability flow ODE and the reverse SDE are the members $\eta=0$ and $\eta=1$ of the $\eta$ family.
 
-def gmm_score(x: np.ndarray, gmm: tuple) -> np.ndarray:
-    """grad_x log sum_k w_k N(x; mu_k, cov_k); x: (B, d)."""
-    w, mu, cov = gmm
-    diff = x[:, None, :] - mu[None]                    # (B, K, d)
-    Pd = np.einsum("kij,bkj->bki", np.linalg.inv(cov), diff)
-    logr = (np.log(w) - 0.5 * np.einsum("bki,bki->bk", diff, Pd)
-            - 0.5 * np.linalg.slogdet(cov)[1])
-    r = np.exp(logr - logr.max(1, keepdims=True))
-    r /= r.sum(1, keepdims=True)                       # responsibilities
-    return -np.einsum("bk,bki->bi", r, Pd)
+## The Fokker-Planck equation {#sec-fp}
 
+For a general SDE $dX_t = \mu(X_t,t)dt+\sigma(X_t,t)dW_t$ (slide 51), the density evolves according to
 
-def condition(gmm: tuple, A: np.ndarray, y: np.ndarray,
-              var: float) -> tuple:
-    """Exact p(x | y) for y = A x + noise, noise ~ N(0, var I)."""
-    w, mu, cov = gmm
-    S = A @ cov @ A.T + var * np.eye(len(y))           # (K, m, m)
-    Si = np.linalg.inv(S)
-    G = cov @ A.T @ Si                                 # (K, d, m)
-    res = y - mu @ A.T                                 # (K, m)
-    logev = (np.log(w) - 0.5 * np.einsum("ki,kij,kj->k", res, Si, res)
-             - 0.5 * np.linalg.slogdet(S)[1])
-    wp = np.exp(logev - logev.max())
-    mu_p = mu + np.einsum("kim,km->ki", G, res)
-    return wp / wp.sum(), mu_p, cov - G @ A @ cov
+$$
+\frac{\partial p}{\partial t} = -\sum_{i=1}^n\frac{\partial}{\partial x_i}\big[\mu_i p\big] + \sum_{i,j=1}^n\frac{\partial^2}{\partial x_i\partial x_j}\big[D_{ij}p\big],\qquad D = \tfrac12\sigma\sigma^\top .
+$$ {#eq-fp-general}
 
+The SDE describes a single sample path, while @eq-fp-general describes the density, which is again the duality between samples and densities from slide 46. With $\sigma = g(t)I$ we have $D = \frac12g^2I$ and recover @eq-fp.
 
-# VP schedule; index 0 is the clean level (abar_0 = 1).
-T = 200
-alpha = 1 - np.r_[0.0, np.linspace(1e-4, 0.06, T)]
-abar = np.cumprod(alpha)
+Taking the Fourier transform in $x$ turns the Laplacian into multiplication by $-\Vert\omega\Vert^2$, so for a drift-free process with $D = \tfrac12g(t)^2I$ the equation becomes an ordinary differential equation in $t$ at each frequency,
 
+$$
+\partial_t\hat p(\omega,t) = -\tfrac12g(t)^2\Vert\omega\Vert^2\hat p(\omega,t),\qquad \hat p(\omega,t) = \hat p(\omega,0)\,e^{-v(t)\Vert\omega\Vert^2/2},\qquad v(t) = \int_0^tg(u)^2du .
+$$ {#eq-fp-fourier}
 
-def noised(gmm: tuple, ab: float) -> tuple:
-    """Law of sqrt(ab) x_0 + sqrt(1 - ab) eps, x_0 ~ gmm."""
-    w, mu, cov = gmm
-    d = mu.shape[1]
-    return w, np.sqrt(ab) * mu, ab * cov + (1 - ab) * np.eye(d)
+The factor multiplying $\hat p(\omega,0)$ is the Fourier transform of $h_{v(t)}$, so inverting gives $p_t = p_0*h_{v(t)}$: the solution is the scale-space at scale $v(t)$, for any schedule $g$, which is @eq-dist-scale-space again with the time change made explicit.
 
+Slide 52 treats the Wiener process. It takes $\mu=0$ and $D=I$, which means $\sigma=\sqrt2\,I$, and @eq-fp-general reduces to the heat equation $\partial_tp = \Delta p$. Its solution is $p(\cdot,t) = p(\cdot,0)*h_{2t}$ with $h_{2t}(x) = (4\pi t)^{-n/2}e^{-\Vert x\Vert^2/4t}$, because the Gaussian of @eq-scale-space satisfies $\partial_t h_t = \frac12\Delta h_t$. So the solution of the Fokker-Planck equation is the scale-space, as the slide says. The kernel written on the slide, $(2\pi t)^{-1/2}\exp(-\Vert x\Vert^2/2t^2)$, should be replaced by this one. For a standard Wiener process ($\sigma=I$, so $D=\frac12I$) the equation is $\partial_tp = \frac12\Delta p$ and the kernel is $h_t$ itself.
 
-def reverse(x: np.ndarray, t0: int, gmm: tuple, eta: float = 1.0,
-            after_step=None) -> np.ndarray:
-    """eq-ddim-step from level t0 down to 0, exact score of gmm."""
-    for t in range(t0, 0, -1):
-        s = gmm_score(x, noised(gmm, abar[t]))
-        eps_hat = -np.sqrt(1 - abar[t]) * s            # eq-epsilon-score-conversion
-        x_hat = (x - np.sqrt(1 - abar[t]) * eps_hat) / np.sqrt(abar[t])
-        bt2 = (1 - abar[t - 1]) / (1 - abar[t]) * (1 - alpha[t])
-        c = np.sqrt(max(1 - abar[t - 1] - eta ** 2 * bt2, 0.0))
-        z = rng.standard_normal(x.shape)
-        x = (np.sqrt(abar[t - 1]) * x_hat           # denoise + rescale
-             + c * eps_hat + eta * np.sqrt(bt2) * z)  # re-noise
-        if after_step is not None:
-            x = after_step(x, t - 1)
-    return x
+Slide 53 treats overdamped Langevin dynamics. It writes the SDE $dx = -\frac{1}{k_BT}\nabla U\,dt+dW$ together with the Fokker-Planck equation
 
+$$
+\partial_tp = \tfrac12\nabla\cdot\Big(\frac{p}{k_BT}\nabla U+\nabla p\Big).
+$$
 
-def report(name: str, x: np.ndarray) -> None:
-    off = np.abs(np.hypot(x[:, 0], x[:, 1] + 1) - 2.5)  # dist. to arc
-    m, s = x.mean(0), x.std(0)
-    print(f"{name:22s} mean ({m[0]:+.3f}, {m[1]:+.3f}) "
-          f"std ({s[0]:.3f}, {s[1]:.3f}) off-arc {off.mean():.3f}")
-```
+The flux vanishes when $\nabla\log p = -\nabla U/k_BT$, so the stationary density of this equation is $p\propto e^{-U/k_BT}$, which is the conclusion on the slide. The SDE and the equation do not quite match, however. With noise $dW$ we have $D=\frac12I$, and @eq-fp-general puts the factor $\frac12$ only on $\nabla p$, so the SDE exactly as written would have stationary density $e^{-2U/k_BT}$. The lines on the slide agree if the drift is halved, or if the noise is changed to $\sqrt2\,dW$, which doubles the right-hand side of the equation and leaves its stationary density unchanged. We use the second correction. Now set $k_BT=1$ and $U = -\log p_{\text{data}}$. The slide writes $U = \nabla\log p$ at this point, but the potential must be minus the log density. The stationary distribution is then $e^{-U} = p_{\text{data}}$, and the SDE becomes $dx = \nabla\log p_{\text{data}}\,dt+\sqrt2\,dW$, whose Euler-Maruyama step with step size $\delta$ is exactly @eq-langevin. With a small step size and many steps, Langevin dynamics samples the density at a single fixed scale. Reversing the whole scale-space requires either annealing over decreasing noise levels, as in SMLD, or the reverse SDE, and panel (b) of @fig-score shows why.
 
-### Step 3: unconditional sampling
+## Summary
 
-```{.python}
-# (3) Unconditional sampling, DDPM (eta = 1) and DDIM (eta = 0).
-B = 4000
-x_T = lambda: rng.standard_normal((B, 2))              # noqa: E731
-report("prior (direct samples)", gmm_sample(B, prior))
-report("DDPM, exact score", reverse(x_T(), T, prior, eta=1.0))
-report("DDIM, exact score", reverse(x_T(), T, prior, eta=0.0))
-```
-
-Output:
-
-```{.text}
-prior (direct samples) mean (-0.010, +0.874) std (1.586, 0.556) off-arc 0.055
-DDPM, exact score      mean (-0.027, +0.877) std (1.585, 0.551) off-arc 0.048
-DDIM, exact score      mean (-0.016, +0.855) std (1.604, 0.563) off-arc 0.051
-```
-
-DDPM and DDIM both reproduce the prior to about $0.02$, as
-@prp-ddim-marginal says every $\eta$ should. Their samples sit slightly
-closer to the arc than true samples (off-arc $0.048$ and $0.051$ against
-$0.055$); this is discretisation error of a 200-step chain, and with
-$T = 1000$ (all $\beta_t$ divided by five) the values become $0.054$ and
-$0.056$.
-
-### Step 4: posterior sampling and ILVR
-
-We observe the first coordinate, $y = x_{0,1} + n$ with $y = 1.2$ and
-$\sigma_{n} = 0.05$.
-
-```{.python}
-# (4) Observe the first coordinate: y = x_{0,1} + n, n ~ N(0, 0.05^2).
-A, y, var_n = np.array([[1.0, 0.0]]), np.array([1.2]), 0.05 ** 2
-post = condition(prior, A, y, var_n)
-report("exact posterior", gmm_sample(B, post))
-# p(x_t | y) is the posterior pushed through the forward kernel, so
-# reverse(..., post) uses grad log p(x_t) + grad log p(y | x_t) exactly.
-report("conditional score", reverse(x_T(), T, post))
-
-# ILVR (eq-ilvr): phi = projection onto the first coordinate.
-y_ref = np.array([1.2, -0.5])                  # only phi(y_ref) is used
-
-
-def ilvr(x: np.ndarray, t: int) -> np.ndarray:
-    z = rng.standard_normal(x.shape)
-    y_t = np.sqrt(abar[t]) * y_ref + np.sqrt(1 - abar[t]) * z
-    return np.stack([y_t[:, 0], x[:, 1]], 1)   # phi(y_t) + (I - phi)(x')
-
-
-report("ILVR", reverse(x_T(), T, prior, after_step=ilvr))
-report("exact posterior, n = 0", gmm_sample(B, condition(prior, A, y,
-                                                          1e-8)))
-```
-
-Output:
-
-```{.text}
-exact posterior        mean (+1.196, +1.227) std (0.050, 0.076) off-arc 0.057
-conditional score      mean (+1.197, +1.227) std (0.043, 0.066) off-arc 0.050
-ILVR                   mean (+1.200, +1.197) std (0.000, 0.093) off-arc 0.061
-exact posterior, n = 0 mean (+1.200, +1.228) std (0.000, 0.073) off-arc 0.056
-```
-
-1. **The conditional score gives the posterior.** The exact
-   $\nabla\log p(x_t \mid y)$ reproduces the posterior
-   mean to three decimals; its spread is about $13\%$ too small, the same
-   discretisation effect as in step 3 (with $T = 1000$ the standard
-   deviations are $0.048$ and $0.074$, against $0.051$ and $0.076$).
-2. **ILVR satisfies the constraint exactly**: $x_1 = 1.2$ with zero spread,
-   as fact (i) of @sec-guidance promised.
-3. **ILVR is not exact posterior sampling.** Against the noise-free
-   posterior (last line), the free coordinate has mean $1.197$ instead of
-   $1.228$ and standard deviation $0.093$ instead of $0.073$, and this gap
-   does *not* shrink with $T$ ($1.198$ and $0.095$ at $T = 1000$). A
-   plausible reading: @eq-ilvr overwrites $x_1$ at every level with an
-   *independently* noised copy of the reference, so the sequence is not a
-   path of the forward process conditioned on $y$.
-
-### Step 5: SDEdit, faithfulness against realism
-
-The guide $x^{g} = (0.4, 0.2)$ lies inside the crescent's arc,
-about $1.2$ away from the data.
-
-```{.python}
-# (5) SDEdit from an off-manifold guide: faithfulness vs realism.
-guide = np.array([0.4, 0.2])
-for t0 in [10, 40, 120]:
-    z = rng.standard_normal((B, 2))
-    x_t0 = np.sqrt(abar[t0]) * guide + np.sqrt(1 - abar[t0]) * z
-    out = reverse(x_t0, t0, prior)
-    off = np.abs(np.hypot(out[:, 0], out[:, 1] + 1) - 2.5).mean()
-    dist = np.linalg.norm(out - guide, axis=1).mean()
-    print(f"t0 = {t0:3d}: SNR {abar[t0] / (1 - abar[t0]):6.2f}, "
-          f"dist to guide {dist:.3f}, off-arc {off:.3f}")
-
-# eq-sdedit-posterior: from ONE fixed x_{t0}, the output is
-# distributed as p(x_0 | x_{t0}).
-t0 = 40
-z = rng.standard_normal(2)
-x_t0 = np.sqrt(abar[t0]) * guide + np.sqrt(1 - abar[t0]) * z
-report("SDEdit from one x_t0", reverse(np.tile(x_t0, (B, 1)), t0, prior))
-exact = condition(prior, np.sqrt(abar[t0]) * np.eye(2), x_t0,
-                  1 - abar[t0])
-report("exact p(x_0 | x_t0)", gmm_sample(B, exact))
-```
-
-Output:
-
-```{.text}
-t0 =  10: SNR  68.18, dist to guide 0.990, off-arc 0.260
-t0 =  40: SNR   3.69, dist to guide 1.467, off-arc 0.046
-t0 = 120: SNR   0.13, dist to guide 1.773, off-arc 0.049
-SDEdit from one x_t0   mean (+1.868, +0.530) std (0.430, 0.440) off-arc 0.044
-exact p(x_0 | x_t0)    mean (+1.851, +0.540) std (0.452, 0.454) off-arc 0.052
-```
-
-At $t_0 = 10$ (SNR $68$) the output stays closest to the guide but is five
-times further from the arc than real samples: faithful and unrealistic. At
-$t_0 = 40$ (SNR $3.7$) it is already as realistic as the prior, and at
-$t_0 = 120$ (SNR $0.13$) it is close to an unconditional sample. The last
-two lines check @eq-sdedit-posterior directly: chains started from one
-fixed $x_{t_0}$ match exact samples of
-$p(x_0 \mid x_{t_0})$ from case (c), so SDEdit with an
-exact reverse chain is posterior sampling.
-
-
-## Connections and further reading
-
-- **Within the book.** The sampler is @eq-ddim-step of @sec-ddim, the
-  noise-to-score conversion is @eq-epsilon-score-conversion, and the
-  geometry the samplers must respect is
-  [Why Diffusion Models](why-diffusion.qmd). The autoencoder that latent
-  diffusion runs inside is lecture 09's subject.
-- **Conditional training.** SR3 [@saharia2022sr3] concatenates the
-  condition; latent diffusion [@rombach2022ldm] moves the process into a
-  learned latent space and brings the condition in through cross-attention;
-  eDiff-I [@balaji2022ediffi] splits the noise schedule between expert
-  denoisers; DALL-E 2 [@ramesh2022dalle2] and Sora [@brooks2024sora] are
-  the systems the slides show.
-- **Guidance.** SDEdit [@meng2022sdedit] conditions through the initial
-  point and ILVR [@choi2021ilvr] at every step. Classifier-free guidance,
-  which the lecture does not reach, is the other member of this family and
-  is treated where the course returns to it.
-- **Inverse problems.** The manifold reading of the reverse step
-  [@chung2022mcg] and diffusion posterior sampling [@chung2023dps] are the
-  continuation of @sec-guidance.
+Diffusion models are a scale-space of the data distribution, and iterative denoising is its dual representation on samples. The Gaussian shell theorem turns the noise levels into discrete orbits $\mathcal{M}_i$, and the continuous description is the Fokker-Planck equation, which for pure noise is the scale-space itself. A diffusion sampler relies on each reverse step staying on the correct manifold, which the denoise and renoise decomposition and a network that knows the noise level are designed to achieve. Single-step GANs have no such intermediate manifolds, and this is where diffusion models gain over them.
 
 ---
 
-*Based on the scribe note of Myungjo Kwak, with the materials from Doyoung
-Jung, Wonjin Nam and Jihoo Jung. Edited by Jong Chul Ye.*
+*Based on the scribe notes of Junhyun Ha, Debjyoti Mondal, Euijin Shin and
+Jahyeok Koo of lecture 07, with the materials from Myungjo Kwak, Doyoung Jung,
+Wonjin Nam and Jihoo Jung of lecture 08. Edited by Jong Chul Ye.*

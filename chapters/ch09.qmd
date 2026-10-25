@@ -1,10 +1,683 @@
 ---
-title: "Latent Diffusion"
+title: "Conditional Diffusion Models"
 ---
 
-::: {.callout-note}
-## Not yet written
-Lecture 09 of AI618, given 2026-10-13. This chapter is merged from
-the scribe notes for that lecture; until those are written and graded it stands
-empty.
-:::
+<!--
+Lecture 08, slides 55-72 of `Part-4-Diffusion-Model-Theory.pptx`. Slides
+43-54 were lectured again at the start of this class but are chapter 8,
+*Why Diffusion Models*, which this one assumes rather than repeats.
+
+Base note: Myungjo Kwak (95.0 of 100). Merged in: the three-way comparison
+that closes the unconditional part (slide 56), which no note carried; the
+figures from Doyoung Jung's note, whose fifteen are the only complete set
+and are already PNG. Declined: the inverse-problems material of slides 73
+onwards, which belongs to a later lecture and is left as the pointer in
+@sec-guidance.
+
+Wonjin Nam's note states the ILVR filter the other way round --- "stronger
+low-pass filtering gives the model more freedom" --- which the grader
+flagged; the direction here is the base note's and is the one the results
+figure shows. The slide gives ILVR as ICLR 2021; it is ICCV 2021, and the
+bibliography says so.
+-->
+
+## Overview
+
+Every diffusion model so far in this book samples $p(x)$. This chapter asks
+for $p(x \mid c)$: a super-resolved image given a low-resolution one, a
+picture given a caption, a face given a reference. The lecture gives two
+routes, and the chapter follows the same division. **Conditional training**
+puts the condition into the network and learns $\nabla\log p(x_t \mid c)$
+from paired data; it is what SR3, Stable Diffusion and every text-to-image
+system does, and it costs a training run for each kind of condition.
+**Guidance** leaves a pretrained unconditional model untouched and injects
+the condition into the sampler instead --- through the initial point
+(SDEdit) or at every step (ILVR) --- which buys one model for many tasks at
+the price of sampling from something that is not quite the posterior.
+
+Nothing in the machinery changes. The sampler is still @eq-ddim-step, the
+network still predicts noise, and the manifolds of
+[Why Diffusion Models](ch08.qmd) still have to be hit in the right
+order. What changes is which score the sampler is given. The chapter ends
+with a two-dimensional example in which every score is known in closed form,
+so each claim --- that conditional training learns the conditional score,
+that ILVR satisfies its constraint exactly, that SDEdit is posterior
+sampling --- is checked against an exact answer rather than against a
+trained network.
+
+## Where unconditional generation stood
+
+Slide 56 puts three models side by side before the conditioning begins:
+DDPM [@ho2020], StyleGAN2-ADA [@karras2020ada] and the reverse SDE [@sde].
+By 2020 the two diffusion constructions had caught up with the best GAN on
+unconditional image synthesis, which is what makes the question of this
+lecture worth asking: conditioning a model is only interesting once the
+model itself is good enough that the conditioned samples are worth looking
+at. The rest of the lecture never returns to GANs.
+
+## Conditional training {#sec-cond-train}
+
+We now want samples from $p(x \mid c)$ for a condition
+$c$. A sampler needs only the target's score at every level (@thm-reverse), here $\nabla_{x_t}\log p(x_t \mid c)$.
+Bayes' rule, with $p(c)$ independent of $x_t$, splits it:
+
+$$
+\nabla_{x_t}\log p(x_t \mid c)
+= \nabla_{x_t}\log p(x_t) + \nabla_{x_t}\log p(c \mid x_t) .
+$$ {#eq-bayes-score}
+
+**Conditional training** (this section) learns the left side directly from
+paired data $(x_0, c)$ by giving $c$ to the
+network. **Guidance** (@sec-guidance) keeps an unconditional model for the
+first term on the right and supplies the second at sampling time.
+
+### SR3: super-resolution by conditional training
+
+In SR3 [@saharia2022sr3] the condition is a low-resolution image
+$x$ and the target a high-resolution image $y$. In this
+subsection $y_t$ is the image chain ($y_0$ clean,
+$y_T \sim \mathcal{N}(0, I)$), $\gamma_t$ plays
+the role of $\bar\alpha_t$ and $f_\theta$ is the noise predictor. The
+forward chain is the VP process on $y$; the reverse chain
+$p_\theta(y_{t-1} \mid y_t, x)$ sees the
+condition at every step.
+
+**Training (Algorithm 1).** Draw $(x, y_0) \sim p(x, y)$,
+$\gamma \sim p(\gamma)$ and $\epsilon \sim \mathcal{N}(0, I)$,
+and take a gradient step on
+$\Vert f_\theta(x, \sqrt{\gamma}\,y_0 + \sqrt{1 - \gamma}\,\epsilon, \gamma) - \epsilon \Vert_p^p$,
+$p \in \{1, 2\}$.
+
+**Inference (Algorithm 2).** From $y_T \sim \mathcal{N}(0, I)$,
+for $t = T, \dots, 1$,
+
+$$
+y_{t-1} = \frac{1}{\sqrt{\alpha_t}}\left( y_t - \frac{1 - \alpha_t}{\sqrt{1 - \gamma_t}}\, f_\theta(x, y_t, \gamma_t) \right) + \sqrt{1 - \alpha_t}\,z,
+\qquad z \sim \mathcal{N}(0, I) \ (z = 0 \text{ at } t = 1) .
+$$ {#eq-sr3-step}
+
+![SR3 as the lecture draws it on slides 58-59. Above, the chain runs on the target $y$ while the low-resolution $x$ is held fixed, so the forward kernel is the ordinary $q(y_t\mid y_{t-1})$ and only the reverse kernel $p_\theta(y_{t-1}\mid y_t,x)$ sees the condition. Below, Algorithm 1 trains $f_\theta$ on the noise it must subtract and Algorithm 2 is the DDPM step with $f_\theta(x,y_t,\gamma_t)$ in place of $\epsilon_\theta$. Reproduced from the slides [@lecture-slides-diffusion; @saharia2022sr3].](figures/lec08/dodoyou0125-sr3-algorithms.png){#fig-sr3 width=100%}
+
+Three points are left implicit on the slide.
+
+**(i) The loss learns the conditional score.** For $p = 2$, the argument of
+@eq-bayes-optimal conditioned on $x$ makes the minimiser
+$\mathbb{E}[\epsilon \mid y_\gamma, x]$, and
+@thm-tweedie with the prior $p(y_0 \mid x)$ (valid because
+the noise is independent of $(x, y_0)$) gives
+
+$$
+f^\star(x, y_\gamma, \gamma) = -\sqrt{1 - \gamma}\;\nabla_{y_\gamma}\log p(y_\gamma \mid x) ,
+$$ {#eq-cond-score}
+
+the left side of @eq-bayes-score; nothing else in the machinery changes.
+(For $p = 1$ the minimiser is a conditional median, not exactly a score.)
+
+**(ii) Noise-level conditioning.** SR3 feeds the network $\gamma$ itself,
+drawn from a continuous range during training, so the same network serves
+any inference schedule. This is the time-embedding mechanism of @fig-unet-time with $\gamma$ in place
+of $t$.
+
+**(iii) Algorithm 2 is the DDPM step.** With $y \to x$,
+$\gamma_t = \bar\alpha_t$ and $f_\theta \to \epsilon_\theta$,
+the posterior mean of @prp-ddim-marginal is
+$\frac{\sqrt{\bar\alpha_{t-1}}(1 - \alpha_t)}{1 - \bar\alpha_t}x_0 + \frac{\sqrt{\alpha_t}(1 - \bar\alpha_{t-1})}{1 - \bar\alpha_t}x_t$.
+Substituting the Tweedie estimate
+$x_0 \approx (x_t - \sqrt{1 - \bar\alpha_t}\,\epsilon_\theta)/\sqrt{\bar\alpha_t}$,
+the coefficient of $x_t$ is
+
+$$
+\frac{1}{1 - \bar\alpha_t}\left( \frac{1 - \alpha_t}{\sqrt{\alpha_t}} + \sqrt{\alpha_t}(1 - \bar\alpha_{t-1}) \right)
+= \frac{1 - \alpha_t + \alpha_t - \bar\alpha_t}{\sqrt{\alpha_t}\,(1 - \bar\alpha_t)}
+= \frac{1}{\sqrt{\alpha_t}},
+$$
+
+and that of $\epsilon_\theta$ is
+$-(1 - \alpha_t)/(\sqrt{\alpha_t}\sqrt{1 - \bar\alpha_t})$: the mean of
+@eq-sr3-step. The only difference from @eq-ddim-step with $\eta = 1$ is the
+noise variance, $1 - \alpha_t$ instead of $\tilde\beta_t^2 \le 1 - \alpha_t$;
+both are standard choices in @ho2020.
+
+**How the condition enters.** SR3 upsamples $x$ bicubically and
+concatenates it with $y_t$ along the channels, so the U-Net sees the
+condition pixel-aligned. The slide's example super-resolves $64 \times 64$
+to $1024 \times 1024$; the output is sharp because each step denoises
+towards a *sample* of $p(y \mid x)$ rather than regressing
+to its blurry mean.
+
+### Latent diffusion with a text condition
+
+Pixel-space diffusion at high resolution is expensive, and a text prompt is
+not pixel-aligned. Latent diffusion [@rombach2022ldm], the model behind
+Stable Diffusion, addresses both.
+
+**Latent space.** A pretrained autoencoder maps an image
+$x \in \mathbb{R}^{H \times W \times 3}$ to
+$z = \mathcal{E}(x) \in \mathbb{R}^{h \times w \times c}$, with
+downsampling factor $f = H/h$ and $\mathcal{D}(z) \approx x$.
+Diffusion runs entirely on $z$, so each U-Net pass costs a factor $f^2$
+fewer positions (64 for $f = 8$), and more for attention, which is quadratic
+in the number of positions.
+
+**Conditioning.** An encoder $\tau_\theta$ maps the condition (text, a
+semantic map, an image) to $L$ tokens, $\tau_\theta(c) \in \mathbb{R}^{L \times d_\tau}$,
+and the objective is the conditional noise-prediction loss on latents,
+$\mathbb{E}\Vert \epsilon - \epsilon_\theta(z_t, t, \tau_\theta(c)) \Vert_2^2$
+with $z_t = \sqrt{\bar\alpha_t}\,\mathcal{E}(x) + \sqrt{1 - \bar\alpha_t}\,\epsilon$,
+whose minimiser is the conditional latent score by @eq-cond-score.
+
+**Cross-attention.** A feature map is flattened into $hw$ tokens
+$\varphi(z_t) \in \mathbb{R}^{hw \times d_\varphi}$, and each $QKV$ block
+computes
+
+$$
+\operatorname{softmax}\!\left( \frac{Q K^\top}{\sqrt{d}} \right) V,
+\qquad
+Q = \varphi(z_t) W_Q, \quad K = \tau_\theta(c) W_K, \quad V = \tau_\theta(c) W_V .
+$$
+
+$Q$ has one row per image position and $K, V$ one per token, so after the
+row-wise softmax $QK^\top \in \mathbb{R}^{hw \times L}$ gives every image
+position a distribution over the tokens (*which words matter here*), and the
+output is a weighted average of token values. Nothing depends on $L$ except
+the size of the sums, so prompts of any length work and no spatial
+alignment is needed. The "switch" on the slide picks the route: spatially
+aligned conditions are concatenated with $z_t$ as in SR3, and sequences
+such as text enter through cross-attention.
+
+![The latent diffusion architecture of slide 61. The encoder $\mathcal{E}$ and decoder $\mathcal{D}$ move between pixel space and the latent space in which the diffusion runs; the conditioning encoder $\tau_\theta$ feeds the $QKV$ cross-attention blocks of the denoising U-Net, and the switch selects concatenation for spatially aligned conditions. Reproduced from the slides [@lecture-slides-diffusion; @rombach2022ldm].](figures/lec08/dodoyou0125-ldm-architecture.png){#fig-ldm width=95%}
+
+### Text-conditioned training
+
+The slide states the text-conditioned loss with pictures (a cat image, noise
+images, the word "Cat"); with the time argument restored it is
+
+$$
+\Big\Vert \epsilon_\theta\big( \sqrt{\bar\alpha_t}\,x_0 + \sqrt{1 - \bar\alpha_t}\,\epsilon, \, t, \, c \big) - \epsilon \Big\Vert_2^2 .
+$$ {#eq-text-loss}
+
+Its TL;DR, "Train a diffusion model to estimate noise only when noise is
+added to a video along with the corresponding text", has two key words. The
+target is *only noise*: the text is an input, never a target, so the model
+denoises *knowing* the caption. And training needs the *corresponding* pairs
+$(x_0, c)$, after which
+$\epsilon_{\theta^\star}(x_t, t, c) = -\sqrt{1 - \bar\alpha_t}\,\nabla\log p(x_t \mid c)$
+by @eq-cond-score. The loss is written for an image, and the same recipe
+with $x_0$ a video clip gives text-to-video. Sampling is
+@eq-ddim-step with $\epsilon_\theta(x_t, t, c)$,
+and every guarantee of the unconditional sampler carries over with
+$p(x_0 \mid c)$ in place of $p_0$.
+
+The remaining slides show results, which we describe since they are
+third-party images. **eDiff-I** [@balaji2022ediffi] keeps the content of the
+prompt "A {X} photo / painting of a penguin working as a fruit vendor in a
+tropical village" fixed while X sets the style; it trains separate *expert*
+denoisers for different ranges of $t$, which fits the shell picture of [Why Diffusion Models](ch08.qmd), since the inputs at different levels
+live on almost disjoint tubes. A comparison of
+Midjourney, Stable Diffusion 2 and DALL-E 2 [@ramesh2022dalle2] shows
+systems that differ in data, encoders and scale but not in the principle of
+@eq-text-loss. **Sora** [@brooks2024sora] applies it to video latents with a
+transformer, generating a walk down a neon-lit Tokyo street from a
+paragraph-long prompt.
+
+The price of conditional training is **paired data and a training run for
+each kind of condition**: a super-resolution model cannot inpaint.
+@sec-guidance removes this restriction by putting the condition into the
+sampler instead of the network.
+
+## Guidance-based approaches {#sec-guidance}
+
+Guidance needs neither paired data nor retraining. It takes a pretrained
+**unconditional** model, which supplies $\nabla\log p(x_t)$, and
+injects the condition at sampling time: SDEdit through the *initialisation*,
+ILVR at *every step* by replacing low frequencies, and inverse-problem
+solvers at every step through the *likelihood* term of @eq-bayes-score. All
+three sample, exactly or approximately, from a posterior with the diffusion
+model as the prior.
+
+### SDEdit: conditioning through the initial point
+
+SDEdit [@meng2022sdedit] starts from a guide image $x^{g}$, such
+as a crude stroke painting with the right layout but no realism, and uses no
+condition-specific training. It **perturbs** the guide to an intermediate
+level $t_0$ with @eq-forward-marginal,
+$x_{t_0} = \sqrt{\bar\alpha_{t_0}}\,x^{g} + \sqrt{1 - \bar\alpha_{t_0}}\,\epsilon$,
+and then **reverses** with the unconditional sampler @eq-ddim-step from
+$t_0$ to $0$. (The paper writes this for the VE-SDE; the VP form is the same
+idea.) On the slide, natural images (green) and stroke paintings (blue) are
+far apart at level $0$ but overlap after perturbation, so the noisy guide is
+a typical point of the noisy image distribution, and the reverse process
+carries it to the images: the merging of modes established in [Why Diffusion Models](ch08.qmd).
+
+**What SDEdit samples.** Suppose the reverse chain is exact (the DDPM step
+with $\theta^\star$ approximates it). The forward chain is Markov, so the
+reverse transitions from $t_0$ compose to the law of $x_0$ given
+$x_{t_0}$:
+
+$$
+p(x_0 \mid x_{t_0})
+\;\propto\; q(x_{t_0} \mid x_0)\,p_0(x_0)
+\;\propto\; \exp\left( -\frac{\bar\alpha_{t_0}}{2(1 - \bar\alpha_{t_0})}\,
+\Big\Vert \frac{x_{t_0}}{\sqrt{\bar\alpha_{t_0}}} - x_0 \Big\Vert^2 \right) p_0(x_0) .
+$$ {#eq-sdedit-posterior}
+
+Since $x_{t_0}/\sqrt{\bar\alpha_{t_0}} = x^{g} + s_{t_0}\epsilon$,
+SDEdit is posterior sampling with prior $p_0$ and a Gaussian likelihood
+centred on the noisy guide, weighted by the signal-to-noise ratio
+$\mathrm{SNR}(t_0) = \bar\alpha_{t_0}/(1 - \bar\alpha_{t_0})$. This makes
+the slide's trade-off exact: a small $t_0$ (high SNR) is **faithful** to the
+guide but stays unrealistic if the guide is far from the data, and a large
+$t_0$ is **realistic** but forgets the guide, becoming an unconditional
+sample as $t_0 \to T$. The next slide's examples (stroke painting to image,
+compositing, stroke editing) all use this one algorithm; only the guide
+changes.
+
+![SDEdit on slides 69-70. The stroke painting (left) is perturbed by the forward SDE until its law overlaps that of natural images, and the reverse SDE then carries it back down; the contours above the images are the distributions of photographs (green) and of strokes (blue), which meet only after the perturbation. Reproduced from the slides [@lecture-slides-diffusion; @meng2022sdedit].](figures/lec08/dodoyou0125-sdedit-overview.png){#fig-sdedit width=100%}
+
+### ILVR: conditioning at every step
+
+ILVR [@choi2021ilvr] conditions on a reference image $y$ through its
+low frequencies ($x$ is again the image chain). With
+$\phi = \phi_N$ a linear low-pass filter (downsample by $N$, upsample back),
+one step is
+
+$$
+x'_{t-1} \sim p_\theta(x'_{t-1} \mid x_t), \qquad
+y_{t-1} \sim q(y_{t-1} \mid y), \qquad
+x_{t-1} = \phi(y_{t-1}) + (I - \phi)(x'_{t-1}) :
+$$ {#eq-ilvr}
+
+an unconditional proposal, the reference noised to the same level, and a
+merge that keeps the proposal's high frequencies and the noisy reference's
+low frequencies. Three facts explain the step.
+
+**(i) The low frequencies are matched exactly.** If $\phi^2 = \phi$ --- for
+example $N \times N$ block averaging $D$ followed by nearest-neighbour
+upsampling $U$, where $DU = I$, and $\phi = UD$ is even an
+orthogonal projection since $D = N^{-2}U^\top$ --- then
+$\phi(x_{t-1}) = \phi^2(y_{t-1}) + (\phi - \phi^2)(x'_{t-1}) = \phi(y_{t-1})$.
+At the last step the reference is almost noise-free, so
+$\phi_N(x_0) \approx \phi_N(y)$.
+
+**(ii) It is a projection onto the noisy constraint set.** For an orthogonal
+projection $\phi$, the closest point to $x'$ in
+$\{x : \phi x = \phi y_{t-1}\}$ is
+$x' - \phi x' + \phi y_{t-1}$, which is
+@eq-ilvr: a *hard* data-consistency step for the noise-free linear problem
+$\mathcal{A} = \phi_N$.
+
+**(iii) It stays on the right tube.** Both pieces carry noise of level
+$t - 1$, so $x_{t-1}$ has the noise level the next network expects (the
+noisy manifolds of [Why Diffusion Models](ch08.qmd)). Inserting the *clean* $\phi(y)$ instead would put
+the input off $\mathcal{M}_{t-1}$.
+
+$N$ controls how much is imposed, since the range of $\phi_N$ has dimension
+$n/N^2$: small $N$ gives near copies of the reference, large $N$ fixes only
+coarse layout and colour. The results slide shows this for
+$N = 4, \dots, 64$, and the same algorithm for image translation,
+paint-to-image and scribble editing.
+
+![ILVR across the downsampling factor, from slide 72. (a) With $N=4$ the output is nearly the reference; by $N=64$ only the coarse layout and colour survive and the identity is gone, which is $\phi_N$ having range of dimension $n/N^2$. (b-d) The same algorithm as image translation, paint-to-image and scribble editing. Reproduced from the slides [@lecture-slides-diffusion; @choi2021ilvr].](figures/lec08/dodoyou0125-ilvr-results.png){#fig-ilvr width=100%}
+
+
+### Inverse problems, in one paragraph
+
+The same route reaches further than SDEdit and ILVR. An imaging system
+$\mathcal{A}$ --- a camera, a microscope, an MRI scanner --- produces
+$y = \mathcal{A}(x) + n$, and recovering $x$ is ill-posed, so a prior is
+needed; a diffusion model is one. Writing the posterior score as
+
+$$
+\nabla_{x_t}\log p(x_t \mid y)
+= \underbrace{\nabla_{x_t}\log p(x_t)}_{\text{pretrained network}}
++ \underbrace{\nabla_{x_t}\log p(y \mid x_t)}_{\text{measurement}}
+$$ {#eq-posterior-score}
+
+splits the work: the first term is the unconditional network through
+@eq-epsilon-score-conversion, and the second is the hard part, because
+$y$ and $x_t$ are conditionally independent given $x_0$, so
+$p(y \mid x_t) = \int p(y \mid x_0)p(x_0 \mid x_t)\,dx_0$ involves the
+intractable $p(x_0 \mid x_t)$. Diffusion posterior sampling
+[@chung2023dps] approximates it by Tweedie's $\hat{x}_0$, and the
+accelerated solvers [@chung2024dds] build on that. Those slides belong to a
+later lecture; here @eq-posterior-score is needed only because the worked
+example below samples the exact posterior to check the approximations
+against.
+
+
+![Guidance on a two-dimensional prior with the exact score. (a)
+Unconditional samples lie on the crescent. (b, c) SDEdit from the guide
+(star): a small $t_0$ is faithful but leaves the output short of the data, a
+large $t_0$ is realistic but ignores the guide, the trade-off of
+@eq-sdedit-posterior. (d) ILVR keeping the first coordinate pins
+$x_1 = y_1$ (dashed line) and fills in $x_2$ from the prior. (e) Exact
+posterior samples for the same constraint. 400 samples per
+panel.](figures/lec08/Kwak-MJ-guidance-2d.png){#fig-guidance-2d width=100%}
+
+## Worked example: conditional sampling with an exact score {#sec-example}
+
+A trained network only approximates the score, and its errors would blur any
+check. We therefore take data whose score is known *exactly* at every
+level, a Gaussian mixture, replace the network by its ideal value
+$\theta^\star$, and test the sampler @eq-ddim-step, conditional sampling
+@eq-posterior-score, ILVR @eq-ilvr and SDEdit @eq-sdedit-posterior against
+closed-form answers. The code needs only numpy; paste the blocks into one
+Python session in order (a few seconds in total). It is the computation
+behind @fig-guidance-2d.
+
+### Three closed forms
+
+Let $p_0 = \sum_{k=1}^{K} w_k\,\mathcal{N}(\mu_k, \Sigma_k)$
+on $\mathbb{R}^{d}$ with positive definite $\Sigma_k$.
+
+**(a) Noisy marginals.** Given component $k$, $x_t$ is a linear map
+of independent Gaussians, so
+
+$$
+p_t(x) = \sum_{k} w_k\,\mathcal{N}\big(x;\, \sqrt{\bar\alpha_t}\mu_k,\, \bar\alpha_t\Sigma_k + (1 - \bar\alpha_t)I\big) .
+$$ {#eq-gmm-noised}
+
+**(b) Score.** For a mixture with terms $\mathcal{N}_k$ of means
+$m_k$ and covariances $C_k$,
+$\nabla\mathcal{N}_k = -\mathcal{N}_k\,C_k^{-1}(x - m_k)$, so
+
+$$
+\nabla_{x}\log p(x)
+= -\sum_k r_k(x)\,C_k^{-1}(x - m_k),
+\qquad
+r_k(x) = \frac{w_k\mathcal{N}_k(x)}{\sum_j w_j\mathcal{N}_j(x)} ,
+$$ {#eq-gmm-score}
+
+with the responsibilities $r_k$ computed from logarithms to avoid
+underflow. With @eq-gmm-noised and @eq-epsilon-score-conversion this gives the ideal
+$\epsilon_{\theta^\star}^{(t)}$ at every level.
+
+**(c) Linear-Gaussian conditioning.** For $y = Ax_0 + n$,
+$n \sim \mathcal{N}(0, \sigma_{n}^2I)$,
+component $k$ conditions to
+$\mathcal{N}(\mu_k + G_k(y - A\mu_k), \Sigma_k - G_k A\Sigma_k)$
+with $S_k = A\Sigma_k A^\top + \sigma_{n}^2I$
+and $G_k = \Sigma_k A^\top S_k^{-1}$
+($x_0 - G_ky$ is uncorrelated with, hence
+independent of, $y$), and its weight becomes proportional to
+$w_k\,\mathcal{N}(y; A\mu_k, S_k)$. So
+$p(x_0 \mid y)$ is again a mixture. Since $x_t$
+and $y$ are conditionally independent given $x_0$,
+running the sampler on this posterior mixture uses the exact left side of
+@eq-posterior-score. The SDEdit law @eq-sdedit-posterior is case (c) with
+$A = \sqrt{\bar\alpha_{t_0}}\,I$,
+$\sigma_{n}^2 = 1 - \bar\alpha_{t_0}$ and $y = x_{t_0}$.
+
+### Step 1: the Gaussian shell
+
+The Gaussian shell theorem of [Why Diffusion Models](ch08.qmd) predicts that $\Vert X\Vert/(\sigma\sqrt{n})$
+has mean close to $1$ and standard deviation close to $1/\sqrt{2n}$.
+
+```{.python}
+import numpy as np
+
+rng = np.random.default_rng(618)
+
+# (1) Gaussian shell: ||X|| / (sigma sqrt(n)), X ~ N(0, sigma^2 I_n)
+sigma = 0.5
+for n in [3, 100, 10_000]:
+    X = sigma * rng.standard_normal((2000, n))
+    r = np.linalg.norm(X, axis=1) / (sigma * np.sqrt(n))
+    print(f"n = {n:6d}: mean {r.mean():.4f}, std {r.std():.4f}, "
+          f"1/sqrt(2n) = {1 / np.sqrt(2 * n):.4f}")
+```
+
+Output:
+
+```{.text}
+n =      3: mean 0.9351, std 0.3963, 1/sqrt(2n) = 0.4082
+n =    100: mean 0.9953, std 0.0704, 1/sqrt(2n) = 0.0707
+n =  10000: mean 1.0002, std 0.0069, 1/sqrt(2n) = 0.0071
+```
+
+### Step 2: the prior and the exact sampler
+
+The prior is the crescent of @fig-guidance-2d: $K = 7$ components on an arc
+of radius $2.5$ centred at $(0, -1)$, with standard deviation $0.3$ along
+the arc and about $0.063$ across it. `reverse` is @eq-ddim-step with the
+ideal network, on a VP schedule with $T = 200$ and $\beta_t$ linear from
+$10^{-4}$ to $0.06$ ($\bar\alpha_T \approx 2 \times 10^{-3}$). `report`
+prints the mean and standard deviation of each coordinate and the mean
+distance from the arc ("off-arc"), a measure of realism.
+
+```{.python}
+# (2) Prior: a thin crescent in R^2 built from K = 7 Gaussians.
+ang = np.linspace(0.15 * np.pi, 0.85 * np.pi, 7)
+tang = np.stack([-np.sin(ang), np.cos(ang)], 1)        # (K, 2) tangent
+nrm = np.stack([np.cos(ang), np.sin(ang)], 1)          # (K, 2) normal
+prior = (np.full(7, 1 / 7),                            # weights (K,)
+         np.stack([2.5 * np.cos(ang), 2.5 * np.sin(ang) - 1], 1),
+         0.09 * np.einsum("ki,kj->kij", tang, tang)    # covs (K, 2, 2)
+         + 0.004 * np.einsum("ki,kj->kij", nrm, nrm))
+
+
+def gmm_sample(B: int, gmm: tuple) -> np.ndarray:
+    w, mu, cov = gmm
+    k = rng.choice(len(w), B, p=w / w.sum())
+    z = rng.standard_normal((B, mu.shape[1]))
+    L = np.linalg.cholesky(cov)
+    return mu[k] + np.einsum("bij,bj->bi", L[k], z)
+
+
+def gmm_score(x: np.ndarray, gmm: tuple) -> np.ndarray:
+    """grad_x log sum_k w_k N(x; mu_k, cov_k); x: (B, d)."""
+    w, mu, cov = gmm
+    diff = x[:, None, :] - mu[None]                    # (B, K, d)
+    Pd = np.einsum("kij,bkj->bki", np.linalg.inv(cov), diff)
+    logr = (np.log(w) - 0.5 * np.einsum("bki,bki->bk", diff, Pd)
+            - 0.5 * np.linalg.slogdet(cov)[1])
+    r = np.exp(logr - logr.max(1, keepdims=True))
+    r /= r.sum(1, keepdims=True)                       # responsibilities
+    return -np.einsum("bk,bki->bi", r, Pd)
+
+
+def condition(gmm: tuple, A: np.ndarray, y: np.ndarray,
+              var: float) -> tuple:
+    """Exact p(x | y) for y = A x + noise, noise ~ N(0, var I)."""
+    w, mu, cov = gmm
+    S = A @ cov @ A.T + var * np.eye(len(y))           # (K, m, m)
+    Si = np.linalg.inv(S)
+    G = cov @ A.T @ Si                                 # (K, d, m)
+    res = y - mu @ A.T                                 # (K, m)
+    logev = (np.log(w) - 0.5 * np.einsum("ki,kij,kj->k", res, Si, res)
+             - 0.5 * np.linalg.slogdet(S)[1])
+    wp = np.exp(logev - logev.max())
+    mu_p = mu + np.einsum("kim,km->ki", G, res)
+    return wp / wp.sum(), mu_p, cov - G @ A @ cov
+
+
+# VP schedule; index 0 is the clean level (abar_0 = 1).
+T = 200
+alpha = 1 - np.r_[0.0, np.linspace(1e-4, 0.06, T)]
+abar = np.cumprod(alpha)
+
+
+def noised(gmm: tuple, ab: float) -> tuple:
+    """Law of sqrt(ab) x_0 + sqrt(1 - ab) eps, x_0 ~ gmm."""
+    w, mu, cov = gmm
+    d = mu.shape[1]
+    return w, np.sqrt(ab) * mu, ab * cov + (1 - ab) * np.eye(d)
+
+
+def reverse(x: np.ndarray, t0: int, gmm: tuple, eta: float = 1.0,
+            after_step=None) -> np.ndarray:
+    """eq-ddim-step from level t0 down to 0, exact score of gmm."""
+    for t in range(t0, 0, -1):
+        s = gmm_score(x, noised(gmm, abar[t]))
+        eps_hat = -np.sqrt(1 - abar[t]) * s            # eq-epsilon-score-conversion
+        x_hat = (x - np.sqrt(1 - abar[t]) * eps_hat) / np.sqrt(abar[t])
+        bt2 = (1 - abar[t - 1]) / (1 - abar[t]) * (1 - alpha[t])
+        c = np.sqrt(max(1 - abar[t - 1] - eta ** 2 * bt2, 0.0))
+        z = rng.standard_normal(x.shape)
+        x = (np.sqrt(abar[t - 1]) * x_hat           # denoise + rescale
+             + c * eps_hat + eta * np.sqrt(bt2) * z)  # re-noise
+        if after_step is not None:
+            x = after_step(x, t - 1)
+    return x
+
+
+def report(name: str, x: np.ndarray) -> None:
+    off = np.abs(np.hypot(x[:, 0], x[:, 1] + 1) - 2.5)  # dist. to arc
+    m, s = x.mean(0), x.std(0)
+    print(f"{name:22s} mean ({m[0]:+.3f}, {m[1]:+.3f}) "
+          f"std ({s[0]:.3f}, {s[1]:.3f}) off-arc {off.mean():.3f}")
+```
+
+### Step 3: unconditional sampling
+
+```{.python}
+# (3) Unconditional sampling, DDPM (eta = 1) and DDIM (eta = 0).
+B = 4000
+x_T = lambda: rng.standard_normal((B, 2))              # noqa: E731
+report("prior (direct samples)", gmm_sample(B, prior))
+report("DDPM, exact score", reverse(x_T(), T, prior, eta=1.0))
+report("DDIM, exact score", reverse(x_T(), T, prior, eta=0.0))
+```
+
+Output:
+
+```{.text}
+prior (direct samples) mean (-0.010, +0.874) std (1.586, 0.556) off-arc 0.055
+DDPM, exact score      mean (-0.027, +0.877) std (1.585, 0.551) off-arc 0.048
+DDIM, exact score      mean (-0.016, +0.855) std (1.604, 0.563) off-arc 0.051
+```
+
+DDPM and DDIM both reproduce the prior to about $0.02$, as
+@prp-ddim-marginal says every $\eta$ should. Their samples sit slightly
+closer to the arc than true samples (off-arc $0.048$ and $0.051$ against
+$0.055$); this is discretisation error of a 200-step chain, and with
+$T = 1000$ (all $\beta_t$ divided by five) the values become $0.054$ and
+$0.056$.
+
+### Step 4: posterior sampling and ILVR
+
+We observe the first coordinate, $y = x_{0,1} + n$ with $y = 1.2$ and
+$\sigma_{n} = 0.05$.
+
+```{.python}
+# (4) Observe the first coordinate: y = x_{0,1} + n, n ~ N(0, 0.05^2).
+A, y, var_n = np.array([[1.0, 0.0]]), np.array([1.2]), 0.05 ** 2
+post = condition(prior, A, y, var_n)
+report("exact posterior", gmm_sample(B, post))
+# p(x_t | y) is the posterior pushed through the forward kernel, so
+# reverse(..., post) uses grad log p(x_t) + grad log p(y | x_t) exactly.
+report("conditional score", reverse(x_T(), T, post))
+
+# ILVR (eq-ilvr): phi = projection onto the first coordinate.
+y_ref = np.array([1.2, -0.5])                  # only phi(y_ref) is used
+
+
+def ilvr(x: np.ndarray, t: int) -> np.ndarray:
+    z = rng.standard_normal(x.shape)
+    y_t = np.sqrt(abar[t]) * y_ref + np.sqrt(1 - abar[t]) * z
+    return np.stack([y_t[:, 0], x[:, 1]], 1)   # phi(y_t) + (I - phi)(x')
+
+
+report("ILVR", reverse(x_T(), T, prior, after_step=ilvr))
+report("exact posterior, n = 0", gmm_sample(B, condition(prior, A, y,
+                                                          1e-8)))
+```
+
+Output:
+
+```{.text}
+exact posterior        mean (+1.196, +1.227) std (0.050, 0.076) off-arc 0.057
+conditional score      mean (+1.197, +1.227) std (0.043, 0.066) off-arc 0.050
+ILVR                   mean (+1.200, +1.197) std (0.000, 0.093) off-arc 0.061
+exact posterior, n = 0 mean (+1.200, +1.228) std (0.000, 0.073) off-arc 0.056
+```
+
+1. **The conditional score gives the posterior.** The exact
+   $\nabla\log p(x_t \mid y)$ reproduces the posterior
+   mean to three decimals; its spread is about $13\%$ too small, the same
+   discretisation effect as in step 3 (with $T = 1000$ the standard
+   deviations are $0.048$ and $0.074$, against $0.051$ and $0.076$).
+2. **ILVR satisfies the constraint exactly**: $x_1 = 1.2$ with zero spread,
+   as fact (i) of @sec-guidance promised.
+3. **ILVR is not exact posterior sampling.** Against the noise-free
+   posterior (last line), the free coordinate has mean $1.197$ instead of
+   $1.228$ and standard deviation $0.093$ instead of $0.073$, and this gap
+   does *not* shrink with $T$ ($1.198$ and $0.095$ at $T = 1000$). A
+   plausible reading: @eq-ilvr overwrites $x_1$ at every level with an
+   *independently* noised copy of the reference, so the sequence is not a
+   path of the forward process conditioned on $y$.
+
+### Step 5: SDEdit, faithfulness against realism
+
+The guide $x^{g} = (0.4, 0.2)$ lies inside the crescent's arc,
+about $1.2$ away from the data.
+
+```{.python}
+# (5) SDEdit from an off-manifold guide: faithfulness vs realism.
+guide = np.array([0.4, 0.2])
+for t0 in [10, 40, 120]:
+    z = rng.standard_normal((B, 2))
+    x_t0 = np.sqrt(abar[t0]) * guide + np.sqrt(1 - abar[t0]) * z
+    out = reverse(x_t0, t0, prior)
+    off = np.abs(np.hypot(out[:, 0], out[:, 1] + 1) - 2.5).mean()
+    dist = np.linalg.norm(out - guide, axis=1).mean()
+    print(f"t0 = {t0:3d}: SNR {abar[t0] / (1 - abar[t0]):6.2f}, "
+          f"dist to guide {dist:.3f}, off-arc {off:.3f}")
+
+# eq-sdedit-posterior: from ONE fixed x_{t0}, the output is
+# distributed as p(x_0 | x_{t0}).
+t0 = 40
+z = rng.standard_normal(2)
+x_t0 = np.sqrt(abar[t0]) * guide + np.sqrt(1 - abar[t0]) * z
+report("SDEdit from one x_t0", reverse(np.tile(x_t0, (B, 1)), t0, prior))
+exact = condition(prior, np.sqrt(abar[t0]) * np.eye(2), x_t0,
+                  1 - abar[t0])
+report("exact p(x_0 | x_t0)", gmm_sample(B, exact))
+```
+
+Output:
+
+```{.text}
+t0 =  10: SNR  68.18, dist to guide 0.990, off-arc 0.260
+t0 =  40: SNR   3.69, dist to guide 1.467, off-arc 0.046
+t0 = 120: SNR   0.13, dist to guide 1.773, off-arc 0.049
+SDEdit from one x_t0   mean (+1.868, +0.530) std (0.430, 0.440) off-arc 0.044
+exact p(x_0 | x_t0)    mean (+1.851, +0.540) std (0.452, 0.454) off-arc 0.052
+```
+
+At $t_0 = 10$ (SNR $68$) the output stays closest to the guide but is five
+times further from the arc than real samples: faithful and unrealistic. At
+$t_0 = 40$ (SNR $3.7$) it is already as realistic as the prior, and at
+$t_0 = 120$ (SNR $0.13$) it is close to an unconditional sample. The last
+two lines check @eq-sdedit-posterior directly: chains started from one
+fixed $x_{t_0}$ match exact samples of
+$p(x_0 \mid x_{t_0})$ from case (c), so SDEdit with an
+exact reverse chain is posterior sampling.
+
+
+## Connections and further reading
+
+- **Within the book.** The sampler is @eq-ddim-step of @sec-ddim, the
+  noise-to-score conversion is @eq-epsilon-score-conversion, and the
+  geometry the samplers must respect is
+  [Why Diffusion Models](ch08.qmd). Latent diffusion has no chapter of its
+  own in this book; it enters here, as the space in which the text-conditioned
+  model runs.
+- **Conditional training.** SR3 [@saharia2022sr3] concatenates the
+  condition; latent diffusion [@rombach2022ldm] moves the process into a
+  learned latent space and brings the condition in through cross-attention;
+  eDiff-I [@balaji2022ediffi] splits the noise schedule between expert
+  denoisers; DALL-E 2 [@ramesh2022dalle2] and Sora [@brooks2024sora] are
+  the systems the slides show.
+- **Guidance.** SDEdit [@meng2022sdedit] conditions through the initial
+  point and ILVR [@choi2021ilvr] at every step. Classifier-free guidance,
+  which the lecture does not reach, is the other member of this family and
+  is treated where the course returns to it.
+- **Inverse problems.** The manifold reading of the reverse step
+  [@chung2022mcg] and diffusion posterior sampling [@chung2023dps] are the
+  continuation of @sec-guidance.
+
+---
+
+*Based on the scribe note of Myungjo Kwak, with the materials from Doyoung
+Jung, Wonjin Nam and Jihoo Jung. Edited by Jong Chul Ye.*

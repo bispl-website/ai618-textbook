@@ -1,5 +1,5 @@
 ---
-title: "Denoising Diffusion Probabilistic Models"
+title: "DDPM & DDIM"
 ---
 
 <!-- DDIM material merged from the lecture 07 notes, 2026-10-25.

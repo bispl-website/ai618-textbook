@@ -44,7 +44,7 @@ denoising into score estimation and opens the door to everything that follows.
 
 **Diffusion Models.** DDPM and its variational bound, score-based models
 through the lens of stochastic differential equations, the probability flow
-ODE. Conditioning and guidance across two chapters, latent diffusion, Schrodinger bridges,
+ODE. why the construction works at all, conditioning and guidance, Schrodinger bridges,
 acceleration by high-order solvers and consistency models, and the applications
 that made the family matter: editing, inverse problems, video and 3D.
 

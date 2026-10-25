@@ -1,5 +1,5 @@
 ---
-title: "Score-Based Diffusion: The SDE Formulation and Why It Works"
+title: "Score-SDE Formulation"
 ---
 
 
@@ -29,7 +29,7 @@ The lecture opens by completing the discrete picture with DDIM [@ddim], which ke
 
 This chapter is what comes after: the lecture moves to continuous time, following @sde. Score matching with Langevin dynamics (SMLD) of @song2019ncsn and DDPM turn out to be discretizations of two stochastic differential equations, and running such an SDE backwards only requires the score $\nabla_{x}\log p_t$ at every noise level. So training a diffusion model is the same as training a score function, and for the VP SDE the denoising score matching loss coincides with the DDPM loss.
 
-The lecture closes with a geometric explanation of why diffusion models work better than GANs --- diffusion as a scale-space of the data distribution, with the samples at each noise level on a thin shell around the data manifold. Lecture 08 opened by going through the same argument, so the two accounts are merged in the chapter [Why Diffusion Models](why-diffusion.qmd), which follows this one.
+The lecture closes with a geometric explanation of why diffusion models work better than GANs --- diffusion as a scale-space of the data distribution, with the samples at each noise level on a thin shell around the data manifold. Lecture 08 opened by going through the same argument, so the two accounts are merged in the chapter that follows, [Why Diffusion Models](ch08.qmd).
 
 Most of the claims below are checked numerically in @sec-worked, on a one-dimensional example where every score is known exactly.
 
@@ -71,7 +71,7 @@ steps along a subsequence $\tau_1<\cdots<\tau_S$ is @sec-skip.
 **The reverse step in three parts.** Every member of the family writes one
 reverse step as Tweedie's denoiser, parametric noise and stochastic noise,
 @eq-denoise-renoise. Slide 54 restates this decomposition once the SDE is in
-place, which the next chapter does where it builds the noisy manifolds.
+place, which @sec-manifold does.
 
 **Noise prediction and the score are the same object.**
 $s_\theta=-\epsilon_\theta/\sqrt{1-\bar\alpha_t}$, with Tweedie's formula as
@@ -98,7 +98,7 @@ $$ {#eq-forward-sde}
 
 for small $\Delta t$, where $f$ and $g$ are chosen so that $x(T)\sim p_T$ is a simple Gaussian. The second form is the Euler-Maruyama step.
 
-To reverse the process we need to know how the density $p_t$ evolves in time. This evolution is governed by the Fokker-Planck equation (the general version is on slide 51 and in the next chapter),
+To reverse the process we need to know how the density $p_t$ evolves in time. This evolution is governed by the Fokker-Planck equation (the general version is on slide 51 and in @sec-fp),
 
 $$
 \partial_t p_t = -\nabla\cdot(f\,p_t) + \tfrac12 g^2\Delta p_t = -\nabla\cdot\Big(\big[f-\tfrac12 g^2\nabla\log p_t\big]p_t\Big),
@@ -289,7 +289,7 @@ nothing.
 
 ![The time-conditioned U-Net of slide 38. The noisy image $x_t$ passes through a multi-scale encoder-decoder that predicts $\epsilon_\theta(x_t,t)$, while the scalar $t$ is encoded by @eq-time-features, transformed by fully connected layers, and injected into every resolution block.](figures/lec07/deb-kit2-fig3-unet-time-embedding.png){#fig-unet-time width=95%}
 
-The network is trained only on inputs whose actual noise level matches $t$, so if a sampler produces an $x_t$ with the wrong noise level, the network receives an input it has never seen and errors appear. The next chapter gives a geometric picture of this effect, where it follows a sample from one noisy manifold to the next.
+The network is trained only on inputs whose actual noise level matches $t$, so if a sampler produces an $x_t$ with the wrong noise level, the network receives an input it has never seen and errors appear. @sec-manifold gives a geometric picture of this effect.
 
 ## A worked example in one dimension {#sec-worked}
 

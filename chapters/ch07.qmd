@@ -542,6 +542,5 @@ In the score-based view, conditioning (the topic of lecture 08) amounts to addin
 
 ---
 
-*Based on the scribe note of Junhyun Ha, with the architecture of the time
-embedding and two figures from Debjyoti Mondal; Euijin Shin and Jahyeok Koo
-were also scribes of lecture 07. Edited by Jong Chul Ye.*
+*Based on the scribe note of Junhyun Ha and Debjyoti Mondal, with the
+materials from Euijin Shin and Jahyeok Koo. Edited by Jong Chul Ye.*

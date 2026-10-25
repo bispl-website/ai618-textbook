@@ -2,6 +2,31 @@
 title: "Denoising Diffusion Probabilistic Models"
 ---
 
+<!-- DDIM material merged from the lecture 07 notes, 2026-10-25.
+
+     The lecture 07 scribes write DDIM at the start of their notes (slides
+     17-25), which this chapter already covered. Four notes were read against
+     @sec-ddim and the parts that were not here were merged in:
+
+       - the callout on how slides 19-23 and 24 print two coefficients
+         (deb-kit2 and HaJunHyun both flagged the first);
+       - @sec-eta-range: the range of eta above 1, the all-fresh-noise step at
+         the top of it and why it is not DDPM (HaJunHyun, euijinshin), the
+         covariance the samplers discard (HaJunHyun) and the fact that the
+         noise budget is a heuristic (Jahyeok-Koo);
+       - the last two rows of @tbl-mixture, run here on this chapter's own
+         example rather than quoted from the notes;
+       - @fig-denoise-renoise, the slide 24 geometry, which the text described
+         but did not show.
+
+     Declined: the lecture 07 graphical-model figure, which duplicates
+     @fig-ddim-graph, and its eta-family figure, which is drawn on a different
+     two-mode example -- the book's figures are generated from the data
+     functions printed in @sec-experiments, and the plotting scripts
+     themselves are in neither repository, so a panel cannot be added to
+     @fig-ddpm-vs-ddim without redrawing it. Everything else in those notes
+     was already here, usually in more detail. -->
+
 ## Overview
 
 A diffusion model splits the hard problem of sampling from a complex data distribution into two parts: an easy forward process that adds a little Gaussian noise many times, and a learned reverse process that undoes it. The forward process is fixed. It gradually erases the structure of the data until the state is close to a standard Gaussian. The reverse process starts from noise and is trained, as a neural network, to remove a little noise at every step [@ho2020].
@@ -937,6 +962,21 @@ and since $\epsilon$ and $z$ are independent, @lem-gauss-lin gives the mean $\sq
 
 The coefficient $\sqrt{1-\bar\alpha_{t-1}-\gamma_t^2}$ is essential: with $\bar\alpha_t$ in place of $\bar\alpha_{t-1}$ the covariance would be $(1-\bar\alpha_t)I$ and the induction would break.
 
+::: {.callout-note}
+## How the slides print two of these coefficients
+Slides 19--23 print $\sqrt{1-\bar\alpha_t-\gamma_t^2}$ in the mean of
+@eq-ddim-posterior, with $\bar\alpha_t$ under the radical, where slide 17,
+slide 24 and @ddim [Eq. 7] have $\bar\alpha_{t-1}$. The induction above needs
+$\bar\alpha_{t-1}$, for the reason just given, and the equations here use it
+throughout. Slide 24 then writes the fresh-noise coefficient as
+$\eta\tilde\beta_t$, using $\tilde\beta_t$ for the posterior *standard
+deviation*, while slide 13, @tbl-notation and @prp-posterior use
+$\tilde\beta_t$ for the variance; in this chapter's notation that coefficient
+is $\gamma_t=\eta\sqrt{\tilde\beta_t}$, and reading slide 24 literally in
+slide 13's notation would call for $\eta=1/\sqrt{\tilde\beta_t}$ where
+$\eta=1$ is meant.
+:::
+
 With the marginals in hand, the forward-time conditional follows from Bayes' rule (slide 19):
 
 $$
@@ -993,7 +1033,7 @@ $$ {#eq-ddim-deterministic}
 
 The two differ in exactly two places. (i) The variance $\tilde\beta_t$ that DDPM injects as fresh noise is carried deterministically by DDIM along the predicted noise direction $\epsilon_\theta$, so the coefficient of the "direction pointing to $x_t$" grows from $\sqrt{1-\bar\alpha_{t-1}-\tilde\beta_t}$ to $\sqrt{1-\bar\alpha_{t-1}}$. (ii) There is no $z$ term. Seen in the original DDPM form @eq-ddpm-sampling, this is why the mean looks different and there seems to be an extra $\epsilon_\theta$ term.
 
-Intermediate choices are parameterized as $\gamma_t=\eta\sqrt{\tilde\beta_t}$, with $\eta=1$ giving DDPM and $\eta=0$ giving DDIM [@ddim, Sec. 5, Eq. 16]. With $\gamma_t=0$ the whole path down to $x_0$ is fixed as soon as $x_T$ is fixed, so DDIM is an implicit probabilistic model; the initial $x_T$ is still drawn at random.
+Intermediate choices are parameterized as $\gamma_t=\eta\sqrt{\tilde\beta_t}$, with $\eta=1$ giving DDPM and $\eta=0$ giving DDIM [@ddim, Sec. 5, Eq. 16]. The admissible range of $\eta$ does not end at 1, and @sec-eta-range works out what the rest of it contains. With $\gamma_t=0$ the whole path down to $x_0$ is fixed as soon as $x_T$ is fixed, so DDIM is an implicit probabilistic model; the initial $x_T$ is still drawn at random.
 
 #### Denoise, then re-noise {#sec-denoise-renoise}
 
@@ -1023,8 +1063,11 @@ $1-\bar\alpha_{t-1}$; take away the $\gamma_t z$ term and the coefficient of
 $\epsilon_\theta$ must grow to make up the difference, which is exactly
 @eq-ddim-deterministic. The lecture draws this as a sequence of manifolds
 $\mathcal{M}_t$, one per noise level, with each step dropping to the data
-manifold and climbing back to the next one up (slide 24). Keeping that
-transition on the right manifold is what the later chapters return to.
+manifold and climbing back to the next one up (slide 24), as in
+@fig-denoise-renoise. Keeping that transition on the right manifold is what the
+later chapters return to.
+
+![One reverse step drops to the data manifold and climbs back, as the lecture draws it on slides 24 and 54. The denoiser takes $x_t$ on the noisy manifold $\mathcal M_t$ to the clean estimate, written $\hat x_t$ on the slide and $\hat x_0(x_t,t)$ here; the right angle marks that projection as orthogonal, which it is where $\mathcal M$ is linear. The two re-noising terms of @eq-denoise-renoise together carry the point to $x_{t-1}$ on $\mathcal M_{t-1}$, and the next step repeats from there. Redrawn from the slides [@lecture-slides-diffusion] in a scribe note of lecture 07.](figures/lec06/HaJunHyun-slide24-decomposition.png){#fig-denoise-renoise width=55%}
 
 ### Why the same network serves every variance choice {#sec-ddim-objective}
 
@@ -1032,7 +1075,7 @@ The common noise-prediction objective follows from Theorem 1 of @ddim [Sec. 3.2]
 
 $$
 c_t:=\sqrt{\bar\alpha_{t-1}}-\sqrt{1-\bar\alpha_{t-1}-\gamma_t^2}\,\sqrt{\frac{\bar\alpha_t}{1-\bar\alpha_t}}>0 .
-$$
+$$ {#eq-ct}
 
 Then each interior term is a weighted noise-prediction error,
 
@@ -1046,6 +1089,82 @@ $$ {#eq-ddim-weights}
 for every $\gamma_t>0$ (@sec-proof-ddim-objective). Here $p_\theta(x_{t-1}\mid x_t)$ is the generative step (@eq-ddim-step), and by @prp-ddim-marginal the expectation runs over the same pairs $x_t=\sqrt{\bar\alpha_t}x_0+\sqrt{1-\bar\alpha_t}\epsilon$ as $\mathcal L_{\mathrm{simple}}$. For $\gamma_t^2=\tilde\beta_t$, $\lambda_t$ reduces to $w_t$ of @eq-wt-simplified, as it must.
 
 Since every $\lambda_t$ is positive, @eq-bayes-optimal applies. **If** $\epsilon_\theta(\cdot,t)$ can represent any function of $x_t$ for each $t$, the idealization of @sec-proof-bayes, then all these objectives and $\mathcal L_{\mathrm{simple}}$ have the same minimizer $\mathbb E[\epsilon\mid x_t]$. In this sense the network trained for DDPM can be used for any $\gamma$ without retraining. A finite network shared across $t$ only approximates this common minimizer. The deterministic case $\gamma_t=0$ is not covered by this identity, since $\lambda_t\to\infty$ as $\gamma_t\to0$. @ddim [Sec. 4.1] introduce it as the special case $\gamma_t=0$ of the generative process and note that, although their Theorem 1 does not cover it, it can be approximated by making $\gamma_t$ very small; every such $\gamma$ shares the minimizer above.
+
+### How much of a step may be fresh noise {#sec-eta-range}
+
+The only constraint on the family is $\gamma_t^2\le1-\bar\alpha_{t-1}$, which in
+the $\eta$ parameterization of @sec-ddim-exact reads
+
+$$
+\eta\le\eta_{\max,t}:=\sqrt{\frac{1-\bar\alpha_t}{\beta_t}} .
+$$ {#eq-eta-max}
+
+For the linear schedule this bound is $1$ at $t=1$, about $2.6$ at $t=10$,
+$7.1$ at $t=100$ and $9.6$ at $t=500$. DDPM, at $\eta=1$, therefore sits near
+the bottom of the range: the interval $[0,1]$ that @ddim interpolate over joins
+two familiar samplers rather than exhausting the family.
+
+At the top of the range the parametric term disappears and the whole re-noising
+is fresh noise,
+
+$$
+x_{t-1}=\sqrt{\bar\alpha_{t-1}}\,\hat x_0(x_t,t)+\sqrt{1-\bar\alpha_{t-1}}\,z ,
+$$ {#eq-fresh-noise-step}
+
+a step that is used in practice: distilled models sample this way, for example
+the multistep sampler of consistency models [@song2023consistency]. It is easy
+to mistake it for DDPM, since the network again enters only through $\hat x_0$
+and the rest is noise, but it is a different sampler. Substituting
+@eq-epsilon-to-x0 gives it the coefficient $-\sqrt{1-\bar\alpha_t}/\sqrt{\alpha_t}$
+on $\epsilon_\theta$, against $-\beta_t/(\sqrt{\alpha_t}\sqrt{1-\bar\alpha_t})$
+in @eq-ddpm-sampling, and the two agree only where $1-\bar\alpha_t=\beta_t$,
+that is at $t=1$. The other DDPM variance of @sec-reverse is not a member of
+the family either: $\sigma_t^2=\beta_t$ keeps the posterior mean and changes
+only the noise, whereas moving $\gamma_t$ inside $q_\gamma$ moves the mean with
+it.
+
+Whether @eq-fresh-noise-step is the right step depends on what is substituted
+for $x_0$. If $\hat x_0$ were itself distributed like the data, the step would
+be exactly the one-step renoising @eq-one-step-renoising of that sample and the
+marginal at $t-1$ would be right. A distilled generator is trained to return
+such a sample. The posterior mean $\mathbb E[x_0\mid x_t]$ is not one: it is
+less dispersed than the data by exactly the posterior covariance it averages
+away, which is the subject of the next paragraphs and is visible in
+@tbl-mixture.
+
+#### What the noise budget leaves out
+
+Reading @eq-denoise-renoise as a re-noising of total variance
+$(1-\bar\alpha_{t-1}-\gamma_t^2)+\gamma_t^2=1-\bar\alpha_{t-1}$ treats
+$\epsilon_\theta$ as a unit Gaussian independent of $z$. The Bayes-optimal
+predictor is neither. It is a function of $x_t$, and by the law of total
+covariance $\mathrm{Cov}(\epsilon^*)=I-\mathbb E\,\mathrm{Cov}(\epsilon\mid x_t)$,
+which is smaller than $I$. The budget is an accounting of where the variance is
+meant to go, not an identity.
+
+What is exact is a comparison of two kernels. At sampling time $x_0$ is
+unknown, so the inference posterior has to be averaged over what is known,
+giving $\int q_\gamma(x_{t-1}\mid x_t,x_0)\,q(x_0\mid x_t)\,dx_0$. The mean of
+@eq-ddim-posterior is affine in $x_0$ with the coefficient $c_t$ of @eq-ct, so
+this average is a Gaussian mixture with mean obtained by substituting
+$\mathbb E[x_0\mid x_t]$ for $x_0$ and with covariance
+$\gamma_t^2I+c_t^2\,\mathrm{Cov}[x_0\mid x_t]$. The generative step
+@eq-ddim-step with the ideal $\epsilon_\theta=\epsilon^*$ reproduces that mean
+and only the first half of that covariance. Every step of every member of the
+family, even with a perfect network, discards $c_t^2\,\mathrm{Cov}[x_0\mid x_t]$.
+
+What separates the ends of the range is how that term behaves when the steps
+are made shorter. On a jump from $s$ to $t$ with $\eta=1$,
+$c_t=\sqrt{\bar\alpha_s}\,(1-\bar\alpha_t/\bar\alpha_s)/(1-\bar\alpha_t)$, which
+is proportional to the size of the jump: for adjacent steps of the linear
+schedule at $t=500$ it is $3.1\times10^{-3}$ against $\beta_t=1.0\times10^{-2}$,
+and at $\eta=0$ it is $1.5\times10^{-3}$. Where $c_t$ is instead of order one,
+at the small $t$ that end the chain, $\mathrm{Cov}[x_0\mid x_t]$ is small, since
+$x_t$ is then nearly clean. Refining the subsequence therefore shrinks what is
+discarded. At the top of the range it does not: $\gamma_t^2=1-\bar\alpha_{t-1}$
+cancels the second term of @eq-ct and leaves $c_t=\sqrt{\bar\alpha_{t-1}}$, a
+number that depends on the time alone and not on the length of the jump. The
+numerical example of @sec-experiments shows both halves of this.
 
 ### Skipping steps {#sec-skip}
 
@@ -1143,7 +1262,7 @@ $$
 \epsilon^*(x,t)=-\sqrt{1-\bar\alpha_t}\,\nabla\log q_t(x)=\sqrt{1-\bar\alpha_t}\sum_kr_k(x)\frac{x-\sqrt{\bar\alpha_t}\mu_k}{V_{t,k}}.
 $$
 
-With the linear schedule ($T=1000$), $N=4000$ draws $x_T\sim\mathcal N(0,I)$ were run through 1000-step DDPM ($\sigma_t^2=\tilde\beta_t$) and through deterministic DDIM on an evenly spaced subsequence of $S$ steps. @tbl-mixture reports the fraction $P$ in the right mode and the mean / standard deviation of each mode (boundary $x=-0.25$).
+With the linear schedule ($T=1000$), $N=4000$ draws $x_T\sim\mathcal N(0,I)$ were run through 1000-step DDPM ($\sigma_t^2=\tilde\beta_t$), through deterministic DDIM on an evenly spaced subsequence of $S$ steps, and through the all-fresh-noise step @eq-fresh-noise-step at the top of the admissible range. @tbl-mixture reports the fraction $P$ in the right mode and the mean / standard deviation of each mode (boundary $x=-0.25$).
 
 | Sampler | Steps $S$ | $P(\text{right})$ | Left mode | Right mode |
 |---|---|---|---|---|
@@ -1151,20 +1270,24 @@ With the linear schedule ($T=1000$), $N=4000$ draws $x_T\sim\mathcal N(0,I)$ wer
 | DDPM | 1000 | 0.706 | $-1.487$ / 0.200 | $+1.003$ / 0.293 |
 | DDIM, $\eta=0$ | 50 | 0.701 | $-1.479$ / 0.191 | $+0.991$ / 0.286 |
 | DDIM, $\eta=0$ | 10 | 0.721 | $-1.404$ / 0.230 | $+0.932$ / 0.263 |
+| All fresh noise | 50 | 0.789 | $-1.493$ / 0.130 | $+0.994$ / 0.192 |
+| All fresh noise | 1000 | 0.811 | $-1.496$ / 0.135 | $+0.995$ / 0.207 |
 
-: Final samples on the one-dimensional mixture with the Bayes-optimal predictor ($N=4000$). Each mode entry is mean / standard deviation. {#tbl-mixture}
+: Final samples on the one-dimensional mixture with the Bayes-optimal predictor ($N=4000$). Each mode entry is mean / standard deviation. The last two rows are the step @eq-fresh-noise-step, that is $\eta=\eta_{\max}$. {#tbl-mixture}
 
-With $N=4000$ the standard error of $P$ is about 0.007. Three observations follow.
+With $N=4000$ the standard error of $P$ is about 0.007. Four observations follow.
 
 1. **Both samplers closely approximate the same target.** With $\epsilon^*$, 1000-step DDPM and 50-step deterministic DDIM ($\eta=0$) reproduce the target mode fraction to within one standard error, and the mode means and standard deviations to within $0.021$ (@fig-ddpm-vs-ddim (c)). The remaining discrepancies come from the Gaussian reverse-transition approximation in finite-step DDPM, the discretization error of finite-step DDIM, the small mismatch between $q_T$ and $\mathcal N(0,I)$, and Monte Carlo error. The experiment therefore supports reuse of the same ideal noise predictor without claiming that either finite-step sampler is exact.
 2. **DDIM is deterministic.** Started twice from the same $x_T=0.3$, DDIM returns $0.9608$ both times, while DDPM returns different values each time, here $-1.4437$ and $1.3192$, in different modes. In @fig-ddpm-vs-ddim (a)--(b), DDPM paths jitter at every step and can reach different modes from the same start, while DDIM paths are smooth and, for these 50 steps, keep the order of their starting points.
 3. **Too few steps fail.** At $S=10$ deterministic DDIM errs clearly: the right-mode fraction is $0.721$ against $0.700$, the left-mode mean $-1.404$ against $-1.500$, and the left-mode spread $0.230$ against $0.200$. The inference family keeps exact marginals on any subsequence (@sec-skip), but the generative chain substitutes $\hat x_0$ for $x_0$, and the resulting error grows with the size of each jump.
 
+4. **The top of the range is a different sampler.** The all-fresh-noise step @eq-fresh-noise-step puts both modes in the right place --- its mode means are the closest to the target in the table --- but each mode is far too narrow, $0.130$ and $0.192$ against $0.200$ and $0.300$, and too much mass ends in the right mode, $0.789$ against $0.700$. Twenty times as many steps do not repair it: at $S=1000$ the spreads are $0.135$ and $0.207$ and the mode fraction drifts further, to $0.811$. This is the behaviour predicted in @sec-eta-range. The step is exact only if what is substituted for $x_0$ is distributed like the data, and $\mathbb E[x_0\mid x_t]$ is not: the sampler discards $c_t^2\,\mathrm{Cov}[x_0\mid x_t]$ at every step, and at this $\gamma_t$ the factor $c_t=\sqrt{\bar\alpha_{t-1}}$ does not shrink when the steps do. The samples are correspondingly under-dispersed.
+
 **Dropping the noise of DDPM.** Running the DDPM mean with $z=0$ at every step, from the first 400 of the same draws $x_T$, sends every sample to $x_0\in[0.955,0.965]$: without the injected noise the chain here contracts to almost a single point near the larger mode, which is why the sampler of @sec-train-sample adds $\sigma_tz$.
 
 ![One noise predictor, two samplers, the same target. With the Bayes-optimal predictor $\epsilon^*$ on the mixture of @tbl-mixture: (a) eight paths of 1000-step DDPM jitter because fresh noise enters at every step; (b) 50-step deterministic DDIM paths from the same eight starts are smooth, with dots where $\epsilon^*$ is evaluated; (c) histograms (45 bins on $[-2.5,2]$) of the $N=4000$ final samples of both samplers match the true density (grey). Grey horizontal lines in (a) and (b) mark the mode means $-1.5$ and $1$, and generation runs from left to right. All plotted values are returned by `figure_data()` in the code below.](figures/lec06/mumbumble-ddpm-vs-ddim.png){#fig-ddpm-vs-ddim width=100%}
 
-The following code reproduces @tbl-mixture, the determinism check, the $z=0$ experiment and panel (b) of @fig-variance-vlb exactly (about 20 seconds with CPython 3.12); its output is listed in the final comments, and `figure_data()` returns the paths and histograms of @fig-ddpm-vs-ddim.
+The following code reproduces @tbl-mixture, the determinism check, the $z=0$ experiment and panel (b) of @fig-variance-vlb exactly (about 25 seconds with CPython 3.12); its output is listed in the final comments, and `figure_data()` returns the paths and histograms of @fig-ddpm-vs-ddim.
 
 ```{.python}
 import math, random
@@ -1207,7 +1330,9 @@ def ddpm(x, rng, path=None):
     return x
 
 def ddim(x, steps=50, eta=0.0, rng=None, path=None):
-    """Generalized DDIM on an evenly spaced sub-sequence of 1..T."""
+    """Generalized DDIM on an evenly spaced sub-sequence of 1..T.
+
+    eta=None puts the whole re-noising into fresh noise (eta = eta_max)."""
     taus = [round(1 + i * (T - 1) / (steps - 1))
             for i in range(steps)]
     for i in range(steps - 1, -1, -1):
@@ -1216,7 +1341,8 @@ def ddim(x, steps=50, eta=0.0, rng=None, path=None):
         x0_hat = (x - math.sqrt(1 - abar[t]) * e)
         x0_hat /= math.sqrt(abar[t])
         r = 1 - abar[t] / abar[s]
-        g2 = eta ** 2 * (1 - abar[s]) / (1 - abar[t]) * r
+        g2 = (1 - abar[s] if eta is None else
+              eta ** 2 * (1 - abar[s]) / (1 - abar[t]) * r)
         k = math.sqrt(1 - abar[s] - g2)
         x = math.sqrt(abar[s]) * x0_hat + k * e
         if g2 > 0: x += math.sqrt(g2) * rng.gauss(0, 1)
@@ -1291,6 +1417,9 @@ if __name__ == "__main__":
     report("DDPM, T=1000", [ddpm(x, rng) for x in xT])
     for steps in (50, 10):
         report(f"DDIM, S={steps}", [ddim(x, steps) for x in xT])
+    for steps in (50, 1000):              # eta at the top of its range
+        r = random.Random(1)
+        report(f"fresh, S={steps}", [ddim(x, steps, None, r) for x in xT])
     d1, d2 = ddim(0.3), ddim(0.3)
     p1, p2 = ddpm(0.3, rng), ddpm(0.3, rng)
     print("x_T = 0.3: DDIM", round(d1, 4), round(d2, 4),
@@ -1305,6 +1434,8 @@ if __name__ == "__main__":
 # DDPM, T=1000  P=0.706  L -1.487/0.200  R +1.003/0.293
 # DDIM, S=50    P=0.701  L -1.479/0.191  R +0.991/0.286
 # DDIM, S=10    P=0.721  L -1.404/0.230  R +0.932/0.263
+# fresh, S=50   P=0.789  L -1.493/0.130  R +0.994/0.192
+# fresh, S=1000 P=0.811  L -1.496/0.135  R +0.995/0.207
 # x_T = 0.3: DDIM 0.9608 0.9608 | DDPM -1.4437 1.3192
 # z = 0 throughout: x_0 in [0.955, 0.965]
 # VLB terms: L_1 0.60, L_999 5.7e-07 | share of t<=10: 42.6%
@@ -1454,6 +1585,8 @@ print("log-log slope, t = 2..100:",
 7. The simplified loss is a reweighting that sets the VLB coefficients $w_t$ to 1; in $x_0$-space the VLB weights each step by the SNR it loses, $\tfrac12(\mathrm{SNR}(t-1)-\mathrm{SNR}(t))$ (@eq-vlb-snr). The reweighting improves FID from 13.51 to 3.17 at the cost of NLL rising slightly from 3.70 to 3.75 bits/dim.
 8. $\epsilon$-, $x_0$- and $v$-prediction are rotated coordinates of the same latent pair, and in $x_0$-space they weight the error by SNR, 1 and SNR+1.
 9. DDIM becomes DDPM for $\gamma_t^2=\tilde\beta_t$ and a deterministic sampler for $\gamma_t=0$. For every $\gamma>0$ its bound is a positively weighted noise-prediction MSE, so an ideal noise predictor serves every $\gamma$; DDIM can also skip steps along a subsequence, where deterministic sampling degrades least.
+
+10. The admissible range of $\gamma_t$ reaches beyond $\eta=1$, up to $\eta_{\max,t}=\sqrt{(1-\bar\alpha_t)/\beta_t}$, where the step is a denoising followed by fresh noise alone (@eq-fresh-noise-step). Every member of the family discards $c_t^2\,\mathrm{Cov}[x_0\mid x_t]$ per step; shorter steps shrink that loss except at the top of the range, where $c_t=\sqrt{\bar\alpha_{t-1}}$ is independent of the jump (@sec-eta-range, @tbl-mixture).
 
 ## Connections and further reading {#sec-further}
 
@@ -1646,6 +1779,6 @@ which also agrees. Both generative steps substitute the same $\hat x_0$ for $x_0
 
 ---
 
-*Based on the scribe note of Hyewon Park, with material from Donghyeon Kim,
-Seojeong Gu and Chankyu Lee --- the four scribes of lecture 06; edited by Jong
-Chul Ye.*
+*Based on the scribe notes of Hyewon Park, Donghyeon Kim, Seojeong Gu and
+Chankyu Lee, with the materials on DDIM from Junhyun Ha, Debjyoti Mondal,
+Euijin Shin and Jahyeok Koo of lecture 07. Edited by Jong Chul Ye.*

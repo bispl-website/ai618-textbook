@@ -13,30 +13,50 @@ It takes the chapter number that the Latent Diffusion stub held, which the
 instructor removed on the same day: latent diffusion is covered in chapter 9
 as the way a text condition enters. Chapter N therefore no longer means
 lecture N from here on.
+
+On 2026-10-26 the instructor asked that no passage describe a slide the
+reader cannot see. The figures named `slideNN-*.png` were therefore taken
+out of `Part-4-Diffusion-Model-Theory.pptx` itself: slides 39, 40, 42, 43,
+44, 46, 47 and 49, each rebuilt from the slide's own pictures, shapes and
+labels. Slide 41, the DiffusionCLIP inversion results, is built by animation
+and its shapes overlay several states at once, so it cannot be reproduced
+from the file; that passage now cites the paper instead. The slide numbers
+that remain -- 45, 50, 51, 52, 53 -- are provenance for passages that
+reproduce the slide in full or correct it, not pointers to a picture.
 -->
 
 
 ## Limitations of GANs
 
-Slide 39 describes a GAN geometrically [@gdl]. A latent distribution $\nu$ on a latent space $\mathcal{Y}$ is pushed by the generator $G_\theta$ into the data space $\mathcal{X}$, and $\theta$ is chosen to bring the result close to the data distribution $\mu$,
+@fig-gan-geometry is the lecture's geometric picture of a GAN [@gdl]. A latent distribution $\nu$ on a latent space $\mathcal{Y}$ is pushed by the generator $G_\theta$ into the data space $\mathcal{X}$, and $\theta$ is chosen to bring the result close to the data distribution $\mu$,
 
 $$
 \min_\theta\ \mathrm{dist}(\mu_\theta,\mu)\qquad\text{subject to}\qquad\mu_\theta = G_{\theta\#}\nu .
 $$
 
-The distance is not computed directly but estimated by the discriminator, which turns training into a min-max game. Slide 40 shows what can go wrong when $\mu$ has several modes. The pushforward $\mu_\theta$ settles on one of them and misses the others, which is called mode collapse. Two effects contribute. A continuous $G_\theta$ maps a connected latent space onto a connected set, so it cannot cover well-separated modes without also putting mass between them. In addition, the adversarial game lets the generator stay on whichever modes the discriminator currently accepts.
+![The geometry of a GAN. The latent space $\mathcal{Y}$ carries the prior $\nu$, drawn as a cloud of samples; the generator $G_\theta$ carries it into the data space $\mathcal{X}$ as the push-forward $\mu_\theta = G_{\theta\#}\nu$, the shaded ellipse, and training moves $\mu_\theta$ towards the data distribution $\mu$, whose samples are the face grid. The distance between the two is what the discriminator estimates. Taken from the lecture slides [@lecture-slides-diffusion].](figures/lec08/slide39-gan-geometry.png){#fig-gan-geometry width=80%}
 
-Slide 41, titled "GAN overfitting" and taken from DiffusionCLIP [@kim2022diffusionclip], shows what this means in practice. GAN-based editing methods first invert an image to a latent code, and even their reconstructions lose the hand in front of the face and the details of the castle. Most training faces are frontal and unoccluded, so inverting and regenerating projects the image onto a range that is dominated by the majority of the data. Deterministic DDIM, on the other hand, follows an ODE flow (@eq-pf-sigma) and can be inverted almost exactly by iterating $x_{t+1} = \sqrt{\bar\alpha_{t+1}}\hat{x}_t+\sqrt{1-\bar\alpha_{t+1}}\epsilon_\theta(x_t,t)$, which is why DiffusionCLIP keeps the hand. @fig-gan-scale-space puts the two pictures side by side. Finally, slide 42 points out that a GAN is a single-step sampler. The network has to represent the entire map from noise to data, and a sample comes from one pass through it, so there is no intermediate state at which an error could be corrected.
+The distance is not computed directly but estimated by the discriminator, which turns training into a min-max game. @fig-mode-collapse shows what can go wrong when $\mu$ has several modes. The pushforward $\mu_\theta$ settles on one of them and misses the others, which is called mode collapse. Two effects contribute. A continuous $G_\theta$ maps a connected latent space onto a connected set, so it cannot cover well-separated modes without also putting mass between them. In addition, the adversarial game lets the generator stay on whichever modes the discriminator currently accepts.
 
-![(a) A GAN learns one push-forward $\mu_\theta = G_{\theta\#}\nu$ from the latent prior $\nu$ on $\mathcal{Y}$ into the data space; when $\mu$ has separated modes a continuous $G_\theta$ cannot cover them all, which is mode collapse (slides 39-42). (b) Forward diffusion instead builds a scale-space $p_t = p_0 * \mathcal{N}(0,\sigma_t^2I)$ in which the modes merge into one well-conditioned distribution, and reverse Langevin dynamics transports samples back down the scales along $\nabla\log p_t$ (slides 43-46). The chapter's argument is that the second picture has intermediate states and the first does not.](figures/lec07/deb-kit2-fig4-gan-vs-scale-space.png){#fig-gan-scale-space width=100%}
+![Mode collapse, the same picture with a multi-modal $\mu$. The data distribution now has two groups of faces, drawn as two clusters inside $\mathcal{X}$, and the single push-forward $\mu_\theta$ covers one of them. Taken from the lecture slides [@lecture-slides-diffusion].](figures/lec08/slide40-mode-collapse.png){#fig-mode-collapse width=80%}
+
+The lecture calls the second weakness GAN overfitting, and it is visible in editing. GAN-based editing methods first invert an image to a latent code, and even their reconstructions lose a hand held in front of the face, or the details of a building [@kim2022diffusionclip]. Most training faces are frontal and unoccluded, so inverting and regenerating projects the image onto a range that is dominated by the majority of the data. Deterministic DDIM, on the other hand, follows an ODE flow (@eq-pf-sigma) and can be inverted almost exactly by iterating $x_{t+1} = \sqrt{\bar\alpha_{t+1}}\hat{x}_t+\sqrt{1-\bar\alpha_{t+1}}\epsilon_\theta(x_t,t)$, which is why DiffusionCLIP keeps the hand. @fig-gan-scale-space puts the two pictures side by side.
+
+The third weakness is in @fig-single-step: a GAN is a single-step sampler. The network has to represent the entire map from noise to data, and a sample comes from one pass through it, so there is no intermediate state at which an error could be corrected.
+
+![A GAN as the lecture draws its training and its sampling. Above, samples from the data distribution train the network; below, one pass through the trained generator produces a sample. The whole map from the latent prior to the data is carried by that single step. Taken from the lecture slides [@lecture-slides-diffusion].](figures/lec08/slide42-single-step.png){#fig-single-step width=85%}
+
+![(a) A GAN learns one push-forward $\mu_\theta = G_{\theta\#}\nu$ from the latent prior $\nu$ on $\mathcal{Y}$ into the data space; when $\mu$ has separated modes a continuous $G_\theta$ cannot cover them all, which is mode collapse (@fig-gan-geometry, @fig-mode-collapse). (b) Forward diffusion instead builds a scale-space $p_t = p_0 * \mathcal{N}(0,\sigma_t^2I)$ in which the modes merge into one well-conditioned distribution, and reverse Langevin dynamics transports samples back down the scales along $\nabla\log p_t$ (@fig-dmcmc, @fig-score-field). The chapter's argument is that the second picture has intermediate states and the first does not.](figures/lec07/deb-kit2-fig4-gan-vs-scale-space.png){#fig-gan-scale-space width=100%}
 
 ## Scale-space in the distribution domain
 
-Scale-space theory (slide 44) represents a signal $f$ at all scales $t\ge0$ by blurring it with a Gaussian,
+Scale-space theory (@fig-scale-space-theory) represents a signal $f$ at all scales $t\ge0$ by blurring it with a Gaussian,
 
 $$
 L_t = h_t*f,\qquad h_t(x) = \frac{1}{(2\pi t)^{n/2}}e^{-\Vert x\Vert^2/2t}.
 $$ {#eq-scale-space}
+
+![Scale-space on an image, as the lecture introduces it. The same photograph is shown as $L(\cdot,\cdot;t) = g(\cdot,\cdot;t)*f$ at $t=0,1,4$ and $16$: fine structure disappears as the scale grows, and nothing new appears. Taken from the lecture slides [@lecture-slides-diffusion].](figures/lec08/slide44-scale-space-theory.png){#fig-scale-space-theory width=95%}
 
 The Gaussian is the only kernel that satisfies the scale-space axioms [@koenderink1984; @lindeberg1994], namely linearity, shift invariance, the semigroup property $h_s*h_t = h_{s+t}$, rotational symmetry, and non-enhancement of local extrema (maxima never increase and minima never decrease, and in one dimension no new extrema appear). Moving to coarser scales smooths away fine structure.
 
@@ -87,30 +107,36 @@ $$
 p_t = p_{t-1}*h_{\sigma_t^2-\sigma_{t-1}^2} = p_0*h_{\sigma_t^2},
 $$ {#eq-dist-scale-space}
 
-where the second equality follows from the semigroup property with $\sigma_0 = 0$. The forward process is the scale-space of @eq-scale-space applied to the density $p_0$, at scale $\sigma_t^2$. Slide 43 writes the first equality as $p(x_{t-1}) = p(x_t)*h(x_t)$, with its time index reversed. For VP the same holds after rescaling $x$ by $1/\sqrt{\bar\alpha_t}$. The figure on slide 43, from @kim2023dmcmc, shows why this is useful. Separate modes merge at coarse scales, where a sampler can move between them before following the scales back down. The bottom panels of that slide compare running the reverse SDE or ODE from pure noise at $\sigma=348$, which often fails to produce a clean face, with starting it from an MCMC chain run at much lower noise levels ($\sigma$ between 1.41 and 2.03), which gives clean faces.
+where the second equality follows from the semigroup property with $\sigma_0 = 0$. The forward process is the scale-space of @eq-scale-space applied to the density $p_0$, at scale $\sigma_t^2$. The lecture writes the first equality as $p(x_{t-1}) = p(x_t)*h(x_t)$, with its time index reversed. For VP the same holds after rescaling $x$ by $1/\sqrt{\bar\alpha_t}$. @fig-dmcmc shows why this is useful. Separate modes merge at coarse scales, where a sampler can move between them before following the scales back down. Its lower panels compare running the reverse SDE or ODE from pure noise at $\sigma=348$, which often fails to produce a clean face, with starting it from an MCMC chain run at much lower noise levels ($\sigma$ between 1.41 and 2.03), which gives clean faces.
+
+![The scale-space of the distribution. Above, the density over the data space at three noise levels, $\sigma$ increasing down the left axis: the data density at the back has separate sharp modes, and they broaden and merge as $\sigma$ grows, which is where the green MCMC chain crosses from one mode to another before the reverse S/ODE (dashed) carries the sample back to the data level. Below, samples: starting the reverse SDE or ODE from pure noise at $\sigma=348$ (left) often fails, while starting from an MCMC chain at $\sigma$ between $1.41$ and $2.03$ (right) gives clean faces. Taken from the lecture slides [@lecture-slides-diffusion], after @kim2023dmcmc.](figures/lec08/slide43-scale-space-distribution.png){#fig-dmcmc width=90%}
 
 ## Iterative denoising as the dual representation
 
-The convolution in @eq-dist-scale-space acts on densities. On samples, the same operation simply adds i.i.d. noise to every pixel. Slide 46 puts the two side by side as $p(x_{t-1}) = p(x_t)*p(\sigma_t\epsilon_t)$ and $x_{t-1} = x_t+\sigma_t\epsilon_t$, again with the time index reversed, and calls the second the dual representation of the first. The figure on that slide shows the score field of a two-mode density, with arrows pointing towards the modes. Undoing a convolution of densities is an ill-posed deconvolution problem, but on samples it becomes iterative denoising guided by the score. One example is Langevin dynamics,
+The convolution in @eq-dist-scale-space acts on densities. On samples, the same operation simply adds i.i.d. noise to every pixel. The lecture puts the two side by side as $p(x_{t-1}) = p(x_t)*p(\sigma_t\epsilon_t)$ and $x_{t-1} = x_t+\sigma_t\epsilon_t$, again with the time index reversed, and calls the second the dual representation of the first. What moves the samples is the score, @fig-score-field. Undoing a convolution of densities is an ill-posed deconvolution problem, but on samples it becomes iterative denoising guided by the score. One example is Langevin dynamics,
 
 $$
 x_{i+1}\leftarrow x_i+\delta\,\nabla_{x}\log p(x_i)+\sqrt{2\delta}\,z_i,\qquad i=0,1,\dots,K,
 $$ {#eq-langevin}
 
-which we write with step size $\delta$ because $\epsilon$ already denotes the noise (the slide uses $\epsilon$). @sec-fp explains why this procedure samples from $p$ when the step size is small and the number of steps is large.
+which we write with step size $\delta$ because $\epsilon$ already denotes the noise (the lecture uses $\epsilon$). @sec-fp explains why this procedure samples from $p$ when the step size is small and the number of steps is large.
+
+![The animation the lecture plays for the reverse direction, at its first and last frame. The contours are level sets of a density with several modes, the arrows are $\nabla\log p$, which points towards the nearest mode everywhere, and the blue dots are samples. (a) The samples start on a grid, spread over the whole plane. (b) After the Langevin chain of @eq-langevin has run, each has followed the arrows onto a mode, and what is left is a sample of $p$. Taken from the lecture slides [@lecture-slides-diffusion], after the blog post accompanying @sde.](figures/lec08/slide46-score-field.png){#fig-score-field width=95%}
 
 ## The Gaussian shell theorem and the hypercylinder
 
 ::: {#thm-shell}
 ## Gaussian shell theorem
-Let $X = (X_1,\dots,X_n)$ have i.i.d. $\mathcal{N}(0,\sigma^2)$ entries. Then $\Vert X\Vert^2/n\to\sigma^2$ in probability, so $\Vert X\Vert\approx\sigma\sqrt n$ and the mass concentrates on the sphere of radius $\sigma\sqrt n$ (slide 47).
+Let $X = (X_1,\dots,X_n)$ have i.i.d. $\mathcal{N}(0,\sigma^2)$ entries. Then $\Vert X\Vert^2/n\to\sigma^2$ in probability, so $\Vert X\Vert\approx\sigma\sqrt n$ and the mass concentrates on the sphere of radius $\sigma\sqrt n$ (@fig-chi2).
 :::
 
 ::: {.proof}
-We have $\mathbb{E}\Vert X\Vert^2 = n\sigma^2$ and $\mathrm{Var}\Vert X\Vert^2 = n\,\mathrm{Var}(X_i^2) = 2n\sigma^4$. By Chebyshev's inequality, $P(|\Vert X\Vert^2/n-\sigma^2|>r)\le2\sigma^4/(nr^2)$, which tends to zero. This is the law of large numbers mentioned on the slide. Since the square root is continuous, $\Vert X\Vert/\sqrt n\to\sigma$.
+We have $\mathbb{E}\Vert X\Vert^2 = n\sigma^2$ and $\mathrm{Var}\Vert X\Vert^2 = n\,\mathrm{Var}(X_i^2) = 2n\sigma^4$. By Chebyshev's inequality, $P(|\Vert X\Vert^2/n-\sigma^2|>r)\le2\sigma^4/(nr^2)$, which tends to zero. This is the law of large numbers mentioned in the lecture. Since the square root is continuous, $\Vert X\Vert/\sqrt n\to\sigma$.
 :::
 
-The relative width of the shell shrinks like $1/\sqrt{2n}$, while its absolute width tends to the constant $\sigma/\sqrt2$ [@vershynin2018]: for a $256\times256\times3$ image the shell is about $0.16\%$ of its own radius thick, which is why it is drawn as a surface rather than a region. The $\chi^2$ curves on slide 47 and panel (a) of @fig-shell show the same concentration.
+The relative width of the shell shrinks like $1/\sqrt{2n}$, while its absolute width tends to the constant $\sigma/\sqrt2$ [@vershynin2018]: for a $256\times256\times3$ image the shell is about $0.16\%$ of its own radius thick, which is why it is drawn as a surface rather than a region. The $\chi^2$ curves of @fig-chi2 and panel (a) of @fig-shell show the same concentration.
+
+![The Gaussian shell theorem as the lecture states it. Left: the mass of an isotropic Gaussian sits on a sphere, not at the origin. Right: the density of $\chi^2_\nu/\nu$ for $\nu = 1, 2, 4, 10, 30, 100$; as the dimension grows the curve concentrates at $1$, which is $\Vert X\Vert^2/n\to\sigma^2$. Taken from the lecture slides [@lecture-slides-diffusion], after @chung2022mcg.](figures/lec08/slide47-gaussian-shell.png){#fig-chi2 width=85%}
 
 The density of $X$ is nevertheless largest at the origin, and the two statements are reconciled by the radial density. Writing $R = \Vert X\Vert$ and integrating over the sphere,
 
@@ -120,7 +146,7 @@ $$ {#eq-radial}
 
 whose maximum for $n>1$ is at $r = \sigma\sqrt{n-1}$. The Cartesian density falls off from the origin, but the volume factor $r^{n-1}$ grows faster until that radius, and in high dimension the product is sharply peaked there. The concentration is an asymptotic statement and not a small-$n$ one: a simulation at $n=3$ puts $\mathbb{E}\Vert X\Vert/(\sigma\sqrt n)$ at about $0.94$, still noticeably below one.
 
-Slide 48 considers data lying on a $k$-dimensional linear subspace $V$, perturbed by noise with $p(y\mid x) = \mathcal{N}(x,\sigma^2I)$. Write $y = x+\sigma z$ and let $P_\perp$ be the projection onto the orthogonal complement of $V$. Since $P_\perp x=0$, the distance from $y$ to $V$ is $\Vert P_\perp y\Vert = \sigma\Vert P_\perp z\Vert$. Here $P_\perp z$ is a standard Gaussian in $n-k$ dimensions, so @thm-shell gives
+The lecture then considers data lying on a $k$-dimensional linear subspace $V$, perturbed by noise with $p(y\mid x) = \mathcal{N}(x,\sigma^2I)$. Write $y = x+\sigma z$ and let $P_\perp$ be the projection onto the orthogonal complement of $V$. Since $P_\perp x=0$, the distance from $y$ to $V$ is $\Vert P_\perp y\Vert = \sigma\Vert P_\perp z\Vert$. Here $P_\perp z$ is a standard Gaussian in $n-k$ dimensions, so @thm-shell gives
 
 $$
 \mathrm{dist}(y,V)\approx\sigma\sqrt{n-k}.
@@ -150,11 +176,15 @@ $$
 \mathcal{M}_i = \{y\mid\mathrm{dist}(y,\mathcal{M})\approx\sigma_i\sqrt{n-k}\}
 $$
 
-around $\mathcal{M}$ [slide 49, after @chung2022mcg]. For the VP process, $\mathcal{M}_i$ surrounds $\sqrt{\bar\alpha_i}\,\mathcal{M}$ at radius $\sqrt{1-\bar\alpha_i}\sqrt{n-k}$. The noise levels give a sequence of thin shells $\mathcal{M}_1,\mathcal{M}_2,\dots,\mathcal{M}_\infty$ at increasing distance from $\mathcal{M}$. Slide 50, reproduced in @fig-manifolds, draws them as nested contours ending at $\mathcal{N}(a_\infty x_0,b_\infty^2I)$, where $a_\infty$ and $b_\infty$ are the limiting signal scale and noise level, and slide 50 calls them discrete orbits. Forward diffusion moves outwards through these shells and reverse diffusion moves inwards.
+around $\mathcal{M}$ (@fig-noisy-tube, after @chung2022mcg). For the VP process, $\mathcal{M}_i$ surrounds $\sqrt{\bar\alpha_i}\,\mathcal{M}$ at radius $\sqrt{1-\bar\alpha_i}\sqrt{n-k}$. The noise levels give a sequence of thin shells $\mathcal{M}_1,\mathcal{M}_2,\dots,\mathcal{M}_\infty$ at increasing distance from $\mathcal{M}$. @fig-manifolds draws them as nested contours ending at $\mathcal{N}(a_\infty x_0,b_\infty^2I)$, where $a_\infty$ and $b_\infty$ are the limiting signal scale and noise level, and the lecture calls them discrete orbits.
+
+![The tube at one noise level. The data manifold $\mathcal{M}$ is the inner curve; at noise level $\sigma_i$ the samples lie in the tube $\mathcal{M}_i$ around it, of radius $\sigma_i\sqrt{n-k}$, drawn as the circles swept along $\mathcal{M}$ and the outer envelope. The strip below shows one image carried out through the levels. Taken from the lecture slides [@lecture-slides-diffusion], after @chung2022mcg.](figures/lec08/slide49-noisy-tube.png){#fig-noisy-tube width=75%}
+
+Forward diffusion moves outwards through these shells and reverse diffusion moves inwards.
 
 ![The nested noisy manifolds, reproduced from slide 50. Forward diffusion (red arrows) moves from the data manifold $\mathcal{M}$ out through the shells $\mathcal{M}_1,\dots,\mathcal{M}_i,\dots$ towards $\mathcal{N}(a_\infty x_0,b_\infty^2I)$, and reverse diffusion (blue arrows) moves back inwards.](figures/lec07/HaJunHyun-slide50-manifolds.png){#fig-manifolds width=60%}
 
-The network at time $t$ has only been trained on inputs from $\mathcal{M}_t$. If a step misses the next shell, the network receives inputs it has never seen, and the error accumulates from step to step. This is the time embedding remark of slide 38 in geometric form. The decomposition on slide 54, which is @eq-denoise-renoise again, is designed to avoid this. Tweedie's formula maps $x_t$ to the clean estimate $\hat{x}_t$, and the step then adds noise of total variance $1-\bar\alpha_{t-1}$. When this noise behaves like an isotropic Gaussian, @thm-shell puts the result at the right distance, on $\mathcal{M}_{t-1}$. Slide 55 summarizes this as "retaining the correct manifold transition is the key". Landing on the right shell is necessary but not sufficient, since the renoise-only sampler of @tbl-toy does so at every step and is still biased. A GAN has no intermediate shells and must map $\nu$ onto $\mathcal{M}$ in a single step.
+The network at time $t$ has only been trained on inputs from $\mathcal{M}_t$. If a step misses the next shell, the network receives inputs it has never seen, and the error accumulates from step to step. This is the time-embedding remark of @fig-unet-time in geometric form. The decomposition of @fig-denoise-renoise, which is @eq-denoise-renoise again, is designed to avoid this. Tweedie's formula maps $x_t$ to the clean estimate $\hat{x}_t$, and the step then adds noise of total variance $1-\bar\alpha_{t-1}$. When this noise behaves like an isotropic Gaussian, @thm-shell puts the result at the right distance, on $\mathcal{M}_{t-1}$. The lecture summarizes this as "retaining the correct manifold transition is the key". Landing on the right shell is necessary but not sufficient, since the renoise-only sampler of @tbl-toy does so at every step and is still biased. A GAN has no intermediate shells and must map $\nu$ onto $\mathcal{M}$ in a single step.
 
 The same decomposition also holds in continuous time. In the variables of @eq-pf-sigma, the VP SDE becomes a VE SDE, because $d(x/\sqrt{\bar\alpha}) = \sqrt{\beta/\bar\alpha}\,dw$ and $d[\sigma^2]/dt = \beta/\bar\alpha$, and by @eq-epsilon-score-conversion its score is $-\epsilon^*/\sigma$. Tweedie's formula reads $\bar{x} = \hat{x}+\sigma\epsilon^*$ in these variables. One reverse Euler-Maruyama step from $\sigma$ to $\sigma'<\sigma$, as in @eq-ve-sampler, therefore gives
 
@@ -175,7 +205,7 @@ $$
 \frac{\partial p}{\partial t} = -\sum_{i=1}^n\frac{\partial}{\partial x_i}\big[\mu_i p\big] + \sum_{i,j=1}^n\frac{\partial^2}{\partial x_i\partial x_j}\big[D_{ij}p\big],\qquad D = \tfrac12\sigma\sigma^\top .
 $$ {#eq-fp-general}
 
-The SDE describes a single sample path, while @eq-fp-general describes the density, which is again the duality between samples and densities from slide 46. With $\sigma = g(t)I$ we have $D = \frac12g^2I$ and recover @eq-fp.
+The SDE describes a single sample path, while @eq-fp-general describes the density, which is again the duality between samples and densities of @eq-langevin and @fig-score-field. With $\sigma = g(t)I$ we have $D = \frac12g^2I$ and recover @eq-fp.
 
 Taking the Fourier transform in $x$ turns the Laplacian into multiplication by $-\Vert\omega\Vert^2$, so for a drift-free process with $D = \tfrac12g(t)^2I$ the equation becomes an ordinary differential equation in $t$ at each frequency,
 

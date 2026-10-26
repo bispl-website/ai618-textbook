@@ -16,9 +16,11 @@ onwards, which belongs to a later lecture and is left as the pointer in
 
 On 2026-10-26 the instructor asked that no passage describe a slide the
 reader cannot see. The figures named `slideNN-*.png` were therefore taken
-out of `Part-4-Diffusion-Model-Theory.pptx` itself: slides 56, 58, 62, 64,
-66, 70 and 71, each rebuilt from the slide's own pictures, shapes and
-labels. Slide numbers that remain in the text are provenance for a passage
+out of `Part-4-Diffusion-Model-Theory.pptx` itself: slides 56, 58, 64, 66,
+70 and 71, each rebuilt from the slide's own pictures, shapes and labels.
+Slide 62, which writes the loss with a cat image in place of $x_0$, was
+among them until the instructor removed it on 2026-10-26: @eq-text-loss
+below says the same thing in symbols. Slide numbers that remain in the text are provenance for a passage
 that reproduces the slide's content in full, not a pointer to a picture.
 
 Wonjin Nam's note states the ILVR filter the other way round --- "stronger
@@ -201,14 +203,13 @@ such as text enter through cross-attention.
 
 ### Text-conditioned training
 
-The lecture states the text-conditioned loss in pictures (@fig-text-loss):
-a cat image, the noise added to it, and the word "Cat" as the condition. With the time argument restored it is
+The lecture states the text-conditioned loss in pictures: a cat image for
+$x_0$, a noise image for $\epsilon$, and the word "Cat" as the condition.
+With the time argument restored it is
 
 $$
 \Big\Vert \epsilon_\theta\big( \sqrt{\bar\alpha_t}\,x_0 + \sqrt{1 - \bar\alpha_t}\,\epsilon, \, t, \, c \big) - \epsilon \Big\Vert_2^2 .
 $$ {#eq-text-loss}
-
-![The text-conditioned loss as the lecture writes it, with a cat image for $x_0$, a noise image for $\epsilon$ and the word "Cat" for the condition $c$. The network is given the noisy image and the caption and must return the noise; the caption is an input, never a target. Taken from the lecture slides [@lecture-slides-diffusion].](figures/lec08/slide62-text-loss.png){#fig-text-loss width=90%}
 
 Its TL;DR, "Train a diffusion model to estimate noise only when noise is
 added to a video along with the corresponding text", has two key words. The

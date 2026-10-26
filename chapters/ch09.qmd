@@ -14,6 +14,13 @@ and are already PNG. Declined: the inverse-problems material of slides 73
 onwards, which belongs to a later lecture and is left as the pointer in
 @sec-guidance.
 
+On 2026-10-26 the instructor asked that no passage describe a slide the
+reader cannot see. The figures named `slideNN-*.png` were therefore taken
+out of `Part-4-Diffusion-Model-Theory.pptx` itself: slides 56, 58, 62, 64,
+66, 70 and 71, each rebuilt from the slide's own pictures, shapes and
+labels. Slide numbers that remain in the text are provenance for a passage
+that reproduces the slide's content in full, not a pointer to a picture.
+
 Wonjin Nam's note states the ILVR filter the other way round --- "stronger
 low-pass filtering gives the model more freedom" --- which the grader
 flagged; the direction here is the base note's and is the one the results
@@ -47,13 +54,15 @@ trained network.
 
 ## Where unconditional generation stood
 
-Slide 56 puts three models side by side before the conditioning begins:
-DDPM [@ho2020], StyleGAN2-ADA [@karras2020ada] and the reverse SDE [@sde].
-By 2020 the two diffusion constructions had caught up with the best GAN on
-unconditional image synthesis, which is what makes the question of this
+@fig-unconditional puts three models side by side before the conditioning
+begins: StyleGAN2-ADA [@karras2020ada], DDPM [@ho2020] and the reverse SDE
+[@sde]. By 2020 the two diffusion constructions had caught up with the best
+GAN on unconditional image synthesis, which is what makes the question of this
 lecture worth asking: conditioning a model is only interesting once the
 model itself is good enough that the conditioned samples are worth looking
 at. The rest of the lecture never returns to GANs.
+
+![Unconditional samples from the three models the lecture compares: StyleGAN2-ADA [@karras2020ada] on the left, DDPM [@ho2020] in the middle and the reverse SDE [@sde] on the right. The point of the slide is that the two diffusion models are no longer behind the GAN. Taken from the lecture slides [@lecture-slides-diffusion].](figures/lec08/slide56-unconditional.png){#fig-unconditional width=75%}
 
 ## Conditional training {#sec-cond-train}
 
@@ -98,7 +107,7 @@ $$ {#eq-sr3-step}
 
 ![SR3 as the lecture draws it on slides 58-59. Above, the chain runs on the target $y$ while the low-resolution $x$ is held fixed, so the forward kernel is the ordinary $q(y_t\mid y_{t-1})$ and only the reverse kernel $p_\theta(y_{t-1}\mid y_t,x)$ sees the condition. Below, Algorithm 1 trains $f_\theta$ on the noise it must subtract and Algorithm 2 is the DDPM step with $f_\theta(x,y_t,\gamma_t)$ in place of $\epsilon_\theta$. Reproduced from the slides [@lecture-slides-diffusion; @saharia2022sr3].](figures/lec08/dodoyou0125-sr3-algorithms.png){#fig-sr3 width=100%}
 
-Three points are left implicit on the slide.
+Three points are left implicit in @fig-sr3.
 
 **(i) The loss learns the conditional score.** For $p = 2$, the argument of
 @eq-bayes-optimal conditioned on $x$ makes the minimiser
@@ -140,10 +149,13 @@ both are standard choices in @ho2020.
 
 **How the condition enters.** SR3 upsamples $x$ bicubically and
 concatenates it with $y_t$ along the channels, so the U-Net sees the
-condition pixel-aligned. The slide's example super-resolves $64 \times 64$
-to $1024 \times 1024$; the output is sharp because each step denoises
-towards a *sample* of $p(y \mid x)$ rather than regressing
-to its blurry mean.
+condition pixel-aligned. @fig-sr3-results shows what comes out: a blurred
+low-resolution input, the SR3 output and the reference. The output is sharp
+because each step denoises towards a *sample* of $p(y \mid x)$ rather than
+regressing to its blurry mean, and the lecture's demonstration runs the same
+model from $64 \times 64$ to $1024 \times 1024$.
+
+![SR3 results as the lecture shows them: the low-resolution input, SR3's output and the reference, for a face and for a flower. The output is not the blurry conditional mean that a regression loss would give, because each reverse step samples. Taken from the lecture slides [@lecture-slides-diffusion], after @saharia2022sr3.](figures/lec08/slide58-sr3-results.png){#fig-sr3-results width=70%}
 
 ### Latent diffusion with a text condition
 
@@ -181,7 +193,7 @@ row-wise softmax $QK^\top \in \mathbb{R}^{hw \times L}$ gives every image
 position a distribution over the tokens (*which words matter here*), and the
 output is a weighted average of token values. Nothing depends on $L$ except
 the size of the sums, so prompts of any length work and no spatial
-alignment is needed. The "switch" on the slide picks the route: spatially
+alignment is needed. The "switch" in @fig-ldm picks the route: spatially
 aligned conditions are concatenated with $z_t$ as in SR3, and sequences
 such as text enter through cross-attention.
 
@@ -189,12 +201,14 @@ such as text enter through cross-attention.
 
 ### Text-conditioned training
 
-The slide states the text-conditioned loss with pictures (a cat image, noise
-images, the word "Cat"); with the time argument restored it is
+The lecture states the text-conditioned loss in pictures (@fig-text-loss):
+a cat image, the noise added to it, and the word "Cat" as the condition. With the time argument restored it is
 
 $$
 \Big\Vert \epsilon_\theta\big( \sqrt{\bar\alpha_t}\,x_0 + \sqrt{1 - \bar\alpha_t}\,\epsilon, \, t, \, c \big) - \epsilon \Big\Vert_2^2 .
 $$ {#eq-text-loss}
+
+![The text-conditioned loss as the lecture writes it, with a cat image for $x_0$, a noise image for $\epsilon$ and the word "Cat" for the condition $c$. The network is given the noisy image and the caption and must return the noise; the caption is an input, never a target. Taken from the lecture slides [@lecture-slides-diffusion].](figures/lec08/slide62-text-loss.png){#fig-text-loss width=90%}
 
 Its TL;DR, "Train a diffusion model to estimate noise only when noise is
 added to a video along with the corresponding text", has two key words. The
@@ -208,17 +222,21 @@ with $x_0$ a video clip gives text-to-video. Sampling is
 and every guarantee of the unconditional sampler carries over with
 $p(x_0 \mid c)$ in place of $p_0$.
 
-The remaining slides show results, which we describe since they are
-third-party images. **eDiff-I** [@balaji2022ediffi] keeps the content of the
-prompt "A {X} photo / painting of a penguin working as a fruit vendor in a
-tropical village" fixed while X sets the style; it trains separate *expert*
-denoisers for different ranges of $t$, which fits the shell picture of [Why Diffusion Models](ch08.qmd), since the inputs at different levels
-live on almost disjoint tubes. A comparison of
-Midjourney, Stable Diffusion 2 and DALL-E 2 [@ramesh2022dalle2] shows
-systems that differ in data, encoders and scale but not in the principle of
-@eq-text-loss. **Sora** [@brooks2024sora] applies it to video latents with a
-transformer, generating a walk down a neon-lit Tokyo street from a
-paragraph-long prompt.
+The lecture closes the section with what the recipe produces. **eDiff-I**
+[@balaji2022ediffi] keeps the content of the prompt "A {X} photo / painting
+of a penguin working as a fruit vendor in a tropical village" fixed while X
+sets the style (@fig-ediff); it trains separate *expert* denoisers for
+different ranges of $t$, which fits the shell picture of
+[Why Diffusion Models](ch08.qmd), since the inputs at different levels live
+on almost disjoint tubes. Midjourney, Stable Diffusion 2 and DALL-E 2
+[@ramesh2022dalle2] differ in data, encoders and scale but not in the
+principle of @eq-text-loss. **Sora** [@brooks2024sora] applies that
+principle to video latents with a transformer, generating the walk down a
+neon-lit Tokyo street of @fig-sora from a paragraph-long prompt.
+
+![One prompt, six styles, from eDiff-I [@balaji2022ediffi]. Only the $X$ of "A {X} photo / painting of a penguin working as a fruit vendor in a tropical village" changes between the panels, and the penguin, the fruit and the village survive it: one network holds both what the scene contains and how it is rendered, and the caption decides each. Taken from the lecture slides [@lecture-slides-diffusion].](figures/lec08/slide64-ediff-styles.png){#fig-ediff width=85%}
+
+![A frame of the Sora clip the lecture plays [@brooks2024sora], generated from a paragraph describing a woman walking down a neon-lit Tokyo street. The model is @eq-text-loss applied to video latents. Taken from the lecture slides [@lecture-slides-diffusion].](figures/lec08/slide66-sora.png){#fig-sora width=85%}
 
 The price of conditional training is **paired data and a training run for
 each kind of condition**: a super-resolution model cannot inpaint.
@@ -244,7 +262,7 @@ level $t_0$ with @eq-forward-marginal,
 $x_{t_0} = \sqrt{\bar\alpha_{t_0}}\,x^{g} + \sqrt{1 - \bar\alpha_{t_0}}\,\epsilon$,
 and then **reverses** with the unconditional sampler @eq-ddim-step from
 $t_0$ to $0$. (The paper writes this for the VE-SDE; the VP form is the same
-idea.) On the slide, natural images (green) and stroke paintings (blue) are
+idea.) In @fig-sdedit, natural images (green) and stroke paintings (blue) are
 far apart at level $0$ but overlap after perturbation, so the noisy guide is
 a typical point of the noisy image distribution, and the reverse process
 carries it to the images: the merging of modes established in [Why Diffusion Models](ch08.qmd).
@@ -265,14 +283,16 @@ Since $x_{t_0}/\sqrt{\bar\alpha_{t_0}} = x^{g} + s_{t_0}\epsilon$,
 SDEdit is posterior sampling with prior $p_0$ and a Gaussian likelihood
 centred on the noisy guide, weighted by the signal-to-noise ratio
 $\mathrm{SNR}(t_0) = \bar\alpha_{t_0}/(1 - \bar\alpha_{t_0})$. This makes
-the slide's trade-off exact: a small $t_0$ (high SNR) is **faithful** to the
+the lecture's trade-off exact: a small $t_0$ (high SNR) is **faithful** to the
 guide but stays unrealistic if the guide is far from the data, and a large
 $t_0$ is **realistic** but forgets the guide, becoming an unconditional
-sample as $t_0 \to T$. The next slide's examples (stroke painting to image,
-compositing, stroke editing) all use this one algorithm; only the guide
-changes.
+sample as $t_0 \to T$. @fig-sdedit-examples collects the lecture's examples
+--- stroke painting to image, image compositing, stroke-based editing ---
+and all of them are this one algorithm; only the guide changes.
 
-![SDEdit on slides 69-70. The stroke painting (left) is perturbed by the forward SDE until its law overlaps that of natural images, and the reverse SDE then carries it back down; the contours above the images are the distributions of photographs (green) and of strokes (blue), which meet only after the perturbation. Reproduced from the slides [@lecture-slides-diffusion; @meng2022sdedit].](figures/lec08/dodoyou0125-sdedit-overview.png){#fig-sdedit width=100%}
+![SDEdit on slide 69. The stroke painting (left) is perturbed by the forward SDE until its law overlaps that of natural images, and the reverse SDE then carries it back down; the contours above the images are the distributions of photographs (green) and of strokes (blue), which meet only after the perturbation. Reproduced from the slides [@lecture-slides-diffusion; @meng2022sdedit].](figures/lec08/dodoyou0125-sdedit-overview.png){#fig-sdedit width=100%}
+
+![The three tasks the lecture gives SDEdit, all with the same unconditional model and the same algorithm. Stroke painting to image (upper left), image compositing (lower left) and stroke-based editing (right); each group pairs the guide the user supplies with the sample the reverse chain returns. Taken from the lecture slides [@lecture-slides-diffusion], after @meng2022sdedit.](figures/lec08/slide70-sdedit-examples.png){#fig-sdedit-examples width=95%}
 
 ### ILVR: conditioning at every step
 
@@ -289,7 +309,10 @@ $$ {#eq-ilvr}
 
 an unconditional proposal, the reference noised to the same level, and a
 merge that keeps the proposal's high frequencies and the noisy reference's
-low frequencies. Three facts explain the step.
+low frequencies. @fig-ilvr-graphical is the lecture's drawing of one such
+step. Three facts explain the step.
+
+![One ILVR step. From $x_t$ the unconditional model proposes $x'_{t-1}$; the reference $y$ is noised to the same level as $y_{t-1}$; and the latent variable refinement replaces the low frequencies of the proposal by those of the noisy reference, giving $x_{t-1}$. Nothing in the model is retrained. Taken from the lecture slides [@lecture-slides-diffusion], after @choi2021ilvr.](figures/lec08/slide71-ilvr-graphical.png){#fig-ilvr-graphical width=95%}
 
 **(i) The low frequencies are matched exactly.** If $\phi^2 = \phi$ --- for
 example $N \times N$ block averaging $D$ followed by nearest-neighbour
@@ -313,7 +336,7 @@ the input off $\mathcal{M}_{t-1}$.
 
 $N$ controls how much is imposed, since the range of $\phi_N$ has dimension
 $n/N^2$: small $N$ gives near copies of the reference, large $N$ fixes only
-coarse layout and colour. The results slide shows this for
+coarse layout and colour. @fig-ilvr shows this for
 $N = 4, \dots, 64$, and the same algorithm for image translation,
 paint-to-image and scribble editing.
 
@@ -339,7 +362,7 @@ $y$ and $x_t$ are conditionally independent given $x_0$, so
 $p(y \mid x_t) = \int p(y \mid x_0)p(x_0 \mid x_t)\,dx_0$ involves the
 intractable $p(x_0 \mid x_t)$. Diffusion posterior sampling
 [@chung2023dps] approximates it by Tweedie's $\hat{x}_0$, and the
-accelerated solvers [@chung2024dds] build on that. Those slides belong to a
+accelerated solvers [@chung2024dds] build on that. That material belongs to a
 later lecture; here @eq-posterior-score is needed only because the worked
 example below samples the exact posterior to check the approximations
 against.
@@ -667,8 +690,8 @@ exact reverse chain is posterior sampling.
   condition; latent diffusion [@rombach2022ldm] moves the process into a
   learned latent space and brings the condition in through cross-attention;
   eDiff-I [@balaji2022ediffi] splits the noise schedule between expert
-  denoisers; DALL-E 2 [@ramesh2022dalle2] and Sora [@brooks2024sora] are
-  the systems the slides show.
+  denoisers; DALL-E 2 [@ramesh2022dalle2] and Sora [@brooks2024sora]
+  (@fig-sora) are the systems the lecture ends on.
 - **Guidance.** SDEdit [@meng2022sdedit] conditions through the initial
   point and ILVR [@choi2021ilvr] at every step. Classifier-free guidance,
   which the lecture does not reach, is the other member of this family and

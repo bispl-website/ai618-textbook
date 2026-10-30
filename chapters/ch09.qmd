@@ -24,8 +24,8 @@ below says the same thing in symbols. Slide numbers that remain in the text are 
 that reproduces the slide's content in full, not a pointer to a picture.
 
 One submitted note states the ILVR filter the other way round --- "stronger
-low-pass filtering gives the model more freedom"; the direction here is the base note's and is the one the results
-figure shows. The slide gives ILVR as ICLR 2021; it is ICCV 2021, and the
+low-pass filtering gives the model more freedom". The direction here is the
+base note's and is the one the results figure shows. The slide gives ILVR as ICLR 2021; it is ICCV 2021, and the
 bibliography says so.
 -->
 

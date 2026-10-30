@@ -29,20 +29,6 @@ the book cannot support. Numbers outside that range agree with the file and
 are kept as provenance.
 -->
 
-*Based on the scribe note of Kiet Nguyen, with material from Changwoo Yoo, Youngjun Jun and Yunkyung Ko --- the four scribes of lecture 09; edited by Jong Chul Ye.*
-
-<!--
-What the other three contributed, so the credit line is not decorative:
-Changwoo Yoo and Youngjun Jun each derived the posterior-mean correction with
-the opposite sign to the slide, independently of the base note, and each
-derived the Gaussian Lipschitz constant that the Jensen bound misstates;
-Changwoo Yoo also raised the feasibility condition now stated at
-@eq-shortcut-feasible and the coordinate mismatch now stated at
-@eq-ddim-x-rate. Yunkyung Ko supplied the bibliography entries for this
-lecture in pull request #47 of the scribe repository, including the CCDF
-page range used in references.bib.
--->
-
 ## Overview {#sec-ip-overview}
 
 This chapter treats inverse problems: recovering an image $\mathbf{x}_0$ from a measurement $\mathbf{y}$, such as a blurred photograph, a low-resolution image, an undersampled MRI scan or the magnitude of a Fourier transform. The Bayesian answer is to sample from the posterior $p(\mathbf{x}_0 \mid \mathbf{y})$, with a diffusion model as the prior. The previous chapter conditioned diffusion models in two ways: by training with the condition supplied to the network, as SR3 and latent diffusion do, and by steering a pretrained model at sampling time with a reference image, as SDEdit and ILVR do. Both put the condition in by hand. In an inverse problem, the forward operator that produces $\mathbf{y}$ is known instead. This chapter therefore uses *one* pretrained unconditional diffusion model as the prior and brings in the measurement only at sampling time, through the forward operator. No retraining is needed when the task changes. The chapter covers slides 73--116 of the lecture deck *Part 4 - Diffusion Model Theory* [@lecture-slides-diffusion]; references of the form "slide N" point to that deck.
@@ -1024,3 +1010,19 @@ Several related solvers were not developed in this chapter. ILVR [@choi2021ilvr]
 
 The backpropagation through the network in DPS (@eq-dps-chain) is slow, memory-hungry and can be unstable. The Decomposed Diffusion Sampler [@chung2024dds] avoids it. Because the Jacobian of the denoiser acts as a projector (@prp-tweedie-projector), gradient steps taken on $\hat{\mathbf{x}}_0$ itself already stay in the tangent space of the data manifold. Several conjugate-gradient steps can then be taken on $\hat{\mathbf{x}}_0$ without backpropagation, which accelerates large-scale MRI and CT reconstruction. The next chapter turns to Schrodinger bridges, which generalize diffusion models to processes whose two endpoints can both be data distributions.
 
+---
+
+<!--
+What the other three contributed, so the credit line is not decorative:
+Changwoo Yoo and Youngjun Jun each derived the posterior-mean correction with
+the opposite sign to the slide, independently of the base note, and each
+derived the Gaussian Lipschitz constant that the Jensen bound misstates;
+Changwoo Yoo also raised the feasibility condition now stated at
+@eq-shortcut-feasible and the coordinate mismatch now stated at
+@eq-ddim-x-rate. Yunkyung Ko supplied the bibliography entries for this
+lecture in pull request #47 of the scribe repository, including the CCDF
+page range used in references.bib.
+-->
+
+*Based on the scribe note of Kiet Nguyen, with the materials from Changwoo
+Yoo, Youngjun Jun and Yunkyung Ko. Edited by Jong Chul Ye.*

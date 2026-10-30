@@ -11,8 +11,8 @@ Base note: Myungjo Kwak (95.0 of 100). Merged in: the three-way comparison
 that closes the unconditional part (slide 56), which no note carried; the
 figures from Doyoung Jung's note, whose fifteen are the only complete set
 and are already PNG. Declined: the inverse-problems material of slides 73
-onwards, which belongs to a later lecture and is left as the pointer in
-@sec-guidance.
+onwards, which is lecture 09 and is now chapter 10, *Conditional Diffusion
+Models for Inverse Problems*; @sec-guidance points forward to it.
 
 On 2026-10-26 the instructor asked that no passage describe a slide the
 reader cannot see. The figures named `slideNN-*.png` were therefore taken
@@ -363,8 +363,10 @@ $y$ and $x_t$ are conditionally independent given $x_0$, so
 $p(y \mid x_t) = \int p(y \mid x_0)p(x_0 \mid x_t)\,dx_0$ involves the
 intractable $p(x_0 \mid x_t)$. Diffusion posterior sampling
 [@chung2023dps] approximates it by Tweedie's $\hat{x}_0$, and the
-accelerated solvers [@chung2024dds] build on that. That material belongs to a
-later lecture; here @eq-posterior-score is needed only because the worked
+accelerated solvers [@chung2024dds] build on that. That material is the next
+chapter, *Conditional Diffusion Models for Inverse Problems*; here
+@eq-posterior-score is
+needed only because the worked
 example below samples the exact posterior to check the approximations
 against.
 

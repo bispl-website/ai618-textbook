@@ -6,8 +6,8 @@ title: "Conditional Diffusion Models for Inverse Problems"
 Lecture 09, slides 73-116 of `Part-4-Diffusion-Model-Theory.pptx`. The
 instructor confirmed that range on 2026-10-30.
 
-Base note: Kiet Nguyen (97.0 of 100), the only one of the four with no thin
-spot against the lecture's topic list. Merged in: the generalization result
+Base note: Kiet Nguyen, the only one of the four with no thin spot against
+the lecture's topic list. Merged in: the generalization result
 of slide 79 and the "is this part necessary?" picture of slide 84, which the
 base note argues for but does not show, both rendered from the deck with
 scripts/slide_figure.py; and the quantitative reading of slide 79, which no

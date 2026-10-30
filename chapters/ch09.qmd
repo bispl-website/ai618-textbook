@@ -7,7 +7,7 @@ Lecture 08, slides 55-72 of `Part-4-Diffusion-Model-Theory.pptx`. Slides
 43-54 were lectured again at the start of this class but are chapter 8,
 *Why Diffusion Models*, which this one assumes rather than repeats.
 
-Base note: Myungjo Kwak (95.0 of 100). Merged in: the three-way comparison
+Base note: Myungjo Kwak. Merged in: the three-way comparison
 that closes the unconditional part (slide 56), which no note carried; the
 figures from Doyoung Jung's note, whose fifteen are the only complete set
 and are already PNG. Declined: the inverse-problems material of slides 73
@@ -23,10 +23,9 @@ among them until the instructor removed it on 2026-10-26: @eq-text-loss
 below says the same thing in symbols. Slide numbers that remain in the text are provenance for a passage
 that reproduces the slide's content in full, not a pointer to a picture.
 
-Wonjin Nam's note states the ILVR filter the other way round --- "stronger
-low-pass filtering gives the model more freedom" --- which the grader
-flagged; the direction here is the base note's and is the one the results
-figure shows. The slide gives ILVR as ICLR 2021; it is ICCV 2021, and the
+One submitted note states the ILVR filter the other way round --- "stronger
+low-pass filtering gives the model more freedom". The direction here is the
+base note's and is the one the results figure shows. The slide gives ILVR as ICLR 2021; it is ICCV 2021, and the
 bibliography says so.
 -->
 

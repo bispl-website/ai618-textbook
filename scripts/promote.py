@@ -99,8 +99,13 @@ def worksheet(lec: str, records: list[dict], scribe_repo: Path) -> str:
             continue
         L.append(f"### `{r['github']}`\n")
         for e in errs:
+            # The denominator is the record's own pass count, not a constant:
+            # a one-pass record printed "1/3 passes", which reads as two passes
+            # having disagreed when there was only ever one reading.
+            npass = r.get("passes", 3)
             L.append(f"- **{e['location']}** ({e['confidence']} confidence, "
-                     f"{e.get('raised_by_passes', 1)}/3 passes) — {e['claim']}  \n"
+                     f"{e.get('raised_by_passes', 1)}/{npass} pass"
+                     f"{'' if npass == 1 else 'es'}) — {e['claim']}  \n"
                      f"  Why: {e['why']}")
         L.append("")
 

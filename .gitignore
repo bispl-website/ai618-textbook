@@ -17,3 +17,9 @@ drafts/*.md
 
 /.quarto/
 **/*.quarto_ipynb
+
+# Quarto leaves per-file HTML beside the sources when a single format is
+# rendered; the book itself goes to _book/.
+/*.html
+chapters/*.html
+site_libs/

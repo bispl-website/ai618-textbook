@@ -26,8 +26,17 @@ real overlap. Treat a quiet report as "nothing mechanical to fix", not as
 
 Usage:
     python scripts/overlap.py --chapter chapters/ch07.qmd
-    python scripts/overlap.py --candidate drafts/lec07-merged.qmd --before 07
+    python scripts/overlap.py --candidate drafts/lec09-merged.qmd --before 10
     python scripts/overlap.py --chapter chapters/ch07.qmd --show-passages
+
+`--before` is a **chapter** number, not a lecture number -- it is matched
+against the `chNN` in the chapter filenames, and `--before 10` means "compare
+against ch00 to ch09". Chapter N stopped meaning lecture N on 2026-10-25, so
+the two numbers differ from lecture 09 on: the draft of lecture 09 above is
+chapter 10, hence `--before 10`. `../lecture-chapters.yml` is where that
+mapping is written down. This script needs no part of it, because it is told
+which chapters to look at and never derives one from a lecture number -- but
+the number you pass it has to be the chapter's.
 """
 
 from __future__ import annotations
@@ -117,8 +126,12 @@ def main() -> int:
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--chapter", help="a chapter in the book, e.g. chapters/ch07.qmd")
     g.add_argument("--candidate", help="any .qmd not yet in the book")
-    ap.add_argument("--before", help="compare against chapters up to this number "
-                                     "(default: those before --chapter)")
+    ap.add_argument("--before", metavar="CHAPTER_NO",
+                    help="compare against the chapters below this CHAPTER number, "
+                         "e.g. --before 10 for ch00..ch09. A chapter number, not a "
+                         "lecture number: lecture 09 is chapter 10 (see "
+                         "lecture-chapters.yml). Default: the chapters before "
+                         "--chapter's own number.")
     ap.add_argument("--show-passages", action="store_true",
                     help="print the longest shared passage for each flagged pair")
     args = ap.parse_args()

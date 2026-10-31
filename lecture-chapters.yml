@@ -1,0 +1,107 @@
+# Which chapter file each lecture's notes belong to.
+#
+# Chapter N is not lecture N. It was, up to lecture 08. On 2026-10-25 the
+# material that lectures 07 and 08 both ran through was lifted out of chapter 7
+# and given a chapter of its own, *Why Diffusion Models*, which took the number
+# the removed Latent Diffusion stub had held. Everything from lecture 09 on is
+# therefore one higher than its lecture number, and this file -- not the
+# filename arithmetic -- is what says so.
+#
+# Before this file existed the mapping lived only in each chapter's provenance
+# comment and in ~/ai618/chapter-pipeline/lecNN.md, so `promote.py --lecture 10`
+# aimed at ch10.qmd, which is lecture 09's finished chapter. Its "already been
+# worked on" guard caught it twice; the seeding step could not be used at all.
+#
+# Fields
+#   chapter  the chapter a lecture's notes are promoted into. One per lecture.
+#            This is the file `promote.py --lecture NN` writes.
+#   also     further chapters that carry part of this lecture's material,
+#            because the book's boundaries are not the lectures'. Reported by
+#            `promote.py`, never written by it.
+#   note     why this entry is not the identity, where it is not.
+#
+# Every entry below was checked against the chapter's own provenance comment,
+# the lecture README in the scribe repository, and the chapter title.
+# Verified 2026-10-31.
+
+lectures:
+  "00":
+    chapter: chapters/ch00.qmd
+    note: >-
+      Mathematical Preliminaries. Not a scribe chapter -- the instructor wrote
+      it from his own book. Unnumbered, between the preface and Part I.
+  "01":
+    chapter: chapters/ch01.qmd
+  "02":
+    chapter: chapters/ch02.qmd
+  "03":
+    chapter: chapters/ch03.qmd
+  "04":
+    chapter: chapters/ch04.qmd
+  "05":
+    chapter: chapters/ch05.qmd
+  "06":
+    chapter: chapters/ch06.qmd
+  "07":
+    chapter: chapters/ch07.qmd
+    also:
+      - chapters/ch06.qmd
+      - chapters/ch08.qmd
+    note: >-
+      Score-SDE Formulation. The lecture opens with the DDIM construction
+      (slides 17-25), but DDIM is defined in DDPM's terms, so the instructor
+      decided on 2026-10-16 that it lives in chapter 6 next to DDPM; chapter 6
+      therefore draws on two lectures' notes. Slides 43-54 of this lecture were
+      run again at the start of lecture 08 and are chapter 8.
+  "08":
+    chapter: chapters/ch09.qmd
+    also:
+      - chapters/ch08.qmd
+    note: >-
+      Conditional Diffusion Models, slides 55-72. The first lecture whose
+      chapter number is not its own. Chapter 8, *Why Diffusion Models*, is not
+      a lecture chapter: it is slides 39-55, which lectures 07 and 08 both ran
+      through, merged from both lectures' notes and split out on 2026-10-25.
+  "09":
+    chapter: chapters/ch10.qmd
+    note: >-
+      Diffusion Models for Inverse Problems, slides 73-116. Published as
+      chapter 10. This is the mapping `promote.py --lecture 10` used to get
+      wrong, from the other side.
+  "10":
+    chapter: chapters/ch11.qmd
+    also:
+      - chapters/ch10.qmd
+    note: >-
+      Accelerated Posterior Sampling and Classifier-Free Guidance, slides
+      114-131. The opening recap, slides 114-116, recapitulates lecture 09, and
+      the instructor asked on 2026-10-31 that it be folded into chapter 10
+      rather than developed again here.
+  "11":
+    chapter: chapters/ch12.qmd
+  "12":
+    chapter: chapters/ch13.qmd
+  "13":
+    chapter: chapters/ch14.qmd
+  "14":
+    chapter: chapters/ch15.qmd
+  "15":
+    chapter: chapters/ch16.qmd
+  "16":
+    chapter: chapters/ch17.qmd
+  "17":
+    chapter: chapters/ch18.qmd
+  "18":
+    chapter: chapters/ch19.qmd
+  "19":
+    chapter: chapters/ch20.qmd
+  "20":
+    chapter: chapters/ch21.qmd
+  "21":
+    chapter: chapters/ch22.qmd
+  "22":
+    chapter: chapters/ch23.qmd
+  "23":
+    chapter: chapters/ch24.qmd
+  "24":
+    chapter: chapters/ch25.qmd

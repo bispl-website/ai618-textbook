@@ -9,13 +9,18 @@ section, what the others have that it does not.
 
 It reads the *private* scribe repository and writes into this one:
 
-    python scripts/promote.py --lecture 07 --scribe-repo ../ai618-scribe-2026f
+    python scripts/promote.py --lecture 09 --scribe-repo ../ai618-scribe-2026f
 
 Outputs:
-    drafts/lec07-merge.md   the worksheet: ranking, gap union, errors to fix
-    chapters/ch07.qmd       the top note, with the gap list carried in a
+    drafts/lec09-merge.md   the worksheet: ranking, gap union, errors to fix
+    chapters/ch10.qmd       the top note, with the gap list carried in a
                             comment at the top -- the tool cannot tell where
                             in the prose a missing topic belongs
+
+Note the chapter number: lecture 09 is chapter 10. Chapter N stopped meaning
+lecture N on 2026-10-25, when the material lectures 07 and 08 shared was split
+out into its own chapter 8. `../lecture-chapters.yml` holds the mapping and is
+the only place it is written down; this script will not do the arithmetic.
 
 Neither output is finished work. The worksheet is a reading order for a human;
 the chapter is a starting point that still needs the merge done by hand.
@@ -31,6 +36,62 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
+CHAPTER_MAP = REPO / "lecture-chapters.yml"
+
+
+def chapter_for(lec: str) -> tuple[Path, list[str], str]:
+    """Resolve `lecNN` to the chapter file its notes are promoted into.
+
+    Returns (chapter path, further chapters carrying this lecture's material,
+    the map's note on the entry).
+
+    The arithmetic `ch{NN} == lec{NN}` was true up to lecture 08 and is wrong
+    from lecture 09 on, which is how `--lecture 10` came to target ch10.qmd --
+    lecture 09's finished chapter. So the mapping is read, never computed. A
+    lecture the map does not mention falls back to the identity with a warning,
+    because a lecture added to the course and not yet to the map is a likely
+    and recoverable mistake; anything else -- no map, or a mapped file that is
+    not there -- is refused rather than guessed at, since guessing is the bug.
+    """
+    if not CHAPTER_MAP.exists():
+        raise SystemExit(
+            f"{CHAPTER_MAP.name} is missing. It is the only record of which "
+            "chapter a lecture belongs to, and chapter N is not lecture N "
+            "from lecture 09 on, so there is nothing to fall back to. Restore "
+            f"it from git: git checkout -- {CHAPTER_MAP.name}")
+    try:
+        import yaml
+    except ImportError:
+        raise SystemExit(
+            f"PyYAML is needed to read {CHAPTER_MAP.name}, which says which "
+            "chapter this lecture belongs to. Install it (pip install pyyaml) "
+            "-- without the map this script would have to guess the chapter "
+            "number, and guessing is what it is here to stop.")
+
+    entries = (yaml.safe_load(CHAPTER_MAP.read_text()) or {}).get("lectures") or {}
+    entry = entries.get(lec[3:]) or entries.get(lec)
+
+    if entry is None:
+        rel = f"chapters/ch{lec[3:]}.qmd"
+        print(f"  WARNING: {lec} is not in {CHAPTER_MAP.name}. Falling back to "
+              f"{rel}, which assumes chapter N == lecture N -- an assumption "
+              "that has been wrong since lecture 09. Check the chapter's own "
+              f"provenance comment, then add the entry to {CHAPTER_MAP.name}.",
+              file=sys.stderr)
+        also, note = [], ""
+    else:
+        rel = entry["chapter"] if isinstance(entry, dict) else str(entry)
+        also = list(entry.get("also") or []) if isinstance(entry, dict) else []
+        note = (entry.get("note") or "").strip() if isinstance(entry, dict) else ""
+
+    chapter = REPO / rel
+    if not chapter.exists():
+        raise SystemExit(
+            f"{rel} is mapped to {lec} but does not exist. Refusing to guess "
+            "another chapter: the one time this script picked a chapter by "
+            "arithmetic it picked a finished chapter of a different lecture. "
+            f"Either create {rel} as a stub or fix {CHAPTER_MAP.name}.")
+    return chapter, also, note
 
 
 def load_grades(grades_repo: Path, lec: str) -> list[dict]:
@@ -193,10 +254,11 @@ def seed_chapter(lec: str, records: list[dict], scribe_repo: Path) -> str:
     # Lecture 01 --- ...". Keep only what follows the dash.
     name = re.sub(r"^Lecture\s*\d+\s*[-\u2013\u2014]+\s*", "", name)
     # lec00 is the instructor's preliminaries chapter, not one of the
-    # lectures. It sits between the preface and Part I and carries
-    # no number, so that chapter N keeps meaning lecture N for everything after
-    # it. An unnumbered chapter is a heading with `.unnumbered`, not a YAML
-    # title, which is how the preface and the references are written too.
+    # lectures. It sits between the preface and Part I and carries no number.
+    # An unnumbered chapter is a heading with `.unnumbered`, not a YAML title,
+    # which is how the preface and the references are written too. (This used
+    # to be what kept chapter N meaning lecture N further down the book. It no
+    # longer does: see lecture-chapters.yml.)
     if lec == "lec00":
         head = f"# {name} {{.unnumbered}}\n"
     else:
@@ -253,6 +315,18 @@ def main() -> int:
     args = ap.parse_args()
 
     lec = f"lec{args.lecture.zfill(2)}"
+
+    # Resolve the chapter before anything is written, so that the target is on
+    # screen before the operator has to trust it.
+    chapter = also = note = None
+    if not args.worksheet_only:
+        chapter, also, note = chapter_for(lec)
+        print(f"{lec} -> {chapter.relative_to(REPO)}")
+        if note:
+            print(f"  {' '.join(note.split())}")
+        for other in also:
+            print(f"  also carries {lec} material: {other} (not written by this script)")
+
     scribe_repo = Path(args.scribe_repo).expanduser().resolve()
     if not scribe_repo.is_dir():
         print(f"scribe repository not found: {scribe_repo}", file=sys.stderr)
@@ -274,7 +348,6 @@ def main() -> int:
     if args.worksheet_only:
         return 0
 
-    chapter = REPO / "chapters" / f"ch{args.lecture.zfill(2)}.qmd"
     if chapter.exists() and "Not yet written" not in chapter.read_text() and not args.force:
         print(f"{chapter.relative_to(REPO)} has already been worked on; "
               "not overwriting (--force to override).")

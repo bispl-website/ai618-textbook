@@ -20,13 +20,20 @@ list of them, and `scripts/promote.py` turns that list into a merge worksheet.
 
 ```bash
 # after a lecture has been graded in the scribe repository
-python scripts/promote.py --lecture 07 --scribe-repo ../ai618-scribe-2026f
+python scripts/promote.py --lecture 09 --scribe-repo ../ai618-scribe-2026f
 ```
 
-That writes `drafts/lec07-merge.md` (ranking, gap union, suspected errors — git
--ignored, it contains per-student detail) and seeds `chapters/ch07.qmd` from the
+That writes `drafts/lec09-merge.md` (ranking, gap union, suspected errors — git
+-ignored, it contains per-student detail) and seeds `chapters/ch10.qmd` from the
 top note with a TODO at every gap. Both are starting points; a human does the
 merge.
+
+**Chapter N is not lecture N.** It was, up to lecture 08. On 2026-10-25 the
+material lectures 07 and 08 shared was split out into a chapter 8 of its own,
+*Why Diffusion Models*, so every lecture from 09 on is one chapter higher than
+its number — lecture 09 is chapter 10, as above. [`lecture-chapters.yml`](lecture-chapters.yml)
+is the mapping, and `promote.py` reads it rather than doing the arithmetic;
+`overlap.py --before` takes a chapter number, so look the number up there too.
 
 A course doubles back on itself, so a new chapter often re-explains what an
 earlier one already covered. `scripts/overlap.py` says where to look before
@@ -91,7 +98,9 @@ ln -sf ../../scripts/hooks/pre-push .git/hooks/pre-push
 ```
 _quarto.yml              book definition, both output formats
 index.qmd                preface
-chapters/chNN.qmd        one per lecture; stubs until promoted
+chapters/chNN.qmd        one per lecture; stubs until promoted. NN is not the
+                         lecture number from lecture 09 on
+lecture-chapters.yml     which chapter each lecture belongs to
 references.bib           shared bibliography — cite into it, not inline
 figures/                 figures used across chapters; PDF or PNG, no SVG
 drafts/                  merge worksheets (git-ignored)

@@ -42,6 +42,12 @@ jobs:
           find _book -name '*.pdf' | grep -q . || { echo "::error::no PDF in _book"; exit 1; }
           echo "html pages: $(find _book -name '*.html' | wc -l)"
           du -sh _book
+      # The build is green whether or not a grade is in the output, which is
+      # how two student scores reached the open web inside provenance
+      # comments. This runs on what will actually be served, and it sits
+      # before the upload: a leak fails the build, so `deploy` never starts.
+      - name: no grading detail in the published output
+        run: python3 scripts/check_publishable.py --both
       - uses: actions/upload-pages-artifact@v5
         with:
           path: _book

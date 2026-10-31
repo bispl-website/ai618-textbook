@@ -56,6 +56,36 @@ non-ASCII characters render fine in HTML and break the PDF, which is why the
 scribe repository rejects all three at submission time. If you write a chapter
 by hand, the same three rules apply.
 
+### Before you push: no grades in the output
+
+The book is public and the grades are not. Each chapter's provenance comment
+is written during the merge, with the grade records open on the same screen,
+and an HTML comment is served verbatim to every reader --- twice a student's
+score has reached the open web that way.
+
+```bash
+python scripts/check_publishable.py --both     # built output and sources
+```
+
+It fails on grading detail attached to a person or a submission: a number out
+of a rubric total, a field name from a grade record, a judgement credited to
+whoever did the grading, a path into the private grades repository. (Those
+words are themselves patterns it looks for, which is why this paragraph is
+written around them.) It only *reports*
+the shapes that are usually innocent --- an integer out of 100, a fraction
+that happens to match a criterion's total, an HTML comment that mentions
+grading --- because the book discusses the rubric on purpose, and a check that
+cries wolf gets switched off. If something really has to ship, put
+`publishable-ok` on the line; those are listed separately rather than hidden.
+
+The same check runs in Actions *before* the Pages upload, so a leak fails the
+build and nothing is deployed. Install the hook to find out before the push
+instead:
+
+```bash
+ln -sf ../../scripts/hooks/pre-push .git/hooks/pre-push
+```
+
 ## Layout
 
 ```

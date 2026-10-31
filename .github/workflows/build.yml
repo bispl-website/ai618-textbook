@@ -47,7 +47,12 @@ jobs:
       # comments. This runs on what will actually be served, and it sits
       # before the upload: a leak fails the build, so `deploy` never starts.
       - name: no grading detail in the published output
-        run: python3 scripts/check_publishable.py --both
+        run: |
+          # The PDF is published beside the HTML, and the runner has no PDF
+          # text extractor of its own -- without poppler the check reports the
+          # PDF as unread and passes, which is the gap it exists to close.
+          sudo apt-get update -qq && sudo apt-get install -qq -y poppler-utils
+          python3 scripts/check_publishable.py --both
       - uses: actions/upload-pages-artifact@v5
         with:
           path: _book

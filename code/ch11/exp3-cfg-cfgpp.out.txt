@@ -1,0 +1,13 @@
+setting      overshoot  std    path  max-jump  inv-error
+w=1             0.011    0.324    0.406    0.029    0.060
+CFG w=3         0.442    0.225    4.635    0.399    0.053
+CFG w=7.5       0.909    0.192   14.067    1.315    0.068
+CFG w=12.5      1.248    0.181   24.364    2.423    0.084
+CFG++ l=0.3     0.383    0.220    2.022    0.159    0.050
+CFG++ l=0.6     0.685    0.192    1.577    0.095    0.053
+CFG++ l=1       0.954    0.178    0.981    0.071    0.062
+largest standard error over seeds: 0.003
+inversion error, CFG++ minus CFG interpolated at equal overshoot:
+  CFG++ l=0.3: -0.0027 +- 0.0000
+  CFG++ l=0.6: -0.0053 +- 0.0000
+  CFG++ l=1: -0.0079 +- 0.0000

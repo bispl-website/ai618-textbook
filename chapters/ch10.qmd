@@ -22,6 +22,17 @@ correction (slide 111), the constant in the Jensen bound, and the DDIM
 contraction rate's coordinate system. Each disagreement is stated in the text
 where it arises rather than silently resolved.
 
+On 2026-10-31 the instructor asked that lecture 10's opening recap, slides
+114-116, be folded into this chapter rather than developed again in chapter
+11, since it recapitulates this lecture and chapter 11 begins at slide 117.
+Two things came in that way, both from the lecture 10 notes: @prp-jensen-sharp,
+which proves the constant the note above could only flag as wrong, with the
+caveat that neither bound controls the score difference the sampler actually
+makes (Junyeong Ahn's note); and @fig-dps-step, the recap's own drawing of the
+step, which separates the three moves and shows the Jacobian removing the
+normal part of the gradient (the same note). Chapter 11's @sec-acc-recall
+states what it assumes from here and cites it rather than repeating it.
+
 Slide numbers in the 99-110 range are deliberately absent from this chapter.
 Two scribes independently numbered that stretch one higher than the deck file
 now on disk, and until that is settled a slide number there would be a claim
@@ -592,6 +603,30 @@ The structure of the bound is the message: **the error is proportional to $m_1$,
 
 *A note on the constant.* For a one-dimensional Gaussian density $\phi$ with variance $\sigma^2$, $\phi'(u) = -\frac{u-\mu}{\sigma^2}\phi(u)$ has maximal magnitude at $|u - \mu| = \sigma$. Its maximum is $\frac{e^{-1/2}}{\sqrt{2\pi}\,\sigma^2}$. The constant $\frac{e^{-1/2\sigma^2}}{\sqrt{2\pi\sigma^2}}$ in @eq-jensen-bound, which comes from Lemma 2 of @chung2023dps, agrees with this only at $\sigma = 1$. The qualitative content is unaffected: a bounded Lipschitz constant times $\|\nabla\mathcal{A}\|\, m_1$, decaying as $\sigma \to \infty$. Do not use @eq-jensen-bound as a sharp numerical bound.
 
+The constant can be settled rather than flagged, and a scribe note of the following lecture does so by bounding the Lipschitz constant of the whole likelihood in one step instead of coordinatewise.
+
+::: {#prp-jensen-sharp}
+## The Jensen gap with a proved constant
+Let $\mathbf{y} = \mathcal{A}(\mathbf{x}_0) + \mathbf{n} \in \mathbb{R}^{d_y}$ with $\mathbf{n} \sim \mathcal{N}(\mathbf{0}, \sigma^2\boldsymbol{I})$ and $\|\nabla\mathcal{A}\| \le L$, and let $m_1$ be as in @thm-jensen. Then
+$$
+\mathcal{J} = \bigl|\,p(\mathbf{y} \mid \mathbf{x}_t) - p(\mathbf{y} \mid \hat{\mathbf{x}}_0)\,\bigr| \;\le\; L\,\frac{e^{-1/2}}{(2\pi\sigma^2)^{d_y/2}\,\sigma}\;m_1 .
+$$ {#eq-jensen-sharp}
+:::
+
+::: {.proof}
+Write $f(\mathbf{x}_0) = p(\mathbf{y} \mid \mathbf{x}_0) = (2\pi\sigma^2)^{-d_y/2}\exp(-r^2/2\sigma^2)$ with $r = \|\mathbf{y} - \mathcal{A}(\mathbf{x}_0)\|$. Then $\nabla f = f\,\nabla\mathcal{A}^{\top}(\mathbf{y} - \mathcal{A}(\mathbf{x}_0))/\sigma^2$, so
+
+$$
+\|\nabla f\| \le L\,(2\pi\sigma^2)^{-d_y/2}\,\frac{r}{\sigma^2}\,e^{-r^2/2\sigma^2} .
+$$
+
+The scalar function $r \mapsto re^{-r^2/2\sigma^2}$ is largest at $r = \sigma$, where it equals $\sigma e^{-1/2}$, so $f$ is Lipschitz with constant $C = L(2\pi\sigma^2)^{-d_y/2}e^{-1/2}/\sigma$. Hence $|\mathbb{E}f(\mathbf{x}_0) - f(\hat{\mathbf{x}}_0)| \le \mathbb{E}|f(\mathbf{x}_0) - f(\hat{\mathbf{x}}_0)| \le C\,\mathbb{E}\|\mathbf{x}_0 - \hat{\mathbf{x}}_0\| = C\,m_1$.
+:::
+
+The maximising displacement is one standard deviation whatever $\sigma$ is, so the factor $e^{-1/2}$ carries no $\sigma$ in it; the $\sigma$-dependence sits entirely in the prefactor, where it belongs. @eq-jensen-sharp has the same structure as @eq-jensen-bound and the same message -- the error is proportional to the posterior spread $m_1$ -- with a constant that does not need the apology above.
+
+Two cautions remain, and they apply to both bounds. The bound is *absolute*: the likelihood itself shrinks with $\sigma$, so the limit $\sigma \to \infty$ says little about the relative error, and nothing is controlled for a precise measurement at a high noise level, where $m_1$ is large. And both bounds control the gap between two *densities*, whereas the sampler substitutes $\nabla_{\mathbf{x}_t}\log p(\mathbf{y} \mid \hat{\mathbf{x}}_0)$ for $\nabla_{\mathbf{x}_t}\log p(\mathbf{y} \mid \mathbf{x}_t)$. A bound on $|f - g|$ gives no bound on $\|\nabla\log f - \nabla\log g\|$, so neither @thm-jensen nor @prp-jensen-sharp controls the quantity the algorithm actually uses. What they establish is that the substituted density is close, which is the reason the method is plausible, not a proof that the step it induces is close.
+
 ### The DPS update for Gaussian and Poisson noise
 
 Replacing the intractable term in the posterior score by the approximation @eq-dps-approx gives [@chung2023dps, eqs. (21)--(22)]:
@@ -802,6 +837,10 @@ This lies in the range of $\mathcal{P}_{\mathcal{M}}$, which is $\mathcal{M}$. F
 :::
 
 @chung2022mcg [Sec. 4] draw the consequence in @fig-mcg (b). A measurement-fidelity step that ignores the data manifold, such as the projection (POCS) step of the earlier solvers (green arrow), moves the sample towards the measurement set in the full ambient space. It therefore has a component normal to the manifold, which pushes the sample off its shell $\mathcal{M}_i$ and can lead to an inaccurate reconstruction. The manifold-constrained gradient (red arrow) is tangent to the manifold, so it moves the sample *along* the data manifold, towards images that agree better with the measurement.
+
+@fig-dps-step draws the same step in the form the following lecture used to open with, which separates the three moves and shows what the Jacobian does to the raw gradient.
+
+![One step of the geometry above, redrawn. (1) The network jumps from $\mathbf{x}_t$ on the noisy shell to the clean manifold. (2) The raw gradient of the data loss has a normal part that would leave $\mathcal{M}$; the Jacobian of the denoiser removes it (inset: the raw gradient splits into a tangential part $g_T$, which is kept, and a normal part $g_N$, which is removed), leaving a step along $\mathcal{M}$ towards the measurement set. (3) Renoising returns to the shell $\mathcal{M}_{t-1}$. Drawn for a scribe note of lecture 10, where this picture is the opening recap.](figures/lec10/justin4ai-fig1-dps-step.png){#fig-dps-step width=90%}
 
 #### The geometry of DPS {#sec-dps-geometry}
 

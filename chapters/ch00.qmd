@@ -23,7 +23,7 @@ Here, a *metric* is a function that defines a concept of distance between any tw
 which is formally defined as follows.
 
 ::: {#def-metric}
-
+## Metric
 A metric on a set $\mathcal{X}$ is a function called the distance
 $d : \mathcal{X}\times \mathcal{X}\mapsto {\mathbb R}_+$, where ${\mathbb R}_+$ is the set of non-negative real numbers.
 For all $x, y, z \in \mathcal{X}$, this function is required to satisfy the following conditions:
@@ -42,7 +42,7 @@ Before going further it is worth seeing that the axioms are satisfied by more
 than the familiar distance, and that they do exclude things.
 
 ::: {#exm-metrics}
-
+## Metric spaces
 The following are metric spaces.
 
 1.  The Euclidean metric $d({\boldsymbol{x}},{\boldsymbol{y}})=\|{\boldsymbol{x}}-{\boldsymbol{y}}\|_2$ on ${\mathbb R}^n$.
@@ -77,7 +77,7 @@ $$
 Using this, we have the formal definition of openness and closedness of a set.
 
 ::: {#def-c64c}
-
+## Open and closed sets
 A subset $U\subset \mathcal{X}$ is called open if for every $x \in U$ there exists an $r > 0$ such that $B_r(x)$ is contained in $U$. The complement of an open set is called closed.
 
 :::
@@ -94,7 +94,7 @@ $$
 We are now ready to define the important concepts in metric spaces.
 
 ::: {#def-7300}
-
+## Complete metric space
 A metric space $\mathcal{X}$ is said to be complete if every Cauchy sequence converges to a limit; or if $d(x_n, x_m) \rightarrow 0$ as both $n$ and $m$ independently go to infinity, then there is some $y\in \mathcal{X}$ with $d(x_n, y) \rightarrow 0$.
 
 :::
@@ -111,7 +111,7 @@ We turn now to maps between metric spaces. Continuity is defined first in the
 general form, and the Lipschitz condition afterwards as a stronger requirement.
 
 ::: {#def-continuity}
-
+## Continuity and uniform continuity
 Let $(\mathcal{X},d_{\mathcal{X}})$ and $(\mathcal{Y},d_{\mathcal{Y}})$ be metric spaces. A function
 $f:\mathcal{X}\mapsto \mathcal{Y}$ is *continuous at* $x_0\in \mathcal{X}$ if for every
 $\varepsilon>0$ there exists $\delta>0$ such that
@@ -136,7 +136,7 @@ every sequence $x_n\to x_0$, which is the one used to pass a limit through a
 function.
 
 ::: {#def-edfc}
-
+## Lipschitz continuity
 Given two metric spaces $(\mathcal{X}, d_{\mathcal{X}})$ and $(\mathcal{Y}, d_{\mathcal{Y}})$, where $d_{\mathcal{X}}$ denotes the metric on the set $\mathcal{X}$ and $d_{\mathcal{Y}}$ is the metric on set $\mathcal{Y}$, a function $f:\mathcal{X}\mapsto \mathcal{Y}$ is called Lipschitz continuous if there exists a real constant $K\geq 0$ such that, for all $x_1,x_2\in \mathcal{X}$,
 
 $$
@@ -215,7 +215,7 @@ $$
 In addition, we formally define the inner product and the norm in a vector space as follows.
 
 ::: {#def-df13}
-
+## Inner product
 Let $\mathcal{V}$ be a vector space over ${\mathbb R}$. A function $\langle\cdot,\cdot\rangle_{\mathcal{V}}:\mathcal{V}\times\mathcal{V}\mapsto {\mathbb R}$ is an
 inner product on $\mathcal{V}$ if:
 
@@ -251,7 +251,7 @@ $$
 $$
 
 ::: {#def-1a0b}
-
+## Norm
 A norm $\|\cdot\|$ is a real-valued function defined on the vector space that has the following properties:
 
 1.  $\|{\boldsymbol{x}}\|\geq 0$, and $\|{\boldsymbol{x}}\|=0$ if and only if ${\boldsymbol{x}}=\mathbf{0}$.
@@ -372,7 +372,7 @@ norm as $\|{\boldsymbol{f}}\|=\sqrt{\langle {\boldsymbol{f}},{\boldsymbol{f}}\ra
 Among the various forms of the normed space, one of the most useful normed spaces is the *Banach space*.
 
 ::: {#def-0d02}
-
+## Banach space
 The Banach space is a complete normed space.
 
 :::
@@ -385,7 +385,7 @@ a vector space equipped with desirable properties of a metric space.
 Similarly, we can define the *Hilbert space*.
 
 ::: {#def-655b}
-
+## Hilbert space
 The Hilbert space is a complete inner product space.
 
 :::
@@ -443,7 +443,7 @@ a given point --- in $L^2({\mathbb R})$ the value $f(x)$ at a single $x$ is not
 even defined, since changing $f$ on a set of measure zero changes nothing.
 
 ::: {#def-rkhs}
-
+## Reproducing kernel Hilbert space
 A Hilbert space $\mathcal{H}$ of functions $f:\mathcal{X}\mapsto {\mathbb R}$
 is a *reproducing kernel Hilbert space* if for every $x\in\mathcal{X}$ the
 evaluation functional $\delta_x: f\mapsto f(x)$ is bounded, that is if there is
@@ -649,14 +649,14 @@ $$
 $$
 
 ::: {#def-5acb}
-
+## Range space
 The range space of a matrix ${\boldsymbol{A}}\in  {\mathbb R}^{m\times n}$, denoted by $\mathcal{R}({\boldsymbol{A}})$, is defined by
 $\mathcal{R}({\boldsymbol{A}}) :=\{ {\boldsymbol{A}}{\boldsymbol{x}}~|~\forall {\boldsymbol{x}}\in {\mathbb R}^n\}.$
 
 :::
 
 ::: {#def-4f0d}
-
+## Null space
 The null space of a matrix ${\boldsymbol{A}}\in  {\mathbb R}^{m\times n}$, denoted by $\mathcal{N}({\boldsymbol{A}})$, is defined by
 $\mathcal{N}({\boldsymbol{A}}) :=\{ {\boldsymbol{x}}\in {\mathbb R}^n ~|~ {\boldsymbol{A}}{\boldsymbol{x}}=\mathbf{0}\}.$
 
@@ -723,7 +723,7 @@ $$
 The eigen-decomposition of a square matrix is defined as follows.
 
 ::: {#def-1dc5}
-
+## Eigenvector and eigenvalue
 A (nonzero) vector ${\boldsymbol{v}}\in {\mathbb C}^n$ is an eigenvector of a square matrix ${\boldsymbol{A}}\in {\mathbb C}^{n\times n}$ if it satisfies the linear equation
 
 $$
@@ -776,7 +776,7 @@ are written in exactly that form.
 We now define the singular value decomposition (SVD) of ${\boldsymbol{A}}$.
 
 ::: {#thm-ac06}
-
+## Singular value decomposition
 If ${\boldsymbol{A}}\in {\mathbb C}^{m\times n}$ is a rank $r$ matrix, then there exist matrices ${\boldsymbol{U}}\in {\mathbb C}^{m\times r}$ and ${\boldsymbol{V}}\in {\mathbb C}^{n\times r}$ such that
 ${\boldsymbol{U}}^H{\boldsymbol{U}}={\boldsymbol{V}}^H{\boldsymbol{V}}={\boldsymbol{I}}_r$ and ${\boldsymbol{A}}={\boldsymbol{U}}{\boldsymbol {\Sigma}}{\boldsymbol{V}}^H$, where $^H$ denotes the conjugate transpose, ${\boldsymbol{I}}_r$ is the $r\times r$ identity matrix and
 ${\boldsymbol {\Sigma}}$ is an $r\times r$ diagonal matrix whose diagonal entries, called *singular values*, satisfy
@@ -871,7 +871,7 @@ where $\sigma_{\mathrm{max}}(\cdot)$ and $\lambda_{\mathrm{max}}(\cdot)$ denote 
 The following matrix inversion lemma is quite useful.
 
 ::: {#lem-inversion}
-
+## Matrix inversion
 $$
 \begin{aligned}
  \left({\boldsymbol{I}}+{\boldsymbol{U}}{\boldsymbol{C}}{\boldsymbol{V}}\right)^{-1} &={\boldsymbol{I}}-{\boldsymbol{U}}\left({\boldsymbol{C}}^{-1}+{\boldsymbol{V}}{\boldsymbol{U}}\right)^{-1}{\boldsymbol{V}},   \\
@@ -887,7 +887,7 @@ In mathematics, the Kronecker product, sometimes denoted by $\otimes$, is an ope
 The formal definition is given as follows.
 
 ::: {#def-0aa8}
-
+## Kronecker product
 If ${\boldsymbol{A}}$ is an $m \times n$ matrix and ${\boldsymbol{B}}$ is a $p \times q$ matrix, then the Kronecker product ${\boldsymbol{A}}\otimes {\boldsymbol{B}}$ is the
 $pm \times qn$ block matrix:
 
@@ -904,7 +904,7 @@ many matrix-related operations. Some of the basic properties are provided in the
 The proofs of the lemmas are straightforward, which can easily be found from a standard linear algebra textbook.
 
 ::: {#lem-kron}
-
+## Basic properties of the Kronecker product
 $$
 \begin{aligned}
 {\boldsymbol{A}}\otimes ({\boldsymbol{B}}+{\boldsymbol{C}}) &= {\boldsymbol{A}}\otimes {\boldsymbol{B}}+{\boldsymbol{A}}\otimes {\boldsymbol{C}}. \\
@@ -919,7 +919,7 @@ $$ {#eq-transp}
 :::
 
 ::: {#lem-c719}
-
+## Kronecker product of matrix products
 If ${\boldsymbol{A}},{\boldsymbol{B}},{\boldsymbol{C}}$ and ${\boldsymbol{D}}$ are matrices of such a size that one can form the matrix products
 ${\boldsymbol{A}}{\boldsymbol{C}}$ and ${\boldsymbol{B}}{\boldsymbol{D}}$, then
 
@@ -935,7 +935,7 @@ One of the important usages of the Kronecker product comes from the vectorizatio
 For this we first define the following two operations.
 
 ::: {#def-aca6}
-
+## Vectorization
 If ${\boldsymbol{A}}=\begin{bmatrix}{\boldsymbol{a}}_1 & \cdots & {\boldsymbol{a}}_n\end{bmatrix}\in {\mathbb R}^{m\times n}$, then
 
 $$
@@ -951,7 +951,7 @@ From these definitions, we can obtain the following two lemmas which will be ext
 used here.
 
 ::: {#lem-Vec}
-
+## Vectorization of a matrix product
 For the matrices ${\boldsymbol{A}},{\boldsymbol{B}},{\boldsymbol{C}}$ with appropriate sizes, we have
 
 $$
@@ -965,7 +965,7 @@ where $\mathrm{Vec}(\cdot)$ is the column-wise vectorization operation.
 :::
 
 ::: {#lem-xy}
-
+## Vectorization of an outer product
 For the vectors ${\boldsymbol{x}}\in{\mathbb R}^m, {\boldsymbol{y}}\in {\mathbb R}^n$, we have
 
 $$
@@ -1070,7 +1070,7 @@ $$ {#eq-At}
 Finally, the following result is useful.
 
 :::: {#lem-7139}
-
+## Derivative with respect to a matrix
 Let ${\boldsymbol{A}}\in {\mathbb R}^{m\times n}$ and ${\boldsymbol{x}}\in {\mathbb R}^n$. Then, we have
 
 $$
@@ -1100,6 +1100,7 @@ where we use @eq-ax and @eq-transp for the second and the third equalities, resp
 ::::
 
 ::: {#lem-deriv}
+## Derivatives of linear and quadratic forms
 Let ${\boldsymbol{x}},{\boldsymbol{a}}$ and ${\boldsymbol{B}}$ denote vectors and a matrix with appropriate sizes, respectively.
 Then, we have
 
@@ -1287,7 +1288,7 @@ $$
 If a function is differentiable, the convexity of a function can easily be checked using the first- and second-order differentiability, as stated in the following:
 
 ::: {#thm-convexity}
-
+## First-order conditions for convexity
 Let $f:\mathcal{H}\mapsto  (-\infty, \infty]$ be proper. Suppose that $\mathrm{dom}f$ is open and convex, and $f$ is Gateaux differentiable on $\mathrm{dom}f$. Then, the following are equivalent:
 
 1.  $f$ is convex.
@@ -1303,7 +1304,7 @@ is a second characterisation, and it is usually the one that settles a concrete
 case.
 
 ::: {#thm-secondorder}
-
+## Second-order condition for convexity
 Let $f$ be twice differentiable with $\mathrm{dom}f$ open and convex. Then $f$
 is convex if and only if its Hessian is positive semidefinite everywhere,
 
@@ -1353,7 +1354,7 @@ Another important role of the subdifferentials comes from
 *Fermat's rule* that characterizes the global minimizers (@fig-fermat):
 
 ::: {#thm-fermat}
-
+## Fermat's rule
 Let $f: \mathcal{H}\mapsto (-\infty,\infty]$ be proper. Then,
 
 $$
@@ -1471,7 +1472,6 @@ $$
 The gap between the primal and dual problem is called the *duality gap*.
 
 :::: {#exm-190b}
-
 ## Dual for Composite Function
 For the given primal problem:
 
@@ -1531,7 +1531,6 @@ $$
 ::::
 
 ::: {#exm-7aa5}
-
 ## Quadratic Programming under Affine Constraint
 Consider the following optimization problem:
 
@@ -1578,7 +1577,7 @@ $\hat {\boldsymbol{x}}={\boldsymbol{A}}^\top\hat {\boldsymbol{u}}$.
 We formally define a Lagrangian dual problem.
 
 ::: {#def-dual}
-
+## Lagrangian dual problem
 Suppose that a primal problem is given by
 
 $$

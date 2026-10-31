@@ -1,0 +1,28 @@
+#!/bin/sh
+# Stop a push that would publish grading detail.
+#
+# The grade is in the editor's hands exactly when the provenance comment gets
+# written, and an HTML comment is served to every reader. Two scores have
+# reached the open web that way. Actions runs the same check and the deploy
+# step cannot run without it, so this hook only buys the minutes between the
+# push and the publish -- but those are the minutes in which the mistake is
+# still private.
+#
+# Install:
+#     ln -sf ../../scripts/hooks/pre-push .git/hooks/pre-push
+#
+# To push anyway: git push --no-verify. Say why in the commit message.
+
+root=$(git rev-parse --show-toplevel) || exit 0
+py=$(command -v python3 || command -v python) || {
+    echo "pre-push: no python found; skipping the publishability check" >&2
+    exit 0
+}
+
+if [ -f "$root/_book/index.html" ]; then
+    "$py" "$root/scripts/check_publishable.py" --both --quiet
+else
+    echo "pre-push: _book/ is not built, so only the sources are checked."
+    echo "          Render before pushing -- the served page is what matters."
+    "$py" "$root/scripts/check_publishable.py" --sources --quiet
+fi

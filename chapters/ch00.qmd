@@ -8,6 +8,9 @@ it. The coverage gaps the grading passes reported against the first draft have
 been filled and the errors they found corrected; what is still outstanding is
 reconciling notation with the lecture chapters, which cannot be done until
 those exist.
+
+publishable-ok: the sentence above mentions grading, but this chapter is the
+instructor's own -- no student is named and no score appears.
 -->
 
 In this chapter, we briefly review the basic mathematical concepts that are required to understand

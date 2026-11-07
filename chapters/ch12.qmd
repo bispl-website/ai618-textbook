@@ -2,16 +2,998 @@
 title: "Diffusion Model Applications: Image Editing"
 ---
 
-<!-- The title here is provisional: it names the lecture, and the chapter's own
-     title is settled with the instructor when the chapter is written. The
-     syllabus title this replaces, "Acceleration: High-order Solvers and
-     Consistency Models", was wrong -- the instructor confirmed on 2026-11-07
-     that lecture 11 was the first half of
-     Part-4.1-Diffusion-Model-Applications.pptx. The date was wrong with it. -->
 
-::: {.callout-note}
-## Not yet written
-Lecture 11 of AI618, given 2026-10-20. This chapter is merged from
-the scribe notes for that lecture; until those are written and graded it stands
-empty.
+<!--
+Chapter 12 is lecture 11 (2026-10-20), the first half of
+Part-4.1-Diffusion-Model-Applications.pptx, slides 2-30. Chapter number and
+lecture number have differed since 2026-10-25; lecture-chapters.yml is the map.
+
+The syllabus had lecture 11 as "Acceleration: High-order Solvers and
+Consistency Models" and this chapter's stub carried that title. It was wrong.
+The instructor confirmed on 2026-11-07 that the lecture was the applications
+deck, and the topic list was rebuilt from the slides before the notes were
+read rather than after. The acceleration material is Part-4 slides 132-147
+and the Schrodinger bridges are 148-156; the instructor will lecture both
+later and give the dates then, so neither has a chapter yet.
+
+Built on the scribe note of PhuTran1005 (instructor's choice, 2026-11-07),
+with material from jaehyuk20. Lecture 11 was assigned three scribes; the third
+dropped the course.
+
+What came from jaehyuk20, all of it a record of what was said in the room
+rather than mathematics:
+
+  * the GLIGEN localisation correction in @sec-gligen. The lecture said the
+    localisation comes from a loss focused on the boxes; @eq-gligen-training is
+    the ordinary denoising loss over the whole latent, and the boxes act only
+    through the grounding token. Both notes reported the discrepancy; only
+    jaehyuk20 resolved it.
+  * the DreamBooth identifier correction in @sec-dreambooth. The lecture
+    described the method as Textual Inversion followed by fine-tuning; there is
+    no inversion stage and [V] never moves.
+  * the lecture's own explanation of why guided inversion fails, recorded in
+    @sec-nulltext beside the quantitative one, because it is not wrong, only
+    weaker than it sounds.
+  * the four ways to condition a diffusion model, in @sec-ip2p.
+  * Asyrp's domain limit -- pixel-space face model, no guidance -- which is
+    what the rest of the chapter is a reaction to.
+  * @tbl-edit-methods, and the lecture remarks on ControlNet's additive form
+    and best-paper award, on how much of MasaCtrl is recombination, and on
+    inversion under DiT and flow models.
+
+One point where the two notes gave different numbers, settled here so that it
+is not reopened: Plug-and-Play's injection schedule in @sec-edit-pnp is 40 of
+50 steps for features and 25 for self-attention. The thresholds are 0.8 and 0.5
+of the trajectory, so the feature injection is the one that runs longer. A
+schedule in which features stop first would contradict the section's own
+argument, that features supply the correspondence between parts and attention
+propagates it to finer scales.
+
+Both notes derive the Asyrp cancellation independently and agree. The base
+note's version is kept, as @thm-asyrp on the training grid and @prp-asyrp-grid
+on any DDIM grid, because it is the general one and because @prp-asyrp-grid is
+what the rescaled coordinates of @sec-edit-ddim were set up for. jaehyuk20's
+table of surviving fractions says the same thing numerically and was not
+duplicated; every number in both was recomputed from scratch while this
+chapter was prepared, and both are exact.
+
+Nine crossref labels clashed with earlier chapters and carry an `edit-` infix
+here: eq-attention, sec-cfg, sec-ddim, sec-duality, sec-notation, sec-overview,
+sec-pnp, sec-synthesis, tbl-toy. Do not rename them back. @sec-pnp in chapter
+11 is the plug-and-play *prior*, a different thing from this chapter's
+Plug-and-Play paper; the warning under @sec-edit-pnp exists because of it.
+
+The base note's own "Source notes" section, which listed its additions in the
+first person, was folded into this comment. For the record, what the note added
+beyond the lecture: the background derivations, @prp-asyrp-grid and
+@fig-asyrp-coeff, @prp-nt-fixed and @eq-nt-grad, @prp-ip2p-cfg and
+@fig-twoway-cfg, @prp-gate and @prp-zeroconv, the stop-gradient analysis of
+DragDiffusion, @eq-db-equiv and the rehearsal reading of prior preservation,
+the tables, the synthesis, and all three experiments.
+-->
+
+
+
+
+
+## Overview {#sec-edit-overview}
+
+This section provides an overview and background knowledge before diving into Diffusion Application section. DDPM [@ho2020], the deterministic DDIM sampler, score-based SDEs and their probability-flow ODEs, classifier-free guidance and latent diffusion. Part 4.1 of the slides [@lecture-slides-applications] turns to what these models are used for, and its first block, slides 2--30, is about **image editing and controllable generation with a pretrained text-to-image diffusion model**. All eleven papers on the slides answer the same question: *given a model that can generate almost any image from text, how do we make it change a given image, obey a spatial constraint, or render one particular subject, without training a new generative model?*
+
+The answers differ mainly in **where they intervene**. Some act only on the sampling process of a frozen network: on a hidden feature map (Asyrp), on the unconditional embedding of classifier-free guidance (Null-text inversion), on cross-attention maps (Prompt-to-Prompt), on self-attention (Plug-and-Play, MasaCtrl) or on one intermediate latent (DragDiffusion). Others add a trainable module to a frozen model (GLIGEN, ControlNet), fine-tune the model on synthetic pairs (InstructPix2Pix), or personalise it with a new word embedding (Textual Inversion) or full fine-tuning (DreamBooth). The chapter follows the slides in their order; for each method it gives the mechanism in the slides' notation, the derivations the slides skip, and what the method reveals about diffusion models. The final synthesis (@sec-edit-synthesis) collects the common threads.
+
+Two experiments were made for this note: a two-dimensional reproduction of Null-text inversion in which every quantity is known in closed form (@sec-toy), and Stable Diffusion experiments on cross-attention maps and on Prompt-to-Prompt, Plug-and-Play and MasaCtrl with the same seed (@fig-xattn, @fig-duality). Their code is in @sec-repro.
+
+## Notation and conventions {#sec-edit-notation}
+
+The chapter keeps the slides' symbols wherever they appear and fixes the remaining ones as follows.
+
+| Symbol | Meaning |
+|---|---|
+| $x_0$, $z_0 = \mathcal{E}(x)$ | a clean image, and its latent under the autoencoder $(\mathcal{E}, \mathcal{D})$ of latent diffusion |
+| $x_t$, $z_t$ | noisy image or latent at step $t$ ($z_t \in \mathbb{R}^{4 \times 64 \times 64}$ for $512^2$ images) |
+| $\alpha_t$ | **cumulative** signal level, $\alpha_t = \prod_{s \le t}(1-\beta_s)$, so $x_t = \sqrt{\alpha_t}\,x_0 + \sqrt{1-\alpha_t}\,\epsilon$ (the DDIM convention of the Asyrp slides; the DDPM chapter wrote $\bar\alpha_t$) |
+| $\bar\sigma_t$, $\bar x_t$ | $\bar\sigma_t = \sqrt{(1-\alpha_t)/\alpha_t}$ and $\bar x_t = x_t/\sqrt{\alpha_t}$ (in the Null-text section, $\bar z_t$ follows that paper and is a latent of the optimised trajectory) |
+| $\sigma_t$, $\eta$ | noise level of a DDIM step, $\sigma_t = \eta\sqrt{(1-\alpha_{t-1})/(1-\alpha_t)}\sqrt{1-\alpha_t/\alpha_{t-1}}$; $\eta = 0$ is deterministic DDIM |
+| $\epsilon_\theta(x_t, t, c)$ | noise-prediction U-Net with condition $c$ (Asyrp writes $\epsilon^\theta_t$, InstructPix2Pix $e_\theta$) |
+| $\mathbf{P}_t$, $\mathbf{D}_t$ | predicted $x_0$ and "direction pointing to $x_t$" of a DDIM step (@eq-ddim-pd) |
+| $\mathcal{C} = \psi(\mathcal{P})$, $\varnothing$ | text embedding of a prompt $\mathcal{P}$ ($77 \times 768$ in Stable Diffusion v1), and of the empty prompt |
+| $w$ | guidance scale, $\tilde\epsilon = w\,\epsilon(\mathcal{C}) + (1-w)\,\epsilon(\varnothing)$; $w = 1$ means *conditional only* |
+| $Q, K, V$, $M$ | queries, keys, values and attention map $M = \mathrm{softmax}(QK^\top/\sqrt{d})$ |
+| $\mathrm{sg}(\cdot)$, $\odot$ | stop-gradient, element-wise product |
+
+Three conventions need care. The DragDiffusion and the DreamBooth paper write a noised sample as $\alpha_t z + \sigma_t \epsilon$, with *amplitudes* $\alpha_t, \sigma_t$, which in the cumulative notation are $\sqrt{\alpha_t}$ and $\sqrt{1-\alpha_t}$. A few letters are reused locally as in the papers: $T$ is the number of steps of whatever grid an algorithm runs on, $M$ is a binary mask in MasaCtrl and DragDiffusion, and $w$ also denotes words in Prompt-to-Prompt's local blending and a loss weight in DreamBooth. Finally, Stable Diffusion is trained with 1000 timesteps and sampled with 50 DDIM steps ($t \in \{981, 961, \ldots, 1\}$), so "the first 40 % of the steps" means the first, noisiest 20 sampling steps.
+
+## Background {#sec-background}
+
+Nothing in this section is new to the book. DDIM is @sec-ddim of chapter 6, the
+probability-flow ODE is in chapter 7, and classifier-free guidance is derived
+in full in @sec-cfg of chapter 11, together with the sharpened distribution it
+samples and the three costs of a large scale. It is restated here for one
+reason: everything this chapter does to a pretrained model is done *through*
+these objects, and two of them have to be written in a particular form before
+they can carry the weight. The DDIM step is put into rescaled coordinates, in
+which it is a plain Euler step, and that form is used four times later --- for
+Asyrp's cancellation, for the inversion error, for why guidance makes inversion
+worse, and for why DragDiffusion inverts with guidance switched off. A reader
+who knows those chapters can read @eq-ddim-euler and @eq-cfg and skip the rest.
+
+### The text-to-image U-Net and its attention layers {#sec-unet}
+
+Stable Diffusion [@rombach2022ldm] encodes a $512 \times 512$ image to a $64 \times 64 \times 4$ latent and denoises it with a U-Net: an encoder ($64 \to 32 \to 16 \to 8$), a middle block and a mirrored decoder fed by skip connections. Its 16 transformer blocks (6 in the encoder, 1 in the middle, 9 in the decoder) each follow a ResBlock and contain a self-attention layer over spatial positions, a cross-attention layer over the 77 text tokens, and a feed-forward layer. For a feature map $\phi \in \mathbb{R}^{N \times c}$ with $N = hw$ positions, one head computes
+$$
+Q = \phi\, W_Q, \qquad K = \kappa\, W_K, \qquad V = \kappa\, W_V, \qquad
+M = \mathrm{softmax}\!\left(\frac{Q K^\top}{\sqrt{d}}\right), \qquad \hat\phi = M V,
+$$ {#eq-edit-attention}
+with $\kappa = \phi$ for self-attention and $\kappa = \mathcal{C}$ for cross-attention. Each row of $M$ is a probability vector saying from where (which positions or which words) a position gathers information; $V$ says what is gathered. Prompt-to-Prompt, Plug-and-Play, MasaCtrl and DragDiffusion all exploit this split, and since text enters the network only through cross-attention, the cross-attention maps are a direct handle on the image.
+
+### Deterministic DDIM sampling as an ODE solver {#sec-edit-ddim}
+
+With cumulative $\alpha_t$ the DDIM update [@ddim]
+$$
+x_{t-1} = \sqrt{\alpha_{t-1}}\, \underbrace{\left(\frac{x_t - \sqrt{1-\alpha_t}\, \epsilon_\theta(x_t,t)}{\sqrt{\alpha_t}}\right)}_{\mathbf{P}_t(\epsilon):\ \text{predicted } x_0}
+ + \underbrace{\sqrt{1-\alpha_{t-1}-\sigma_t^2}\; \epsilon_\theta(x_t,t)}_{\mathbf{D}_t(\epsilon):\ \text{direction pointing to } x_t}
+ + \underbrace{\sigma_t z_t}_{\text{random noise}},
+$$ {#eq-ddim-pd}
+with $z_t \sim \mathcal{N}(0, I)$: Tweedie's estimate of the clean image, re-noised along the predicted noise. For $\sigma_t = 0$, dividing by $\sqrt{\alpha_{t-1}}$ gives
+$$
+\bar x_{t-1} = \frac{x_t}{\sqrt{\alpha_t}} - \frac{\sqrt{1-\alpha_t}}{\sqrt{\alpha_t}}\,\epsilon_\theta + \frac{\sqrt{1-\alpha_{t-1}}}{\sqrt{\alpha_{t-1}}}\,\epsilon_\theta
+= \bar x_t + \left(\bar\sigma_{t-1} - \bar\sigma_t\right) \epsilon_\theta(x_t, t),
+$$ {#eq-ddim-euler}
+one explicit Euler step of
+$$
+\frac{d \bar x}{d \bar\sigma} = \epsilon_\theta\big(\sqrt{\alpha}\,\bar x,\ t(\bar\sigma)\big)
+$$ {#eq-ddim-ode}
+from $\bar\sigma_t$ to $\bar\sigma_{t-1}$. When $\epsilon_\theta$ is the exact predictor $\epsilon^\star = -\sqrt{1-\alpha}\,\nabla \log p_t$, @eq-ddim-ode is the probability-flow ODE [@ddim; @sde], so deterministic DDIM maps noise to data along a smooth, invertible trajectory. Note for later that a shift $\Delta\epsilon$ moves $\bar x_{t-1}$ by $(\bar\sigma_{t-1} - \bar\sigma_t)\Delta\epsilon$, proportional to the step size (@sec-asyrp-thm).
+
+### DDIM inversion and where its error comes from {#sec-inversion}
+
+Chapter 11 reached inversion from the other side: @sec-cfgpp-inversion asks
+which *sampler* inverts well, and answers that CFG++ does where CFG does not,
+because an interpolation stays on the manifold where an extrapolation leaves
+it. This chapter takes the sampler as given --- Stable Diffusion with CFG at
+the scale editing needs --- and asks what it costs to invert anyway. The two
+answers are complementary, and @sec-nulltext is the expensive one: a per-image
+optimisation that buys back what a better sampler would have given for free.
+
+Editing a real image requires a starting noise, and usually a whole trajectory, that the sampler maps back to the image. Running @eq-ddim-euler backwards gives DDIM inversion:
+$$
+\begin{aligned}
+\bar x_{t+1} &= \bar x_t + \left(\bar\sigma_{t+1} - \bar\sigma_t\right) \epsilon_\theta(x_t, t),
+\qquad\text{i.e.}\\
+x_{t+1} &= \sqrt{\tfrac{\alpha_{t+1}}{\alpha_t}}\, x_t + \sqrt{\alpha_{t+1}}\left(\sqrt{\tfrac{1}{\alpha_{t+1}}-1} - \sqrt{\tfrac{1}{\alpha_t}-1}\right)\epsilon_\theta(x_t, t),
+\end{aligned}
+$$ {#eq-ddim-inv}
+the second form (multiply by $\sqrt{\alpha_{t+1}}$ and use $\bar\sigma = \sqrt{1/\alpha - 1}$) being the corrected formula of the Null-text paper [@mokady2023nulltext]. Inversion uses the slope at $x_t$ while sampling back from $x_{t+1}$ uses the slope at $x_{t+1}$, so one round trip returns
+$$
+\bar x_t' = \bar x_{t+1} + (\bar\sigma_t - \bar\sigma_{t+1})\,\epsilon_\theta(x_{t+1}, t+1)
+= \bar x_t + (\bar\sigma_{t+1} - \bar\sigma_t)\big[\epsilon_\theta(x_t, t) - \epsilon_\theta(x_{t+1}, t+1)\big].
+$$ {#eq-roundtrip}
+If $\epsilon_\theta$ is bounded and Lipschitz (constant $L$) in $(\bar x, \bar\sigma)$, the bracket is $O(\Delta\bar\sigma_{\max})$, each step contributes $O(\Delta\bar\sigma_{\max}^2)$, and the Euler convergence argument bounds the error after $N$ steps by $O\big(e^{L(\bar\sigma_T - \bar\sigma_0)}\Delta\bar\sigma_{\max}\big)$. Inversion is exact only in the limit of infinitely many steps, and the error grows with how fast the predicted noise changes: near sharp modes (the Jacobian scales like $1/s$ for a mode of width $s$) and, crucially for editing, under guidance.
+
+### Classifier-free guidance and why it amplifies inversion error {#sec-edit-cfg}
+
+With $\epsilon_\theta(x_t, t, \mathcal{C}) \approx -\sqrt{1-\alpha_t}\, \nabla \log p_t(x_t \mid \mathcal{C})$, classifier guidance [@dhariwal2021] samples from $p_t(x_t)\, p_t(\mathcal{C} \mid x_t)^w$. Classifier-free guidance [@ho2022cfg] obtains the classifier gradient by Bayes' rule, $\nabla \log p_t(\mathcal{C} \mid x_t) = \nabla \log p_t(x_t \mid \mathcal{C}) - \nabla \log p_t(x_t)$, with the unconditional score supplied by the same network evaluated on the null text (learned by dropping prompts in training). Multiplying the guided score by $-\sqrt{1-\alpha_t}$ gives
+$$
+\tilde\epsilon_\theta(x_t, t, \mathcal{C}, \varnothing)
+= \epsilon_\theta(x_t, t, \varnothing) + w\big(\epsilon_\theta(x_t, t, \mathcal{C}) - \epsilon_\theta(x_t, t, \varnothing)\big)
+= w\, \epsilon_\theta(x_t, t, \mathcal{C}) + (1-w)\, \epsilon_\theta(x_t, t, \varnothing),
+$$ {#eq-cfg}
+with $w = 7.5$ for Stable Diffusion. Three consequences matter later. First, $w = 1$ is the *conditional* model. Second, the unconditional branch enters with weight $1 - w = -6.5$, a strong lever. Third, guidance worsens inversion: the Jacobian of the guided prediction, $J_\varnothing + w(J_{\mathcal{C}} - J_\varnothing)$, departs from $J_\varnothing$ in proportion to $w$ and the guided steps are larger, so the bracket of @eq-roundtrip grows with $w$; moreover, for $w \notin \{0, 1\}$ the sharpened densities are in general not the noisy marginals of one clean distribution, so the inverted latent need not look Gaussian. The Null-text paper measures both effects: the Gaussian log-likelihood of the inverted latent decreases with $w$, and the reconstruction PSNR falls from about 13.6 dB at $w = 1$ (peaking near 13.9 dB at $w \approx 2$) to about 9.5 dB at $w = 8$. @sec-toy reproduces the effect.
+
+## Asyrp: a semantic latent space inside a frozen diffusion model {#sec-asyrp}
+
+Asyrp, the *asymmetric reverse process* [@kwon2023asyrp], asks whether a frozen diffusion model has a latent space in which a semantic change such as "make the face smile" is a fixed direction that works for any image, as in StyleGAN's $\mathcal{W}$ space.
+
+### Motivation: four ways to steer a diffusion model
+
+Diffusion models invert real images almost perfectly with DDIM (@sec-inversion), but the obvious latent $x_T$ is not semantic: a direction in $x_T$ that makes one face smile does not transfer, and optimising $x_T$ with a CLIP loss distorts the image. @fig-asyrp-approaches contrasts the alternatives: (a) *image guidance* (ILVR, SDEdit) mixes in the latents of a guide image, so it is ambiguous what is transferred; (b) *classifier guidance* needs a classifier trained on noisy images and a gradient at every step; (c) *DiffusionCLIP* [@kim2022diffusionclip] fine-tunes the whole model with a CLIP loss, one model per attribute; (d) *Asyrp* keeps the model frozen and finds a direction $\Delta h$ in a hidden feature space, whose sign and scale control the edit.
+
+![**Four ways to steer a pretrained diffusion model.** Guidance by an image or a classifier transfers ambiguous attributes or leaves the image manifold; DiffusionCLIP fine-tunes the model per attribute; Asyrp edits along a direction $\Delta h$ of a frozen model, with $+\Delta h$, $+\frac12\Delta h$ and $-\Delta h$ giving graded edits. Reproduced from [@kwon2023asyrp, Fig. 1].](figures/lec11/PhuTran1005-asyrp-approaches.png){#fig-asyrp-approaches width=90%}
+
+### The DDIM step split into a prediction and a direction
+
+The DDIM update @eq-ddim-pd can be written as
+$$
+\begin{gathered}
+x_{t-1} = \sqrt{\alpha_{t-1}}\,\mathbf{P}_t\big(\epsilon^\theta_t(x_t)\big) + \mathbf{D}_t\big(\epsilon^\theta_t(x_t)\big) + \sigma_t z_t,\\
+\mathbf{P}_t(\epsilon) = \frac{x_t - \sqrt{1-\alpha_t}\,\epsilon}{\sqrt{\alpha_t}},
+\qquad
+\mathbf{D}_t(\epsilon) = \sqrt{1-\alpha_{t-1}-\sigma_t^2}\;\epsilon .
+\end{gathered}
+$$ {#eq-asyrp-pd}
+The predicted noise appears twice, in the clean-image estimate $\mathbf{P}_t$ and in the re-noising direction $\mathbf{D}_t$. Shifting it in both places, $\tilde\epsilon^\theta_t = \epsilon^\theta_t + \Delta\epsilon_t$, turns out to do almost nothing.
+
+### Theorem 1: a symmetric shift of the noise cancels {#sec-asyrp-thm}
+
+::: {#thm-asyrp}
+## Destructive interference of a symmetric shift
+Let $\sigma_t = 0$ and let the grid be the full training grid, $\alpha_{t-1} = \alpha_t/(1-\beta_t)$. Replacing $\epsilon^\theta_t$ by $\epsilon^\theta_t + \Delta\epsilon_t$ in both $\mathbf{P}_t$ and $\mathbf{D}_t$ changes the next state by
+$$
+\tilde x_{t-1} - x_{t-1} = \frac{\sqrt{1-\alpha_t-\beta_t} - \sqrt{1-\alpha_t}}{\sqrt{1-\beta_t}}\;\Delta\epsilon_t
+\;\approx\; -\frac{\beta_t}{2\sqrt{1-\alpha_t}\sqrt{1-\beta_t}}\;\Delta\epsilon_t \quad (\beta_t \ll 1-\alpha_t),
+$$ {#eq-asyrp-thm}
+which is small compared with the coefficient $-\sqrt{1-\alpha_t}/\sqrt{1-\beta_t}$ of a shift in $\mathbf{P}_t$ alone.
 :::
+
+::: {.proof}
+With $\sigma_t = 0$, $\mathbf{D}_t(\epsilon) = \sqrt{1-\alpha_{t-1}}\,\epsilon$, so the difference of the shifted and unshifted updates is $\big(-\sqrt{\alpha_{t-1}}\sqrt{1-\alpha_t}/\sqrt{\alpha_t} + \sqrt{1-\alpha_{t-1}}\big)\Delta\epsilon$. On the full grid $\alpha_{t-1}/\alpha_t = 1/(1-\beta_t)$ gives the first coefficient $-\sqrt{1-\alpha_t}/\sqrt{1-\beta_t}$, and $1 - \alpha_{t-1} = (1-\beta_t-\alpha_t)/(1-\beta_t)$ gives the second. The approximation is $\sqrt{a - \beta} - \sqrt{a} = -\beta/(\sqrt{a-\beta} + \sqrt{a}) \approx -\beta/(2\sqrt{a})$ with $a = 1 - \alpha_t$, valid for $\beta \ll a$ (not in the first few steps near $t = 1$).
+:::
+
+Asyrp trains on 40 strided steps and Stable Diffusion samples on 50, so the general version matters; the rescaled coordinates of @sec-edit-ddim give it in one line and show the mechanism.
+
+::: {#prp-asyrp-grid}
+## Symmetric versus asymmetric shift on any DDIM grid
+For a deterministic DDIM step between any two grid points, a shift $\Delta\epsilon$ moves the next state by
+$$
+\begin{aligned}
+\Delta x_{t-1}^{\mathrm{sym}} &= \sqrt{\alpha_{t-1}}\,\big(\bar\sigma_{t-1} - \bar\sigma_t\big)\,\Delta\epsilon
+&&\text{(shift in } \mathbf{P}_t \text{ and } \mathbf{D}_t\text{)},\\
+\Delta x_{t-1}^{\mathrm{asym}} &= -\sqrt{\alpha_{t-1}}\,\bar\sigma_t\,\Delta\epsilon
+&&\text{(shift in } \mathbf{P}_t \text{ only)},
+\end{aligned}
+$$ {#eq-asyrp-grid}
+so that $|\Delta x^{\mathrm{sym}}| / |\Delta x^{\mathrm{asym}}| = 1 - \bar\sigma_{t-1}/\bar\sigma_t$.
+:::
+
+::: {.proof}
+The coefficient of $\epsilon$ in $\sqrt{\alpha_{t-1}}\,\mathbf{P}_t$ is $-\sqrt{\alpha_{t-1}}\,\bar\sigma_t$ and in $\mathbf{D}_t$ it is $\sqrt{1-\alpha_{t-1}} = \sqrt{\alpha_{t-1}}\,\bar\sigma_{t-1}$; a shift in $\mathbf{P}_t$ alone picks up the first, a shift in both their sum, which on the full grid is @eq-asyrp-thm.
+:::
+
+A symmetric shift is thus a change of the ODE *velocity* in @eq-ddim-euler, multiplied by the step size, while an asymmetric shift moves the *predicted clean image* by $-\bar\sigma_t\,\Delta\epsilon$, and $\bar\sigma_t$ is huge early in sampling ($\bar\sigma_T \approx 157$ for the linear schedule). On a 50-step grid the symmetric effect is about 8 times smaller at a typical step, and on the 1000-step grid about 150 times smaller (@fig-asyrp-coeff).
+
+![**A symmetric shift of the predicted noise is a velocity change; an asymmetric shift is a jump of the predicted image.** Left: coefficient of $\Delta\epsilon$ in $x_{t-1}$ for a shift in both $\mathbf{P}_t$ and $\mathbf{D}_t$ (blue) or in $\mathbf{P}_t$ only (red), for DDIM grids of 50, 20 and 10 steps on the linear schedule $\beta_t \in [10^{-4}, 0.02]$. Right: their ratio $1 - \bar\sigma_{t-1}/\bar\sigma_t$. Only the symmetric effect shrinks with the step size.](figures/lec11/PhuTran1005-asyrp-coeff.png){#fig-asyrp-coeff width=95%}
+
+### The asymmetric reverse process and h-space
+
+Asyrp therefore shifts only the prediction as
+$$
+x_{t-1} = \sqrt{\alpha_{t-1}}\,\mathbf{P}_t\big(\tilde\epsilon^\theta_t(x_t)\big) + \mathbf{D}_t\big(\epsilon^\theta_t(x_t)\big),
+$$ {#eq-asyrp-asym}
+so the trajectory follows the edited clean-image estimate but re-noises along the original direction, which keeps it close to the inverted image. Optimising $\Delta\epsilon_t$ directly works on one image but gives a pixel-space noise pattern that neither transfers nor survives perturbation. Asyrp instead perturbs the bottleneck feature of the U-Net:
+$$
+x_{t-1} = \sqrt{\alpha_{t-1}}\,\mathbf{P}_t\big(\epsilon^\theta_t(x_t \mid \Delta h_t)\big) + \mathbf{D}_t\big(\epsilon^\theta_t(x_t)\big) + \sigma_t z_t ,
+$$ {#eq-asyrp-h}
+where $\epsilon^\theta_t(x_t \mid \Delta h_t)$ adds $\Delta h_t$ to the bottleneck feature $h_t$ before the decoder (@fig-asyrp-arch). This **h-space** is the output of the middle block, $8 \times 8 \times 512$ for the $256 \times 256$ models of the paper: the deepest map and the only one not bypassed by a skip connection. A layer search confirms the choice: shallower layers barely change the image and deeper decoder layers produce artifacts.
+
+![**The asymmetric reverse process.** Left: the bottleneck feature $h$ is shifted by $\Delta h_t = f_t(h_t)$; the resulting prediction $\tilde\epsilon_t$ is used only in $\mathbf{P}_t$, the unmodified $\epsilon_t$ in $\mathbf{D}_t$. Right: the edited trajectory branches off the DDIM trajectory of an inverted real image towards a smiling version of the same face. Reproduced from [@kwon2023asyrp, Fig. 2].](figures/lec11/PhuTran1005-asyrp-architecture.png){#fig-asyrp-arch width=90%}
+
+### Learning the direction and choosing when to edit
+
+Asyrp learns $\Delta h_t$ with a small network $f_t(h_t)$ (two $1 \times 1$ convolutions with the timestep embedding, about 0.8 million parameters per attribute), trained with the **directional CLIP loss** of StyleGAN-NADA [@gal2022nada]. With CLIP encoders $E_I, E_T$ [@radford2021clip] and texts $y^{\mathrm{source}}$ ("face") and $y^{\mathrm{target}}$ ("smiling face"),
+$$
+\begin{gathered}
+\mathcal{L}_{\mathrm{direction}}(x^{\mathrm{edit}}, y^{\mathrm{target}}; x^{\mathrm{source}}, y^{\mathrm{source}})
+= 1 - \frac{\Delta I \cdot \Delta T}{\lVert\Delta I\rVert\,\lVert\Delta T\rVert},\\
+\Delta I = E_I(x^{\mathrm{edit}}) - E_I(x^{\mathrm{source}}), \qquad \Delta T = E_T(y^{\mathrm{target}}) - E_T(y^{\mathrm{source}}),
+\end{gathered}
+$$ {#eq-dirclip}
+which asks the change of the image embedding to align with the change of the text embedding, so that images are edited without collapsing onto one target. It is applied to the predicted clean images, avoiding back-propagation through the chain:
+$$
+\mathcal{L}^{(t)} = \lambda_{\mathrm{CLIP}}\,\mathcal{L}_{\mathrm{direction}}\big(\mathbf{P}^{\mathrm{edit}}_t, y^{\mathrm{target}}; \mathbf{P}^{\mathrm{source}}_t, y^{\mathrm{source}}\big) + \lambda_{\mathrm{recon}}\,\big\lVert \mathbf{P}^{\mathrm{edit}}_t - \mathbf{P}^{\mathrm{source}}_t \big\rVert_1 ,
+$$ {#eq-asyrp-loss}
+with $\mathbf{P}^{\mathrm{edit}}_t = \mathbf{P}_t(\epsilon^\theta_t(x_t \mid f_t))$ and $\mathbf{P}^{\mathrm{source}}_t = \mathbf{P}_t(\epsilon^\theta_t(x_t))$; training takes about 20 minutes on three GPUs. Since content is decided early, Asyrp edits only on $[T, t_{\mathrm{edit}}]$, where $t_{\mathrm{edit}}$ is the step at which $\mathrm{LPIPS}(x, \mathbf{P}_t)$ falls to 0.33, lowered for attributes further from the source text (513 for "smiling", 321 for "Frida" on CelebA-HQ). Below $t_{\mathrm{boost}}$, where $\mathrm{LPIPS}(x, x_t) = 1.2$, sampling switches to stochastic DDPM steps ($\eta = 1$) to remove residual noise ("quality boosting").
+
+### Properties of h-space
+
+h-space behaves like a GAN latent space although diffusion training never asks for it. The same $\Delta h$ produces the same change on different images (**homogeneity**); scaling it scales the edit, even to *negative* scales never trained (**linearity**, @fig-asyrp-linearity); sums of directions combine attributes; random perturbations change semantics but keep the image realistic, unlike in $\epsilon$-space (**robustness**); and directions are similar across timesteps, so a time-averaged $\Delta h$ works almost as well. Slide 6 shows edits on real faces (@fig-asyrp-results); in a user study Asyrp was preferred over DiffusionCLIP in 94.9 % of the answers for in-domain attributes and 63.1 % for unseen ones.
+
+![**Asyrp edits on CelebA-HQ.** One frozen model and one learned direction per attribute, applied to inverted real images; identity and background are preserved. Reproduced from [@kwon2023asyrp, Fig. 4].](figures/lec11/PhuTran1005-asyrp-results.png){#fig-asyrp-results width=75%}
+
+![**Linearity of h-space.** Positive multiples of the trained "smiling" direction (right) interpolate the attribute; negative multiples (left), never trained, remove the smile. Reproduced from [@kwon2023asyrp, Fig. 7].](figures/lec11/PhuTran1005-asyrp-linearity.png){#fig-asyrp-linearity width=75%}
+
+### Discussion
+
+Asyrp changes the network's estimate of what the image is while keeping the noise that ties the trajectory to the inverted input, and it must act early, where the lever $\bar\sigma_t$ is large and the content undecided. The bottleneck is the right place because the decoder re-interprets a new global code together with unchanged skip features that carry geometry and texture, much like StyleGAN's style modulation. Later work studies this space systematically, finding unsupervised directions from the Jacobian of the map to h-space [@park2023riemannian] or injecting one image's h-feature into another's trajectory [@jeong2024content]. Asyrp needs one trained $f_t$ per attribute and was not tested on latent diffusion; the text-to-image methods that follow use the prompt itself as the editing interface.
+
+Two features of the setting are easy to miss and explain why the rest of the
+chapter looks so different. The lecture's examples use a pixel-space model
+trained on faces, with no classifier-free guidance, which is why DDIM inversion
+reconstructs a real image almost exactly here and why @sec-nulltext has to work
+so hard for the same thing on Stable Diffusion. And the edit never leaves the
+model's domain: a face model edits faces, and "smiling" has to be learned as
+its own $f_t$ before it can be applied. Everything from @sec-nulltext on buys
+its generality from the text encoder instead.
+
+## Null-text inversion: editing real images under guidance {#sec-nulltext}
+
+### The problem: a real image has no trajectory
+
+Prompt-to-Prompt runs a source and an edited trajectory from the same noise. For a real image $\mathcal{I}$ with caption $\mathcal{P}$, that noise and trajectory must be found such that sampling with the source prompt **at the editing guidance scale** $w = 7.5$ reproduces the image, while the model and the prompt embedding stay intact so that the attention maps still mean what they meant. The paper makes two core observations. DDIM inversion with $w = 1$ reconstructs poorly when resampled at $w = 7.5$, but its endpoint is near-Gaussian and editable, a good starting point; inversion at $w = 7.5$ is worse on both counts (@sec-edit-cfg). And the unconditional prediction strongly affects the guided step, yet can be changed without touching the model or the conditional embedding $\mathcal{C}$.
+
+The lecture gave a shorter reason for the failure than @sec-edit-cfg does: the
+guided combination is assembled only at sampling time and the network is never
+trained on it, so there is no reason for a trajectory inverted under one
+prediction to be retraced under another. That is true, but it is true of
+classifier-free guidance everywhere and does not by itself explain why $w = 1$
+inverts well and $w = 7.5$ does not. The quantitative version is the one above:
+the per-step error is $O(\Delta\bar\sigma^2)$ either way, and guidance
+multiplies both the Jacobian's departure from the unconditional one and the
+size of the steps.
+
+### Pivotal inversion and null-text optimisation
+
+Borrowing pivotal tuning from GAN inversion [@roich2022pti], the method computes a **pivot** $z^*_T, \ldots, z^*_0$ by DDIM inversion with $w = 1$ and then optimises, per timestep, the embedding of the empty prompt, $\varnothing_t$, which enters only the unconditional branch:
+$$
+\min_{\varnothing_t}\ \big\lVert z^*_{t-1} - z_{t-1}(\bar z_t, \varnothing_t, \mathcal{C}) \big\rVert_2^2 ,
+$$ {#eq-nt-objective}
+where $z_{t-1}(\bar z_t, \varnothing_t, \mathcal{C})$ is one DDIM step from the current latent $\bar z_t$ with the guided prediction
+$$
+\tilde\epsilon_\theta(\bar z_t, t, \mathcal{C}, \varnothing_t) = w\,\epsilon_\theta(\bar z_t, t, \mathcal{C}) + (1-w)\,\epsilon_\theta(\bar z_t, t, \varnothing_t), \qquad w = 7.5 .
+$$ {#eq-nt-cfg}
+The steps are solved for $t = T, \ldots, 1$, each starting from the output of the previous *optimised* step, so the optimised trajectory is exactly the one replayed at editing time (@fig-nulltext-overview). Algorithm 1 summarises the procedure:
+
+```
+Algorithm 1: Null-text inversion (Mokady et al.)
+ 1  Input: source prompt embedding C = psi(P) and input image I
+ 2  Output: noise vector z_T and optimised embeddings {null_t}, t = 1..T
+ 3  set guidance scale w = 1
+ 4  compute z*_T, ..., z*_0 by DDIM inversion of I          (z*_0 = E(I))
+ 5  set guidance scale w = 7.5
+ 6  initialise zbar_T <- z*_T,  null_T <- psi("")
+ 7  for t = T, T-1, ..., 1:
+ 8      for j = 0, ..., N-1:
+ 9          L <- || z*_{t-1} - z_{t-1}(zbar_t, null_t, C) ||^2
+             null_t <- null_t - eta * grad_{null_t} L
+10      end
+11      zbar_{t-1} <- z_{t-1}(zbar_t, null_t, C);   null_{t-1} <- null_t
+12  end
+13  return zbar_T, {null_t}
+```
+
+Editing then starts from $z^*_T$ and uses $\varnothing_t$ at step $t$ in both branches of Prompt-to-Prompt. The paper uses 50 DDIM steps, $N = 10$ and learning rate 0.01 with early stopping (the official code re-creates Adam each step with a decaying learning rate); the optimised object is the full $77 \times 768$ text-encoder output for the empty prompt at each step. Inversion takes about a minute on an A100, and each edit then about ten seconds.
+
+![**Pivotal inversion and null-text optimisation.** Top: DDIM inversion with $w = 1$ gives the pivot $z^*_t$; sampling back with $w = 7.5$ drifts away ($\bar z_t$). Bottom: at each step the null-text embedding $\varnothing_t$ is tuned so that the guided step lands on $z^*_{t-1}$, and the final inversion reproduces the input. Reproduced from [@mokady2023nulltext, Fig. 3].](figures/lec11/PhuTran1005-nulltext-overview.png){#fig-nulltext-overview width=80%}
+
+### What one optimisation step does
+
+Write the DDIM step as $z_{t-1} = a_t\,\bar z_t + c_t\,\tilde\epsilon$ with $a_t = \sqrt{\alpha_{t-1}/\alpha_t}$ and $c_t = \sqrt{\alpha_{t-1}}\,(\bar\sigma_{t-1} - \bar\sigma_t) < 0$ (@eq-ddim-euler). Only the unconditional term depends on $\varnothing_t$, so with $r = z^*_{t-1} - z_{t-1}$
+$$
+\nabla_{\varnothing_t} \lVert r \rVert^2 = -2\,(1-w)\,c_t\, J_{\mathrm{emb}}^\top r ,
+\qquad J_{\mathrm{emb}} = \frac{\partial\,\epsilon_\theta(\bar z_t, t, \varnothing)}{\partial \varnothing}\Big|_{\varnothing = \varnothing_t}.
+$$ {#eq-nt-grad}
+The gradient passes through a single U-Net evaluation, not the trajectory, and the factor $(1-w) = -6.5$ gives the unconditional branch a strong lever, which is why ten iterations per step suffice. A sufficient condition for a solution is the following.
+
+::: {#prp-nt-fixed}
+## A null embedding that imitates the prompt recovers the pivot
+If $\epsilon_\theta(\bar z_t, t, \varnothing_t) = \epsilon_\theta(\bar z_t, t, \mathcal{C})$, the guided step with any $w$ equals the $w = 1$ step, and if moreover $\bar z_t = z^*_t$, it reproduces the pivot up to the round-trip error @eq-roundtrip.
+:::
+
+::: {.proof}
+Then $\tilde\epsilon = w\,\epsilon(\mathcal{C}) + (1-w)\,\epsilon(\mathcal{C}) = \epsilon(\mathcal{C})$, the prediction the pivot was built with, and the step from $z^*_t$ inverts the inversion step from $z^*_{t-1}$ up to the difference of the predictions at $z^*_{t-1}$ and $z^*_t$, which is @eq-roundtrip.
+:::
+
+Negative-prompt inversion [@miyake2023npi] uses exactly this condition, setting $\varnothing_t := \mathcal{C}$ without optimisation (faster, less accurate). The proposition only guarantees the accuracy of the $w = 1$ round trip; because the objective targets the pivot points exactly, an expressive $\varnothing_t$ can also absorb the round-trip error, which the experiment below shows. Optimising the conditional embedding instead also reconstructs, but it pushes image information into word tokens and blurs their cross-attention maps, which damages editing; the unconditional branch has no word-to-region attention to damage.
+
+### A worked example in two dimensions {#sec-toy}
+
+To see the mechanism with exact quantities, take a two-dimensional "image space" with a mixture of four Gaussians (standard deviation 0.5, means $(2, 2)$, $(2.5, -1)$, $(-2, 1.5)$, $(-1.5, -2)$); the first two form class $\mathcal{C}$. The noisy marginals are again mixtures (means $\sqrt{\alpha_t}\mu_k$, variances $\alpha_t s^2 + 1 - \alpha_t$), so the optimal noise predictor $\epsilon^\star = -\sqrt{1-\alpha_t}\,\nabla \log p_t$ is exact for the conditional (class $\mathcal{C}$) and unconditional (all components) models. To mimic the null text, the unconditional predictor gets six parameters $\phi$ (four mixture logits and a common shift of the means), exact at their initial value and entering only the unconditional branch. With the linear schedule, 50 DDIM steps, $w = 7.5$ and the "real image" $x_0 = (1.55, 2.45)$:
+
+| Procedure | $\lVert \hat x_0 - x_0 \rVert$ |
+|----|--|
+| (a) DDIM inversion $w = 1$, sampling $w = 1$ | 0.088 |
+| (b) DDIM inversion $w = 7.5$, sampling $w = 7.5$ | 0.266 |
+| (c) DDIM inversion $w = 1$, sampling $w = 7.5$ | 1.251 |
+| (d) as (c), per-step optimised $\phi_t$ (Algorithm 1, $N = 10$) | 0.003 |
+
+: Reconstruction error of the toy experiment (code in @sec-repro). {#tbl-edit-toy}
+
+![**Null-text inversion in a two-dimensional model with exact noise predictors.** Left: the pivot (black, DDIM inversion with $w = 1$) is retraced by $w = 1$ sampling (dashed blue), but $w = 7.5$ sampling from the same latent (red) ends far from $x_0$; inverting with $w = 7.5$ (dotted purple) drives the latent to norm 17.4, far outside the Gaussian. Right: with six "null" parameters re-optimised per step, guided sampling (dashed green) tracks the pivot and reconstructs $x_0$ to within 0.003.](figures/lec11/PhuTran1005-toy-nulltext.png){#fig-toy-nulltext width=95%}
+
+@tbl-edit-toy and @fig-toy-nulltext reproduce the paper's claims in miniature: guided resampling (c) drifts by more than 2 from the pivot and lands on a different "image"; guided inversion (b) leaves the Gaussian (latent norm 17.4 against 1.5); and the closed-loop optimisation (d) is thirty times more accurate than even the $w = 1$ round trip, because each step's residual is corrected by the following steps.
+
+### Discussion
+
+The null text is the right knob because it carries the lever $1 - w$ but no word-to-region semantics, so it absorbs the reconstruction error without disturbing the attention maps the editor relies on; fine-tuning the model or the conditional embedding would reconstruct too, at the price of the prior or of editability. Algorithmically the method is closed-loop control: targets from the pivot, inputs from the optimised trajectory. Direct Inversion [@ju2024direct] pushes this further by adding the residual to the source branch without any optimisation, and EDICT [@wallace2023edict] makes the sampler exactly invertible. Reconstruction works even with a random caption, but only concepts named in the caption can be edited, and Prompt-to-Prompt cannot make large structural changes such as making a sitting dog stand, the subject of MasaCtrl (@sec-masactrl).
+
+## Prompt-to-Prompt: editing through cross-attention {#sec-p2p}
+
+Prompt-to-Prompt (P2P) [@hertz2023p2p] edits a generated image by editing only its prompt: swapping a word ("bicycle" to "car"), adding a phrase ("and a rainbow in the background"), or turning a word up or down ("fluffy", "crowded"), with no mask, training or optimisation (@fig-p2p-teaser). Regenerating with the edited prompt and the same seed does not work: changing one word changes the whole composition, because the prompt is read at every step and the two trajectories diverge. A fixed seed is necessary but not sufficient; something must couple the trajectories, and P2P's insight is that the right coupling is the cross-attention.
+
+![**Edits produced by changing only the prompt.** Word swap (bicycle to car), prompt refinement ("and a rainbow in the background!", "jelly beans", "Children drawing of") and attention re-weighting ("crowded" down, "fluffy" up); everything the edit does not mention is preserved. Reproduced from [@hertz2023p2p, Fig. 1].](figures/lec11/PhuTran1005-p2p-teaser.png){#fig-p2p-teaser width=80%}
+
+### Cross-attention binds words to pixels
+
+In the notation of @eq-edit-attention, the cross-attention of a layer at step $t$ is
+$$
+\begin{gathered}
+M = \mathrm{Softmax}\!\left(\frac{Q K^\top}{\sqrt{d}}\right), \qquad \hat\phi(z_t) = M V,\\
+Q = \ell_Q(\phi(z_t)), \qquad K = \ell_K(\psi(\mathcal{P})), \qquad V = \ell_V(\psi(\mathcal{P})),
+\end{gathered}
+$$ {#eq-p2p-xattn}
+where $M_{ij}$ is the weight of token $j$ at pixel $i$. Hertz et al. show that the map of a word localises the object it describes (a "bear" in their Fig. 4) and that the layout is already visible in the first steps. @fig-xattn repeats this analysis with Stable Diffusion: the maps of "squirrel", "burger" and "table" segment their regions, "eating" lights up the mouth, and the burger's position is fixed by the sixth of fifty steps. It also shows what per-token visualisations hide: on average **87 % of a pixel's attention mass goes to the start token**, a default slot, and all words together receive less than 10 %. Word maps are therefore small in absolute value, which is why P2P normalises them by their maximum before visualising or thresholding.
+
+![**Cross-attention maps of Stable Diffusion bind words to regions, and the layout is fixed early.** Top: a sample for "a squirrel eating a burger on a wooden table" and the maps of five tokens (averaged over the five $16 \times 16$ layers, heads and steps, normalised by their maxima); the start-token map and the mean mass per token show that about 87 % of the mass goes to the start token. Bottom: the "burger" map along the trajectory; its shape is fixed after about six of 50 steps. Stable Diffusion v1.4 is used.](figures/lec11/PhuTran1005-xattn.png){#fig-xattn width=100%}
+
+The map $M$ decides where each pixel reads and the values $V$ decide what it reads. P2P runs the edited generation with edited maps $\widehat{M}_t$ (the source maps wherever they are injected) and the target values,
+$$
+\hat\phi^*(z^*_t) = \widehat{M}_t\, V^*, \qquad V^* = \ell_V(\psi(\mathcal{P}^*)),
+$$ {#eq-p2p-mv}
+so the new word's content is written into the region the old word occupied. This line explains both what P2P can do (change what is in a region) and what it cannot (change the layout, as in a pose change).
+
+### The three edit operations
+
+With $M_t$ and $M^*_t$ the maps of the source and edited generations from the same seed, an edit is a function $\widehat{M}_t = \mathrm{Edit}(M_t, M^*_t, t)$ (@fig-p2p-method):
+
+* **Word swap** ("a big bicycle" to "a big car"). Injecting at every step forces the car into a bicycle's silhouette, so injection stops at $\tau$:
+$$
+\mathrm{Edit}(M_t, M^*_t, t) = \begin{cases} M^*_t & \text{if } t < \tau, \\ M_t & \text{otherwise}, \end{cases}
+$$ {#eq-p2p-swap}
+i.e. the source maps fix the composition in the noisy steps $t \ge \tau$ and the target shapes the details afterwards.
+
+* **Prompt refinement** ("a castle" to "children drawing of a castle"). Only the tokens common to both prompts are injected; with an alignment $A(j)$ from tokens of $\mathcal{P}^*$ to tokens of $\mathcal{P}$ (or None for new tokens),
+$$
+\big(\mathrm{Edit}(M_t, M^*_t, t)\big)_{i,j} = \begin{cases} (M^*_t)_{i,j} & \text{if } A(j) = \text{None}, \\ (M_t)_{i, A(j)} & \text{otherwise}. \end{cases}
+$$ {#eq-p2p-refine}
+
+* **Attention re-weighting** ("a fluffy ball"). The map of one token $j^*$ is scaled by $c \in [-2, 2]$ without re-normalising, a "fader" for that word:
+$$
+\big(\mathrm{Edit}(M_t, M^*_t, t)\big)_{i,j} = \begin{cases} c \cdot (M_t)_{i,j} & \text{if } j = j^*, \\ (M_t)_{i,j} & \text{otherwise}. \end{cases}
+$$ {#eq-p2p-reweight}
+
+![**Cross-attention control.** Top: pixel queries and token keys give one attention map per token, which weights the token values. Bottom: word swap injects the source maps $M_t$ in place of $M^*_t$; prompt refinement injects only the maps of unchanged tokens; re-weighting scales one token's map. Reproduced from [@hertz2023p2p, Fig. 3].](figures/lec11/PhuTran1005-p2p-method.png){#fig-p2p-method width=80%}
+
+### The algorithm and local blending
+
+The Prompt-to-Prompt image editing algorithm is presented as in Algorithm 2:
+
+```
+Algorithm 2: Prompt-to-Prompt image editing
+ 1  Input: source prompt P, target prompt P*, random seed s
+ 2  Optional for local editing: words w in P, w* in P* marking the region
+ 3  Output: source image x_src and edited image x_dst
+ 4  z_T ~ N(0, I), a unit Gaussian with random seed s
+ 5  z*_T <- z_T
+ 6  for t = T, T-1, ..., 1:
+ 7      z_{t-1}, M_t <- DM(z_t, P, t, s)
+ 8      M*_t <- DM(z*_t, P*, t, s)
+ 9      Mhat_t <- Edit(M_t, M*_t, t)
+10      z*_{t-1} <- DM(z*_t, P*, t, s){M <- Mhat_t}
+11      if local:
+12          alpha <- B(Mbar_{t,w}) union B(Mbar*_{t,w*})
+13          z*_{t-1} <- (1-alpha) * z_{t-1} + alpha * z*_{t-1}
+14  return (z_0, z*_0)
+```
+
+$DM(\cdot)$ is one diffusion step that returns the attention maps, and $DM(\cdot)\{M \leftarrow \widehat{M}\}$ overrides the maps but keeps the values of $\mathcal{P}^*$; the two branches share the seed and run as one batch. **Local blending** (lines 11--13) thresholds the word maps averaged over the steps so far, $B(x) = \mathbf{1}[x > 0.3]$ on max-normalised maps, and takes the **union** of the source-word and target-word masks, so that the region fits both the old and the new object; outside it the source latent is copied after every step.
+
+### Results and limitations
+
+In a user study with 32 participants, P2P scored best for structure preservation (4.64 of 5), text alignment (4.55) and realism (4.42) against VQGAN+CLIP, Text2LIVE and a "switch prompts after 20 % of the steps" baseline, at the cost of one diffusion pass per edit. Real images need inversion, since the algorithm is defined on paired trajectories; plain DDIM inversion is often inaccurate, and Null-text inversion (@sec-nulltext) is the solution. P2P's own limits follow from @eq-p2p-mv: it cannot change the layout (no pose change, object movement or change of count), its maps are low-resolution, attributes can leak ("smiling bunny doll" also makes the child smile), and re-weighting works better with Imagen's T5 encoder than with Stable Diffusion's CLIP. The "source decides where, target decides what" idea recurs in Plug-and-Play and MasaCtrl (@sec-edit-duality), and P2P also became the data engine of the next paper.
+
+## InstructPix2Pix: learning to follow editing instructions {#sec-ip2p}
+
+InstructPix2Pix [@brooks2023ip2p] removes captions, inversion and per-edit tuning: given an image and an **instruction** ("swap sunflowers with roses"), one conditional diffusion model produces the edit in a single sampling run of about nine seconds. Since no dataset of (image, instruction, edited image) triplets exists, the paper generates one with two pretrained models (@fig-ip2p-pipeline).
+
+### Generating the training data
+
+**Text.** The authors hand-wrote 700 triplets of input caption (from LAION-Aesthetics), instruction and edited caption (e.g. "Yefim Volkov, Misty Morning", "make it afternoon", "Yefim Volkov, Misty Afternoon"), fine-tuned GPT-3 on them, and generated **454,445** triplets for LAION captions. **Images.** Each caption pair is rendered by Stable Diffusion v1.5 with Prompt-to-Prompt from shared noise. How much structure to keep depends on the edit and cannot be predicted from the text, so 100 pairs are generated per caption pair, each sharing attention for a random fraction $p \sim \mathcal{U}(0.1, 0.9)$ of the steps (self-attention in the released code, which needs no token alignment). **Filtering.** With CLIP encoders $E_{\mathrm{img}}, E_{\mathrm{txt}}$, images $x_0, x_1$ and captions $t_0, t_1$, a pair is kept if both image--caption similarities are at least 0.2, the image--image similarity is at least 0.75, and the directional similarity
+$$
+\mathrm{sim}_{\mathrm{dir}} = \cos\big(E_{\mathrm{img}}(x_1) - E_{\mathrm{img}}(x_0),\ E_{\mathrm{txt}}(t_1) - E_{\mathrm{txt}}(t_0)\big)
+$$ {#eq-ip2p-dir}
+is at least 0.2 (compare @eq-dirclip); the best four pairs per caption pair are kept, about 313,000 examples in total.
+
+![**InstructPix2Pix.** (a) GPT-3 turns a caption into an instruction and an edited caption; (b) Stable Diffusion with Prompt-to-Prompt renders the pair; (c) the generated training examples; (d) the trained model edits real images from human instructions. Reproduced from [@brooks2023ip2p, Fig. 2].](figures/lec11/PhuTran1005-ip2p-pipeline.png){#fig-ip2p-pipeline width=90%}
+
+### The model and its loss
+
+The model is Stable Diffusion v1.5 with the input image's latent $\mathcal{E}(c_I)$ concatenated to $z_t$ (8 input channels instead of 4), the weights of the new channels initialised to zero so that training starts exactly at Stable Diffusion, and the instruction $c_T$ entering through the existing cross-attention. With $x$ the edited image, the loss is
+$$
+L = \mathbb{E}_{\mathcal{E}(x), \mathcal{E}(c_I), c_T, \epsilon \sim \mathcal{N}(0,1), t}\Big[\big\lVert \epsilon - \epsilon_\theta\big(z_t, t, \mathcal{E}(c_I), c_T\big) \big\rVert_2^2\Big].
+$$ {#eq-ip2p-loss}
+
+The lecture used this design to lay out the ways a condition can be put into a
+diffusion model at all, which is worth having in one place, since the rest of
+the chapter is a tour of the consequences:
+
+1. **Concatenation on the channel axis**, as here, and as in conditional GANs that feed the target domain as extra input channels. It suits a condition that is pixel-aligned with the output.
+2. **Cross-attention**, as for the text of Stable Diffusion: a variable-length set of tokens, attended to from every spatial position.
+3. **Joint self-attention** over noise tokens and condition tokens, as in DiT-style architectures [@peebles2023dit], which removes the distinction between the two.
+4. **A separate branch** whose features are added back, which is ControlNet (@sec-controlnet); GLIGEN (@sec-gligen) is the attention-side version of the same move.
+
+The first three change the network's inputs; the fourth leaves the network
+alone and adds to it. Which one a method picks is largely decided by whether
+the condition is pixel-aligned, a set, or neither.
+
+### Classifier-free guidance with two conditions
+
+In training, the image is replaced by a null image $\varnothing_I$ (zero latent) for 5 % of the examples, the instruction by the null text $\varnothing_T$ for 5 %, and both for 5 %, so one network learns all four combinations of present and absent conditions (an idea from Composable Diffusion [@liu2022composable]). Three of them are combined at inference:
+$$
+\tilde e_\theta(z_t, c_I, c_T) = e_\theta(z_t, \varnothing, \varnothing)
++ s_I \big(e_\theta(z_t, c_I, \varnothing) - e_\theta(z_t, \varnothing, \varnothing)\big)
++ s_T \big(e_\theta(z_t, c_I, c_T) - e_\theta(z_t, c_I, \varnothing)\big).
+$$ {#eq-ip2p-cfg}
+
+::: {#prp-ip2p-cfg}
+## Two-way guidance as a product of implicit classifiers
+If $e_\theta(z_t, \cdot) \approx -\sqrt{1-\alpha_t}\,\nabla_{z_t} \log p_t(z_t \mid \cdot)$ for each conditioning set, a null argument meaning that the condition is marginalised out, then @eq-ip2p-cfg is $-\sqrt{1-\alpha_t}$ times the score of
+$$
+\tilde p_t(z_t) \propto p_t(z_t)\; p_t(c_I \mid z_t)^{s_I}\; p_t(c_T \mid c_I, z_t)^{s_T}.
+$$ {#eq-ip2p-tilted}
+For $s_I = s_T = 1$ it is the conditional prediction $e_\theta(z_t, c_I, c_T)$; for $s_I = 1$ it is ordinary text guidance with the image-conditional model as the "unconditional" one.
+:::
+
+::: {.proof}
+By the chain rule, $p(z, c_T, c_I) = p(c_T \mid c_I, z)\,p(c_I \mid z)\,p(z)$; taking $\nabla_z \log$ removes the $z$-independent normaliser:
+$$
+\nabla_z \log p(z \mid c_I, c_T) = \nabla_z \log p(z) + \nabla_z \log p(c_I \mid z) + \nabla_z \log p(c_T \mid c_I, z).
+$$
+By Bayes' rule, $\nabla \log p(c_I \mid z) = \nabla \log p(z \mid c_I) - \nabla \log p(z)$ and $\nabla \log p(c_T \mid c_I, z) = \nabla \log p(z \mid c_I, c_T) - \nabla \log p(z \mid c_I)$, so replacing each score by $-e_\theta/\sqrt{1-\alpha_t}$ gives
+$$
+\begin{aligned}
+\nabla \log p(c_I \mid z) &\approx -\frac{e_\theta(z, c_I, \varnothing) - e_\theta(z, \varnothing, \varnothing)}{\sqrt{1-\alpha_t}},\\
+\nabla \log p(c_T \mid c_I, z) &\approx -\frac{e_\theta(z, c_I, c_T) - e_\theta(z, c_I, \varnothing)}{\sqrt{1-\alpha_t}}.
+\end{aligned}
+$$
+Weighting the two classifier terms by $s_I$ and $s_T$ and multiplying the score of @eq-ip2p-tilted by $-\sqrt{1-\alpha_t}$ gives @eq-ip2p-cfg; for $s_I = s_T = 1$ the sum telescopes, and for $s_I = 1$ the first two terms combine to $e_\theta(z, c_I, \varnothing)$.
+:::
+
+As with all guidance, this motivates rather than proves the formula (tilted densities at different noise levels are generally not the diffusion of one clean density). The order of factorisation matters, exchanging $c_I$ and $c_T$ gives a different combination, which the authors found worse, and it matches the meaning of an instruction, which is relative to an image. @fig-twoway-cfg shows the geometry. A step costs three U-Net evaluations; the released defaults are $s_T = 7.5$ and $s_I = 1.5$. The two scales are the user's knobs: $s_I$ controls faithfulness to the input (like P2P's injection fraction or SDEdit's noise level), $s_T$ adherence to the instruction.
+
+![**Two-way guidance as vector arithmetic in noise-prediction space.** The image direction (unconditional to image-conditional) is scaled by $s_I$ and the text direction (image-conditional to fully conditional) by $s_T$; large $s_I$ stays close to the input image, large $s_T$ follows the instruction more.](figures/lec11/PhuTran1005-twoway-cfg.png){#fig-twoway-cfg width=65%}
+
+### Results and limitations
+
+Measured by CLIP similarity to the input against directional similarity @eq-ip2p-dir, InstructPix2Pix keeps notably more of the input than SDEdit at the same edit strength. Training on 1 % or 10 % of the data yields only subtle, stylistic edits, and removing the CLIP filter lowers consistency with the input. The model inherits the limits of its synthetic teacher: it fails at counting and spatial reasoning ("have the people swap places"), viewpoint changes and sometimes at isolating objects, exactly the failure modes of Prompt-to-Prompt, and it reproduces biases of the data. In effect, InstructPix2Pix distils the whole pipeline of GPT-3, Prompt-to-Prompt and best-of-100 CLIP selection into a feed-forward editor; the selection teaches it an instruction-dependent edit strength that the teacher alone could not choose, but it cannot learn edits its data never contains, which later work addresses with human-annotated data such as MagicBrush [@zhang2023magicbrush].
+
+## Plug-and-Play diffusion features: structure from features and self-attention {#sec-edit-pnp}
+
+> **A word of warning about the name.** "Plug-and-play" is used in this book in
+> two unrelated senses. In @sec-pnp of chapter 11 it is the plug-and-play
+> *prior*: a template in which a data-fidelity term is minimised over the clean
+> manifold of an unconditional model, which is how CFG++ is derived. Here it is
+> the title of a paper about injecting U-Net features. The two have nothing in
+> common beyond the phrase.
+
+Plug-and-Play (PnP) [@tumanyan2023pnp] performs text-guided image-to-image translation: given a guidance image $I^G$ (a photo, drawing or silhouette) and a free target prompt $P$, produce an image that follows the prompt while keeping the guidance image's structure. Prompt-to-Prompt needs word-aligned prompts and its maps capture objects rather than parts; SDEdit trades structure against appearance through a single noise level. PnP instead asks how structure is represented in the U-Net and transplants that representation.
+
+### Where structure lives in the U-Net
+
+PnP views each U-Net layer $l$ as a residual block, producing spatial features $f^l_t$, followed by self-attention
+$$
+\hat f^{\,l}_t = A^l_t\, v^l_t, \qquad A^l_t = \mathrm{softmax}\!\left(\frac{q^l_t\, {k^l_t}^\top}{\sqrt{d}}\right),
+$$ {#eq-pnp-sa}
+and cross-attention. Two analyses locate structure. A joint PCA of decoder features over 20 humanoid images of very different styles shows that the coarsest layer only separates foreground from background, while layer 4 ($16 \times 16$) colours the same body parts identically across photos, cartoons and robots, an appearance-invariant semantic map, and deeper layers carry high-frequency appearance. And the affinity matrix $A^l_t$ is a self-similarity descriptor whose principal components follow the layout regardless of colour.
+
+### The injection rules
+
+The guidance image is DDIM-inverted with the empty prompt to $x^G_T$, and the translation starts from the same noise. Both branches are denoised in parallel, and the target branch receives the guidance features. Injecting features at layer 4 alone does not keep the structure, and injecting them at higher-resolution layers too leaks appearance (the source's clothing colours appear on a "silver robot"); affinities carry structure without appearance. The final rule (depicted on slide 17; Eq. 4 of the paper, which writes the prediction as $z^*_{t-1}$) is
+$$
+\hat\epsilon^{\,*}_t = \hat\epsilon_\theta\big(x^*_t, P, t;\ f^4_t, \{A^l_t\}_{l = 4, \ldots, 11}\big),
+$$ {#eq-pnp-rule}
+i.e. the target U-Net with its decoder-layer-4 features replaced by the guidance ones and the self-attention maps of decoder layers 4--11 replaced by copying the guidance $q^l_t, k^l_t$ while keeping the target's values. Features are injected during the first 40 of 50 steps and attention during the first 25 (@fig-pnp-overview). The same starting noise is essential: since decoder features are injected from the first step, the target's encoder features, which reach the decoder through the skips and at $t = T$ depend on the seed much more than on the prompt, must be compatible with them. A negative prompt describing the guidance image, mixed into the unconditional branch with a weight that decreases during sampling, pushes the appearance away from the source, which matters for silhouettes and sketches.
+
+![**Plug-and-Play diffusion features.** (a) The guidance image is DDIM-inverted and the translation starts from the same noise; spatial features and self-attention of the guidance branch are injected into the decoder of the target branch ("a photo of a statue in the snow"). (b) In one layer, the injected quantities (red) are the residual-block features $f^l_t$ and the self-attention queries and keys $q^l_t, k^l_t$. Reproduced from [@tumanyan2023pnp, Fig. 2].](figures/lec11/PhuTran1005-pnp-overview.png){#fig-pnp-overview width=90%}
+
+### Results and ablations
+
+Structure is measured by the distance between DINO-ViT self-similarity matrices of guidance and output, text fidelity by CLIP similarity. PnP reaches the structure distance of SDEdit at its lowest noise level together with the CLIP score of SDEdit at its highest, escaping SDEdit's trade-off. The ablation (@tbl-pnp) shows the two injections are complementary: removing either raises the structure distance by 55--70 %; features provide the correspondence between parts, and attention propagates it to finer scales.
+
+| Configuration (Wild-TI2I, real images) | Self-sim. distance $\downarrow$ | CLIP $\uparrow$ |
+|-----|--|--|
+| full method | 0.058 | 0.282 |
+| without feature injection | 0.090 | 0.288 |
+| without self-attention injection | 0.097 | 0.286 |
+
+: Plug-and-Play ablation, from Table 1 of Tumanyan et al. [@tumanyan2023pnp]. {#tbl-pnp}
+
+The insight is that structure lives in mid-resolution decoder features and self-attention affinities, appearance in high-resolution features and values; "structure is self-similarity" appears both in the method and in its metric. PnP fails on arbitrary coloured segmentation masks and, by construction, keeps the pose, the gap MasaCtrl fills. The same group later built TokenFlow [@geyer2024tokenflow] on it for video editing.
+
+## GLIGEN: grounding a frozen model with gated self-attention {#sec-gligen}
+
+The next two papers add a new input modality by training a module next to a frozen model. GLIGEN [@li2023gligen] adds grounding: boxes with a phrase or a reference image, keypoints, and spatial maps such as depth, edges or segmentation (@fig-gligen-modalities), without forgetting the pretrained model's knowledge.
+
+![**Grounding modalities of GLIGEN.** Text or image entities with boxes, style images, keypoints, depth, HED edges, normals and semantic maps, each added to a frozen text-to-image model by its own grounding module. Reproduced from [@li2023gligen, Fig. 1].](figures/lec11/PhuTran1005-gligen-modalities.png){#fig-gligen-modalities width=80%}
+
+### Grounding tokens and gated self-attention
+
+A grounding instruction is a caption plus entities $(e_i, l_i)$ with semantics $e_i$ (a phrase or an image) and location $l_i$. The caption tokens enter only the frozen cross-attention, while each entity with a box $l = [x_{\min}, y_{\min}, x_{\max}, y_{\max}]$ becomes a grounding token (@fig-gligen-arch)
+$$
+h^e = \mathrm{MLP}\big(f_{\mathrm{text}}(e),\ \mathrm{Fourier}(l)\big),
+$$ {#eq-gligen-token}
+with $f_{\mathrm{text}}(e)$ the phrase feature from the same frozen text encoder and a sinusoidal embedding of the box. Because entities are encoded like captions, grounding is open-set ("blue jay" works without blue-jay boxes in training). Between the frozen self- and cross-attention of every transformer block, GLIGEN inserts a new layer over the visual tokens $v$ and grounding tokens (@fig-gligen-block):
+$$
+\begin{aligned}
+v &= v + \mathrm{SelfAttn}(v) && \text{(frozen)}\\
+v &= v + \beta \cdot \tanh(\gamma) \cdot \mathrm{TS}\big(\mathrm{SelfAttn}([v, h^e])\big) && \text{(new, trainable)}\\
+v &= v + \mathrm{CrossAttn}(v, h^c) && \text{(frozen)}
+\end{aligned}
+$$ {#eq-gligen-gate}
+where $\mathrm{TS}$ keeps the outputs at visual positions, $\gamma$ is a scalar initialised to zero (a $\tanh$ gate as in Flamingo [@alayrac2022flamingo]) and $\beta = 1$ in training. Training starts exactly at the pretrained model, and only the new layers $\phi$ and the MLP are trained, with the ordinary denoising loss over the whole latent:
+$$
+\min_{\phi}\; \mathbb{E}_{z, t, \epsilon, y, B}\,
+\big\lVert \epsilon - \epsilon_{\theta, \phi}\big(z_t, t, \psi(y), U(B)\big) \big\rVert_2^2 ,
+\qquad \theta \text{ fixed}.
+$$ {#eq-gligen-training}
+
+It is worth being precise about where the localisation comes from, because the lecture put it elsewhere: it is not that the loss is focused on the boxes. @eq-gligen-training is the same objective the model was pretrained with, summed over the whole latent, and it contains no box-dependent weighting at all. What carries the location is the grounding token itself --- the Fourier embedding of $l$ inside $h^e$ in @eq-gligen-token --- and the only way it can act is through the gated layer. A model that ignored the boxes would pay for it in exactly this loss, since the training images do have the objects where the boxes say.
+
+![**GLIGEN's grounding tokens.** Each grounded phrase is encoded by the frozen text encoder and fused with its box (through the MLP of @eq-gligen-token) into a grounding token; the caption gives the usual caption tokens. Reproduced from [@li2023gligen, Fig. 2].](figures/lec11/PhuTran1005-gligen-tokens.png){#fig-gligen-arch width=70%}
+
+![**GLIGEN's transformer block.** The trainable gated self-attention sits between the frozen self- and cross-attention; visual tokens attend to grounding tokens in the new layer and to caption tokens only in the cross-attention. Reproduced from [@li2023gligen, Fig. 3].](figures/lec11/PhuTran1005-gligen-block.png){#fig-gligen-block width=40%}
+
+::: {#prp-gate}
+## Gradients through a gate that starts at zero
+For a branch added through a gate, $v_{\mathrm{out}} = v + \beta \tanh(\gamma)\, g_{\theta'}(v)$ with $\gamma = 0$, and $G = \partial\mathcal{L}/\partial v_{\mathrm{out}}$,
+$$
+\frac{\partial \mathcal{L}}{\partial \gamma} = \beta \left\langle G,\ g_{\theta'}(v) \right\rangle, \qquad \frac{\partial \mathcal{L}}{\partial \theta'} = 0 ,
+$$
+where the first is generically non-zero; the second also holds for parameters feeding only the branch, such as the grounding MLP.
+:::
+
+::: {.proof}
+$\partial\mathcal{L}/\partial\gamma = \beta\,(1 - \tanh^2\gamma)\,\langle G, g_{\theta'}(v)\rangle$, which at $\gamma = 0$ is $\beta\,\langle G, g_{\theta'}(v)\rangle$, non-zero unless the random branch output is orthogonal to $G$; and $\partial\mathcal{L}/\partial\theta' = \beta \tanh(\gamma)\,(\partial g/\partial\theta')^\top G = 0$.
+:::
+
+The first update therefore moves only the gate, and the frozen downstream layers never see a random layer at full strength; in training, $\gamma$ rises to only about 0.08, so grounding stays a gentle residual. At inference, scheduled sampling uses the new layers only in the layout-forming first part of sampling,
+$$
+\beta = \begin{cases} 1, & \text{during the first } \tau T \text{ sampling steps},\\ 0, & \text{during the remaining steps}, \end{cases}
+$$ {#eq-gligen-schedule}
+($\tau = 0.2$ in the paper's example), which recovers the frozen model exactly for the detail-forming steps and restores its image quality; it even lets a keypoint model trained on humans pose monkeys and cartoon characters.
+
+On COCO, GLIGEN keeps the base model's image quality (FID 5.61--5.82 against 5.91) while a detector finds the requested boxes with AP 21.7--24.0 against 0.6 without grounding, and trained on COCO it grounds LVIS's long-tail classes zero-shot better than a model trained on LVIS (AP 6.4 against 2.0).
+
+## ControlNet: a trainable copy behind zero convolutions {#sec-controlnet}
+
+ControlNet [@zhang2023controlnet] adds spatially aligned conditions (e.g., edges, depth, pose, segmentation, scribbles) to Stable Diffusion (@fig-controlnet-teaser). Paired data for such conditions are small (around 100,000 examples, far smaller than LAION), so fine-tuning the model risks overfitting and forgetting, yet a tiny adapter may not understand complex conditions. ControlNet therefore reuses the pretrained encoder as the condition encoder, attached so that training starts at the unchanged model.
+
+![**ControlNet results.** A Canny edge map and a human pose control Stable Diffusion, with the default prompt or with different text prompts. Reproduced from [@zhang2023controlnet, Fig. 1].](figures/lec11/PhuTran1005-controlnet-teaser.png){#fig-controlnet-teaser width=80%}
+
+### Locked copy, trainable copy and zero convolutions
+
+For a trained block $y = \mathcal{F}(x; \Theta)$, ControlNet locks $\Theta$, clones a trainable copy $\Theta_c \leftarrow \Theta$, and connects it through two zero convolutions $\mathcal{Z}$ ($1 \times 1$, weights and biases initialised to zero; @fig-controlnet-arch):
+$$
+y_c = \mathcal{F}(x; \Theta) + \mathcal{Z}\big(\mathcal{F}\big(x + \mathcal{Z}(c; \Theta_{z1}); \Theta_c\big); \Theta_{z2}\big).
+$$ {#eq-cn-block}
+At initialisation both zero convolutions output 0, so $y_c = y$: the controlled network starts as the original one, and the copy is a working pretrained encoder rather than a random network.
+
+::: {#prp-zeroconv}
+## A zero convolution learns, and shields what is behind it
+For $\mathcal{Z}(I; W, B)_{p,i} = B_i + \sum_j W_{ij} I_{p,j}$ with upstream gradient $G_{p,i} = \partial\mathcal{L}/\partial \mathcal{Z}_{p,i}$,
+$$
+\frac{\partial\mathcal{L}}{\partial W_{ij}} = \sum_p G_{p,i}\, I_{p,j}, \qquad
+\frac{\partial\mathcal{L}}{\partial B_i} = \sum_p G_{p,i}, \qquad
+\frac{\partial\mathcal{L}}{\partial I_{p,j}} = \sum_i G_{p,i}\, W_{ij}.
+$$ {#eq-cn-grad}
+At $W = 0$ the first two are generically non-zero and the third vanishes. Hence in @eq-cn-block only $\Theta_{z2}$ receives a gradient at the first step; the trainable copy and $\Theta_{z1}$ from the second; and the network producing $c$ from the third.
+:::
+
+::: {.proof}
+@eq-cn-grad is the chain rule for a linear map. At step 1, the outer zero convolution sees the non-zero pretrained feature and a non-zero gradient from the frozen decoder, while every other trainable parameter lies behind $W_{z2} = 0$. After one update $W_{z2} \neq 0$, so gradient reaches the copy and the inner zero convolution, whose input $c$ is non-zero; what produces $c$ lies behind $W_{z1}$, which becomes non-zero only after step 2.
+:::
+
+This makes the paper's claim that zero convolutions "protect the backbone from random noise as gradients" precise: the gradients reaching the copied encoder start out scaled by $W_{z2} \approx 0$ (the paper states only the first part, with index typos in its supplement). In Stable Diffusion, ControlNet copies the **12 encoder blocks and the middle block** ($64$ to $8 \times 8$), feeds them the noisy latent, prompt, timestep and the condition, encoded from $512 \times 512$ to $64 \times 64$ by a small convolutional network, and **adds its 13 outputs to the 12 skip connections and the middle block** of the locked U-Net (@fig-controlnet-sd), about 361 million trainable parameters against 860 million for the U-Net.
+
+![**ControlNet around one block.** A locked block, its trainable copy, and two zero convolutions through which the condition $c$ enters and the copy's output is added to $y$. Reproduced from [@zhang2023controlnet, Fig. 2].](figures/lec11/PhuTran1005-controlnet-block.png){#fig-controlnet-arch width=50%}
+
+![**ControlNet attached to Stable Diffusion.** Trainable copies (blue) of the encoder blocks A--D and the middle block feed the skip connections of the locked U-Net (grey) through zero convolutions. Reproduced from [@zhang2023controlnet, Fig. 3].](figures/lec11/PhuTran1005-controlnet-sd.png){#fig-controlnet-sd width=55%}
+
+### Training, inference and results
+
+Training uses the usual loss with text prompt $c_t$ and condition $c_f$,
+$$
+\mathcal{L} = \mathbb{E}_{z_0, t, c_t, c_f, \epsilon \sim \mathcal{N}(0, 1)}\Big[\big\lVert \epsilon - \epsilon_\theta(z_t, t, c_t, c_f) \big\rVert_2^2\Big],
+$$ {#eq-cn-loss}
+over the ControlNet parameters only. Half of the prompts are replaced by empty strings, so that the network must read the semantics from the condition itself (a scribbled house must give a house without the word "house"). Because nothing random enters the frozen model, outputs stay high-quality throughout training, and the model suddenly starts to follow the condition, usually before 10,000 steps. Training costs only about 23 % more memory and 34 % more time per step than Stable Diffusion alone, as no gradient flows through the locked encoder. Since ControlNet's outputs are additive residuals, several ControlNets compose by addition and their strength can be scaled. ControlNet trains robustly from 1,000 to 3 million images; a depth ControlNet trained for five days on one GPU was indistinguishable to users from Stability's depth-to-image model trained on over 12 million images (attribution precision 0.52). The ablation answers the design questions: Gaussian-initialised connections destroy the copy's pretrained weights, and a light branch trained from scratch ("ControlNet-lite") cannot interpret a scribble without a prompt.
+
+The lecture dwelt on the shape of @eq-cn-block rather than on its
+hyperparameters, and the reason is worth keeping: a feature *added* to an
+intact network is the cheapest possible intervention, because the network it
+is added to does not have to accommodate it. Nothing is re-learned, nothing is
+displaced, and the worst case is that the added term is zero, which is where
+training starts. The paper won a best-paper award, and the same additive move
+is what GLIGEN's gate and LoRA's low-rank update are doing in their own places.
+
+Copying the encoder works with little data because learning a condition becomes fine-tuning of a strong pretrained backbone, while the locked decoder cannot be damaged. GLIGEN concatenates condition tokens inside attention, which suits a variable number of entities; ControlNet adds features to the skips, which suits pixel-aligned maps; lighter alternatives such as T2I-Adapter [@mou2023t2iadapter] add features from a small separate network.
+
+## MasaCtrl: mutual self-attention for non-rigid editing {#sec-masactrl}
+
+All editors so far keep the source layout, so none can make a sitting dog stand up. MasaCtrl [@cao2023masactrl] targets such non-rigid edits (pose, view or count, e.g. "a sitting boy" to "a standing boy", "an apple" to "two apples") and consistent synthesis of one character in several poses, without the per-edit fine-tuning of Imagic [@kawar2023imagic]. It rests on two observations: the layout forms in the first few steps (as in @fig-xattn), and the self-attention queries are semantically aligned across images, so that a query of one image can look up matching content in another.
+
+### Mutual self-attention and its schedule
+
+The source (generated with prompt $P_s$, or a DDIM-inverted real image with $P_s$ empty) and the target with the modified prompt $P$ start from the same noise. In a controlled layer the target keeps its queries but uses the source's keys and values (@fig-masactrl-attention):
+$$
+\mathrm{MutualSelfAttention}(Q, K_s, V_s) = \mathrm{softmax}\!\left(\frac{Q K_s^\top}{\sqrt{d}}\right) V_s ,
+$$ {#eq-masa}
+a soft nearest-neighbour retrieval of source content arranged by the target's layout. Applied everywhere, it would reproduce the source, because early target queries come from the same noise as the source's. Control is therefore restricted to late steps and decoder layers:
+$$
+\mathrm{EDIT} := \begin{cases} \{Q, K_s, V_s\}, & \text{if } T - t > S \text{ and } l > L, \\ \{Q, K, V\}, & \text{otherwise}, \end{cases}
+$$ {#eq-masa-edit}
+with $T = 50$ sampling steps; the code uses 0-based indices and non-strict inequalities, so the defaults $S = 4$, $L = 10$ leave the first four steps unmodified and control transformer blocks 10--15 of 16 (counted in execution order: 6 encoder, 1 middle, 9 decoder), i.e. the decoder blocks at $32 \times 32$ and $64 \times 64$. The first $S$ steps let the target prompt form its own layout; the remaining steps fill it with source content (@fig-masactrl-pipeline).
+
+![**The MasaCtrl pipeline.** After $S$ ordinary steps from shared noise, the target's self-attention queries the source's keys and values, so the target follows the layout of "a photo of a running dog" with the appearance of the source dog; an optional mask from the cross-attention of "dog" separates foreground and background. Reproduced from [@cao2023masactrl, Fig. 3].](figures/lec11/PhuTran1005-masactrl-pipeline.png){#fig-masactrl-pipeline width=90%}
+
+When object and background look alike, queries may retrieve the wrong content. MasaCtrl then thresholds the cross-attention maps of the object token into masks $M_s$ (source) and $M$ (target) and restricts the retrieval:
+$$
+\begin{gathered}
+f^l_o = \mathrm{Attention}(Q^l, K^l_s, V^l_s; M_s), \qquad
+f^l_b = \mathrm{Attention}(Q^l, K^l_s, V^l_s; 1 - M_s),\\
+\bar f^{\,l} = f^l_o \odot M + f^l_b \odot (1 - M),
+\end{gathered}
+$$ {#eq-masa-mask}
+where $\mathrm{Attention}(Q, K, V; M_s) = \mathrm{softmax}(QK^\top/\sqrt{d} + \log M_s)\,V$ excludes source keys outside the (binary, resized, non-empty) mask. The masks reuse Prompt-to-Prompt's localisation only to partition the keys; injecting the maps themselves would freeze the layout.
+
+The procedure is presented in Algorithm 3 as follows:
+
+```
+Algorithm 3: MasaCtrl, tuning-free mutual self-attention control
+Input: source prompt P_s, modified prompt P,
+       initial latents z^s_T and z_T (z_T = z^s_T)
+Output: latents z^s_0 and z_0 for P_s and P
+1  for t = T, T-1, ..., 1:
+2      eps_s, {Q_s, K_s, V_s} <- eps_theta(z^s_t, P_s, t)   (source)
+3      z^s_{t-1} <- Sample(z^s_t, eps_s)
+4      {Q, K, V} <- eps_theta(z_t, P, t)                    (target)
+5      {Q*, K*, V*} <- EDIT({Q, K, V}, {Q_s, K_s, V_s})
+6      eps <- eps_theta(z_t, P, t; {Q*, K*, V*})
+7      z_{t-1} <- Sample(z_t, eps)
+8  return z^s_0, z_0
+```
+
+![**Mutual self-attention and mask extraction.** (a) The target keeps its queries $Q$ and uses the source's keys and values in the decoder layers. (b) Masks $M_s$ and $M$ from thresholded cross-attention maps of "Horse". Reproduced from [@cao2023masactrl, Fig. 5].](figures/lec11/PhuTran1005-masactrl-attention.png){#fig-masactrl-attention width=55%}
+
+The lecture was blunt about how much of this is new: less than in the methods
+before it. Inversion, the shared seed, the early-steps-decide-layout schedule
+and the cross-attention mask are all borrowed, and what MasaCtrl contributes is
+the observation that the borrowed pieces can be recombined with the *opposite*
+half of the attention. That is not a criticism of the result --- @sec-edit-duality
+is built on it --- but it is a fair description of the step.
+
+Lines 2, 4 and 6 run as one batched pass with deterministic DDIM and guidance 7.5. When text cannot produce the desired layout, a pose or sketch condition (T2I-Adapter or ControlNet) can drive the target branch (last column of slide 22). On 20 images MasaCtrl achieves the best CLIP text and image alignment among P2P, PnP and Imagic and 73.5 % of user preferences, at 16 s per edit. Ablations confirm the schedule: control from step 0 or over the whole U-Net reproduces the source, starting late loses the source content, and only the high-resolution decoder layers transfer content while keeping the target layout. It fails when Stable Diffusion cannot produce the target layout, when the target needs content the source lacks (palms that were never visible), or when DDIM inversion fails.
+
+### The duality of Plug-and-Play and MasaCtrl {#sec-edit-duality}
+
+Prompt-to-Prompt, Plug-and-Play and MasaCtrl all copy part of an attention computation from a source branch to a target branch. Since in $\hat\phi_i = \sum_j \mathrm{softmax}_j(q_i \cdot k_j/\sqrt{d})\, v_j$ the pattern from $q$ and $k$ decides where to read and $v$ decides what, they differ in which half they borrow (@tbl-duality):
+
+| | borrowed from the source | from the target | when | preserves | changes |
+|---|---|---|---|---|---|
+| Prompt-to-Prompt | cross-attention maps $M$ | values $V^*$ | early steps | layout | content of word regions |
+| Plug-and-Play | features $f^4$, self-attention $Q, K$ | values $V$ | first 50--80 % | structure, pose | appearance, style |
+| MasaCtrl | self-attention $K, V$ | queries $Q$ | after step 4 | appearance, identity | layout, pose |
+
+: Three ways to split attention between a source and a target branch. {#tbl-duality}
+
+Plug-and-Play and MasaCtrl are duals: one keeps the source's affinity structure and takes appearance from the prompt, the other takes layout from the prompt and appearance from the source, and their time windows are complementary. To test this, all three mechanisms were reimplemented in one attention processor for Stable Diffusion v1.4 (@sec-repro) and run from the same seed, with source prompt "a photo of a corgi sitting on the grass", a pose edit ("... running ...") and an appearance edit ("a painting of ..."), using each paper's default settings (Plug-and-Play with the source prompt as negative prompt, as prescribed for generated guidance images).
+
+![**Plug-and-Play and MasaCtrl are duals.** Same seed for all methods. Pose edit: Prompt-to-Prompt and Plug-and-Play keep the source's low, side-on silhouette, while MasaCtrl produces a walking dog with the source dog's coat. Appearance edit: Plug-and-Play renders the source's pose in a painterly style; MasaCtrl stays photographic, copying the source appearance, and instead changes the pose towards the layout of the new prompt. Stable Diffusion v1.4, 50 DDIM steps, $w = 7.5$, seed 1234.](figures/lec11/PhuTran1005-sd-duality.png){#fig-duality width=100%}
+
+@fig-duality confirms @tbl-duality. It also reveals a less obvious consequence: for MasaCtrl, a prompt that only asks for a new style still produces a new *layout*, while the requested style is overwritten by the source values; Plug-and-Play, conversely, cannot change a pose whatever the prompt says. The same operators reappear in video and style methods, for instance cross-frame attention to the first frame in Text2Video-Zero [@khachatryan2023t2vzero] (MasaCtrl's operator) and shared attention in StyleAligned [@hertz2024stylealigned].
+
+## DragDiffusion: dragging points with a diffusion model {#sec-drag}
+
+DragDiffusion [@shi2024dragdiffusion] lets the user click handle points (red) and target points (blue) and optionally mask the editable region; the content at each handle should move to its target (@fig-drag-teaser). It transfers DragGAN [@pan2023draggan], which alternates motion supervision (pull the features one step ahead of each handle towards the current features) and point tracking (find the handle again by nearest-neighbour feature search), from class-specific StyleGANs to Stable Diffusion.
+
+![**Point-based editing.** Handle points (red), target points (blue) and the editable region (brighter); DragGAN distorts the real images, DragDiffusion moves the content. Reproduced from [@shi2024dragdiffusion, Fig. 1].](figures/lec11/PhuTran1005-dragdiffusion-teaser.png){#fig-drag-teaser width=80%}
+
+### Three stages of DragDiffusion
+
+**(1) Identity-preserving fine-tuning.** A LoRA [@hu2022lora] $\Delta\theta$ (rank 16, 80 steps, about 25 s) is fitted to the image's latent $z$ with the denoising loss
+$$
+\mathcal{L}_{\mathrm{ft}}(z, \Delta\theta) = \mathbb{E}_{\epsilon, t}\Big[\big\lVert \epsilon - \epsilon_{\theta + \Delta\theta}(\alpha_t z + \sigma_t \epsilon) \big\rVert_2^2\Big],
+$$ {#eq-drag-lora}
+with signal and noise amplitudes $\alpha_t, \sigma_t$ (@sec-edit-notation). Like pivotal tuning [@roich2022pti] for DragGAN, it makes the model represent this image accurately.
+
+**(2) Latent optimisation.** The image is DDIM-inverted without guidance (which keeps inversion nearly exact, @sec-edit-cfg) to one intermediate step, the 35th of 50, and only this latent $\hat z_t$ is optimised. With handles $h^k_i$, targets $g_i$ and $d_i = (g_i - h^k_i)/\lVert g_i - h^k_i \rVert_2$, the motion supervision loss is
+$$
+\mathcal{L}_{\mathrm{ms}}(\hat z^k_t) = \sum_{i=1}^{n} \sum_{q \in \Omega(h^k_i, r_1)} \Big\lVert F_{q + d_i}(\hat z^k_t) - \mathrm{sg}\big(F_q(\hat z^k_t)\big) \Big\rVert_1
++ \lambda \Big\lVert \big(\hat z^k_{t-1} - \mathrm{sg}(\hat z^0_{t-1})\big) \odot (\mathbf{1} - M) \Big\rVert_1 ,
+$$ {#eq-drag-ms}
+where $F_q$ is the U-Net feature at pixel $q$ (third decoder block, upsampled), $\Omega(h, r_1)$ a small square patch, $F_{q + d_i}$ bilinearly interpolated, and the second term keeps the unmasked region of the one-step-denoised latent fixed. After each update (Adam, learning rate 0.01) the handles are tracked (slide 27, "Point Tracking"):
+$$
+h^{k+1}_i = \arg\min_{q \in \Omega(h^k_i, r_2)} \Big\lVert F_q(\hat z^{k+1}_t) - F_{h^0_i}(z_t) \Big\rVert_1 ,
+$$ {#eq-drag-track}
+against the original handle's feature on the original latent, for at most 80 iterations.
+
+**(3) Reference-latent-control.** The original latent is denoised in parallel, and the decoder self-attention of the edited branch takes its keys and values from it: MasaCtrl's operator @eq-masa applied to a latent-space edit, restoring the source appearance on the new layout (@fig-drag-overview).
+
+![**DragDiffusion in three stages.** (1) LoRA fine-tuning on the input image; (2) DDIM inversion to $z_t$ and optimisation of this latent according to the drag; (3) denoising with keys and values copied from the original latent's denoising. Reproduced from [@shi2024dragdiffusion, Fig. 3].](figures/lec11/PhuTran1005-dragdiffusion-overview.png){#fig-drag-overview width=90%}
+
+**Why the stop-gradient moves content.** @eq-drag-ms has no external target. For one patch position $q$, the (sub)gradient flows only through $F_{q+d}$,
+$$
+\frac{\partial}{\partial \hat z}\, \big\lVert F_{q + d}(\hat z) - \mathrm{sg}(F_q(\hat z)) \big\rVert_1
+= J_{q + d}(\hat z)^\top\, \mathrm{sign}\big(F_{q + d}(\hat z) - F_q(\hat z)\big),
+$$
+with $J_{q+d}$ the Jacobian of the feature at $q + d$, so a descent step makes the feature one step ahead resemble the current feature at $q$: the content is copied one feature pixel towards the target. Without the stop-gradient, the loss could equally drop by pulling the background backwards onto the handle. Since the realised displacement is unknown, point tracking is needed after each step. The bilinear weights do not depend on $\hat z$, so a sub-pixel direction $d$ is possible and the loss stays differentiable.
+
+On DragBench (205 images, 349 drags, introduced by the paper), DragDiffusion reaches a mean handle-to-target distance of about 33 pixels and an image fidelity ($1 - \mathrm{LPIPS}$) of about 0.88, against about 57 and 0.70 for DragGAN (approximate readings of the paper's Fig. 8). Without LoRA the distance rises to about 56, so fine-tuning improves *accuracy*, not only fidelity; without reference-latent-control the fidelity drops; and the distance is minimal for intermediate inversion steps (30--40 of 50), where the layout lives. DragDiffusion thus combines several prior ideas, including inversion, an intermediate step as the place of layout, a light fine-tuning as identity anchor, and mutual self-attention, and shows that diffusion features are discriminative enough to serve as their own tracker, as DIFT [@tang2023dift] also exploits. Dragging has since moved into video models and into commercial editing tools, which is the clearest case in this chapter of a research interface becoming a product one.
+
+## Textual Inversion: a new word for a new concept {#sec-ti}
+
+Personalisation asks the model to render one particular object or style that no prompt describes precisely. Textual Inversion [@gal2023ti] keeps the generator frozen and learns, from 3--5 images, the embedding of a pseudo-word $S_*$ that can then be used in any sentence ("an oil painting of $S_*$", "a $S_*$ backpack"; @fig-ti-teaser).
+
+![**Textual Inversion.** A pseudo-word $S_*$ found from a few images of a sculpture or a toy places the concept in new scenes, styles and products. Reproduced from [@gal2023ti, Fig. 1].](figures/lec11/PhuTran1005-ti-teaser.png){#fig-ti-teaser width=80%}
+
+A latent diffusion model is trained with
+$$
+L_{LDM} = \mathbb{E}_{z \sim \mathcal{E}(x),\, y,\, \epsilon \sim \mathcal{N}(0,1),\, t}\Big[\big\lVert \epsilon - \epsilon_\theta\big(z_t, t, c_\theta(y)\big) \big\rVert_2^2\Big],
+$$ {#eq-ti-ldm}
+where the text encoder $c_\theta$ maps each token of the prompt $y$ to an embedding vector and processes the sequence with a transformer. Textual Inversion gives the placeholder $S_*$ a free embedding $v$ and solves
+$$
+v_* = \arg\min_v\ \mathbb{E}_{z \sim \mathcal{E}(x),\, y,\, \epsilon,\, t}\Big[\big\lVert \epsilon - \epsilon_\theta\big(z_t, t, c_\theta(y, v)\big) \big\rVert_2^2\Big],
+$$ {#eq-ti}
+over the concept images $x$ and neutral templates $y$ such as "a photo of $S_*$", with everything but $v$ frozen. The gradient $\nabla_v L = (\partial c_\theta/\partial v)^\top (\partial \epsilon_\theta/\partial c)^\top\, 2(\epsilon_\theta - \epsilon)$ reaches $v$ only through the cross-attention layers and the frozen text transformer. Because the objective is reconstruction, the vector captures visual detail; because $v$ is an input of the text transformer, every new sentence contextualises it like any other word, which is why one vector composes with arbitrary prompts. The paper's model is a 1.4-billion-parameter LDM (1280-dimensional embeddings; 768 for Stable Diffusion); the vector is initialised from a coarse word ("sculpture") and optimised for 5,000 steps, about an hour per concept, and occupies a few kilobytes.
+
+The variants trace a distortion--editability trade-off familiar from GAN inversion [@tov2021e4e] (@tbl-ti): more vectors barely improve reconstruction and hurt editability, pulling the vector towards a real word does the opposite, and human-written captions are worse on both axes --- hence the title, "an image is worth one word". About five images with varied backgrounds work best. Exact shapes are hard to capture (the learned token covers 75.8 % of style concepts but only 34.3 % of objects), relations between two concepts fail, and on Stable Diffusion the embeddings tend to dominate the prompt, which the authors attribute to its frozen CLIP text encoder.
+
+| Variant | Reconstruction | Editability |
+|---|---|---|
+| one vector (default) | 0.79 | 0.27 |
+| two or three vectors | 0.80 | 0.24 |
+| regularised towards the coarse word | 0.73 | 0.28 |
+| human-written long captions | 0.62 | 0.23 |
+
+: CLIP-based reconstruction and editability of Textual Inversion variants (reproduced values from Gal et al. [@gal2023ti]). {#tbl-ti}
+
+Set beside @sec-nulltext, the pair makes the method's shape clear. Both
+optimise a text embedding of a frozen model against a reconstruction loss, and
+both leave the weights alone; they differ in what the embedding has to be good
+for. Null-text inversion fits one image and needs the result only at the
+timestep it was fitted at, so it can afford a different vector per step.
+Textual Inversion fits a concept and needs the result to survive being placed
+in sentences it has never seen, so it gets one vector and a prior-shaped
+initialisation. The lecture added a caveat that applies to both: on DiT
+architectures and flow models the inversion step is done differently, so the
+mechanism here should be read for the idea rather than the recipe.
+
+## DreamBooth: binding a rare token by fine-tuning {#sec-dreambooth}
+
+DreamBooth [@ruiz2023dreambooth] takes the opposite route and fine-tunes all weights on 3--5 images of a subject, so that a rare token $[V]$ comes to mean that subject, which can then be shown in new contexts, poses and lighting with a fidelity a word embedding cannot reach (@fig-dreambooth-teaser).
+
+![**DreamBooth.** From four photos of a corgi puppy, the fine-tuned model shows the same dog in the Acropolis, swimming, sleeping, in a bucket and getting a haircut. Reproduced from [@ruiz2023dreambooth, Fig. 1].](figures/lec11/PhuTran1005-dreambooth-teaser.png){#fig-dreambooth-teaser width=80%}
+
+### The objective and the identifier
+
+DreamBooth writes the model in **$x$-prediction** form with amplitudes $\alpha_t, \sigma_t$ and text condition $c$:
+$$
+\mathbb{E}_{x, c, \epsilon, t}\Big[w_t\, \big\lVert \hat x_\theta(\alpha_t x + \sigma_t \epsilon,\ c) - x \big\rVert_2^2\Big].
+$$ {#eq-db-loss}
+This is the noise-prediction loss up to a weight: if the network predicts $\hat\epsilon$, then $\hat x = (z_t - \sigma_t \hat\epsilon)/\alpha_t$ and
+$$
+\hat x - x = \frac{\alpha_t x + \sigma_t \epsilon - \sigma_t \hat\epsilon}{\alpha_t} - x = -\frac{\sigma_t}{\alpha_t}\,(\hat\epsilon - \epsilon),
+\qquad
+w_t \lVert \hat x - x \rVert_2^2 = \frac{w_t}{\mathrm{SNR}_t}\, \lVert \hat\epsilon - \epsilon \rVert_2^2, \quad \mathrm{SNR}_t = \frac{\alpha_t^2}{\sigma_t^2},
+$$ {#eq-db-equiv}
+so the plain $\epsilon$-loss of Stable Diffusion corresponds to $w_t = \mathrm{SNR}_t$. All images are labelled "a [V] [class noun]"; the class noun ties the subject to the class prior, which supplies shape and plausible poses (subject fidelity drops from a DINO score of 0.744 to 0.303 without it). The identifier should carry a weak prior: English words have meanings to unlearn and random strings split into letters, so DreamBooth samples rare tokens of the vocabulary. Unlike Textual Inversion, the token's embedding is not optimised; the model is fine-tuned to give it a meaning. The lecture presented the procedure as Textual Inversion followed by fine-tuning with the text held fixed, which is a natural reading of the two papers in sequence but not what DreamBooth does. There is no inversion stage and no learned embedding: $[V]$ is picked from the vocabulary before training starts and never moves. The distinction matters for the comparison in @tbl-ti-db, because it is what makes DreamBooth's cost a whole checkpoint rather than a vector.
+
+### Language drift and the prior-preservation loss
+
+Naive fine-tuning causes language drift (the model forgets the class, and "a dog" produces the subject) and reduced diversity. DreamBooth therefore lets the frozen model generate about 1,000 samples $x_{\mathrm{pr}}$ of "a [class noun]" (condition $c_{\mathrm{pr}}$) and keeps reconstructing them:
+$$
+\mathbb{E}_{x, c, \epsilon, \epsilon', t}\Big[w_t \big\lVert \hat x_\theta(\alpha_t x + \sigma_t \epsilon, c) - x \big\rVert_2^2
++ \lambda\, w_{t'} \big\lVert \hat x_\theta(\alpha_{t'} x_{\mathrm{pr}} + \sigma_{t'} \epsilon', c_{\mathrm{pr}}) - x_{\mathrm{pr}} \big\rVert_2^2\Big].
+$$ {#eq-db-ppl}
+The second term is rehearsal: with ELBO weighting integrated over $t$, it upper-bounds a Monte-Carlo estimate of $\mathbb{E}_{x \sim p_{\mathrm{pre}}}[-\log p_\theta(x \mid c_{\mathrm{pr}})] = H(p_{\mathrm{pre}}) + D_{\mathrm{KL}}(p_{\mathrm{pre}} \Vert p_\theta)$, with $p_{\mathrm{pre}}$ the frozen model's class distribution, so it keeps the class distribution close to the original while the first term moves "a [V] dog" to the subject (with the $\epsilon$-loss weighting used in practice this is a heuristic, not a bound).
+
+On a benchmark of 30 subjects and 25 prompts, with subject fidelity measured by DINO [@caron2021dino] and CLIP image similarity and prompt fidelity by CLIP text similarity, DreamBooth clearly beats Textual Inversion (@tbl-db), and users preferred it for subject fidelity in 68 % against 22 % of the answers. Without prior preservation, generated "a dog" images become similar to the subject (PRES 0.664 against 0.493) and diversity drops, at a slightly higher subject fidelity. The limitations are rare contexts, appearance changing with the context, overfitting, and a full model copy per subject.
+
+| Method | DINO $\uparrow$ | CLIP-I $\uparrow$ | CLIP-T $\uparrow$ |
+|---|---|---|---|
+| real images (upper bound) | 0.774 | 0.885 | --- |
+| DreamBooth (Imagen) | **0.696** | **0.812** | **0.306** |
+| DreamBooth (Stable Diffusion) | 0.668 | 0.803 | 0.305 |
+| Textual Inversion (Stable Diffusion) | 0.569 | 0.780 | 0.255 |
+
+: Subject and prompt fidelity, Table 1 of Ruiz et al. [@ruiz2023dreambooth]. {#tbl-db}
+
+The two methods are ends of a spectrum (@tbl-ti-db). In between lie partial fine-tuning methods such as LoRA [@hu2022lora] (DragDiffusion's identity-preserving step is a single-image LoRA-DreamBooth) and Custom Diffusion [@kumari2023custom], which tunes only the cross-attention keys and values. Moving towards full fine-tuning increases fidelity, cost and the risk of drift.
+
+| | Textual Inversion | DreamBooth |
+|--|---|----|
+| what is optimised | one word embedding | all U-Net weights (860 M for SD) |
+| identifier | new token, learned embedding | existing rare token plus class noun |
+| regulariser | none (model frozen) | class prior preservation |
+| storage per concept | a few KB | a full checkpoint |
+| typical failure | imprecise shape | language drift, overfitting |
+
+: Two ends of the personalisation spectrum. {#tbl-ti-db}
+
+## Synthesis: what the lecture teaches as a whole {#sec-edit-synthesis}
+
+**1. Where to intervene.** Training-free methods (Prompt-to-Prompt, Plug-and-Play, MasaCtrl) are cheap but limited to what the frozen model does in one pass; per-image optimisation (Null-text inversion, DragDiffusion) buys fidelity to a real image for about a minute; trained modules (GLIGEN, ControlNet, Asyrp's $f_t$) add a control once and for all; fine-tuning (InstructPix2Pix, DreamBooth) changes what the model knows.
+
+@tbl-edit-methods puts the eleven in one place first, by what the user supplies
+and what the method actually changes.
+
+| Method | What the user supplies | What is changed or learned |
+|---|---|---|
+| Asyrp | a semantic direction, e.g. "smiling" | bottleneck shift $\Delta h_t$, applied asymmetrically |
+| Null-text inversion | a real image and its caption | per-step null embeddings $\varnothing_t$ |
+| Prompt-to-Prompt | a source and an edited prompt | cross-attention maps during sampling |
+| InstructPix2Pix | an image and an instruction | the model, retrained on generated pairs |
+| Plug-and-Play | an image and a target prompt | injected features and self-attention maps |
+| GLIGEN | a caption, phrases and boxes | added gated self-attention layers |
+| ControlNet | a prompt and a spatial map | a trainable encoder copy behind zero convolutions |
+| MasaCtrl | an image and a changed action | target queries read source keys and values |
+| DragDiffusion | an image, handle and target points | a LoRA, then one intermediate latent |
+| Textual Inversion | a few images of a concept | one token embedding $v$ |
+| DreamBooth | a few images of a subject | all weights, with prior preservation |
+
+: The eleven methods by interface and by what each one moves. {#tbl-edit-methods}
+
+Read down the last column and the chapter's argument is visible in one view:
+the thing being changed moves steadily outwards, from a hidden feature to an
+embedding, to attention, to an added module, to the weights themselves, and
+the cost rises with it.
+
+**2. Early steps decide layout, late steps appearance.** Almost every method encodes this in a schedule (@tbl-schedules); structure-preserving methods act early, appearance-preserving MasaCtrl acts late.
+
+| Method | Intervention in time |
+|--|----|
+| Asyrp | edit on $[T, t_{\mathrm{edit}}]$, $t_{\mathrm{edit}} \approx 300$--$500$ of 1000 |
+| Prompt-to-Prompt / Plug-and-Play | inject maps or features in the first 50--80 % of the steps |
+| GLIGEN | grounding layers active in the first 20--30 % of the steps |
+| MasaCtrl | mutual self-attention from step 4 of 50 |
+| DragDiffusion | optimise the latent at step 35 of 50 |
+| this chapter (@fig-xattn) | the "burger" map is fixed after about 6 of 50 steps |
+
+: Where the methods place their interventions in time. {#tbl-schedules}
+
+**3. Inversion is the gateway to real images, and guidance makes it hard** (@sec-edit-cfg, @tbl-edit-toy). Null-text inversion corrects the guided trajectory step by step; DragDiffusion turns guidance off and adds a LoRA; Plug-and-Play and MasaCtrl invert with the empty prompt, for which conditional and unconditional predictions coincide, and use guidance only in the target branch.
+
+**4. Attention splits into where and what.** Prompt-to-Prompt borrows cross-attention maps, Plug-and-Play self-attention queries and keys, MasaCtrl and DragDiffusion keys and values (@tbl-duality, @fig-duality).
+
+**5. New modules should start as the identity.** Methods that attach a branch to the pretrained generation path make its output zero at initialisation while keeping a gradient on its output-side parameter (@prp-gate, @prp-zeroconv; @tbl-identity), as do ADM's zero-initialised layers and DiT's adaLN-Zero [@peebles2023dit]. Asyrp's $f_t$, randomly initialised but acting only inside the editing interval, is an exception.
+
+| Method | New component | Zero-initialised parameter |
+|---|---|---|
+| InstructPix2Pix | 4 extra input channels | their first-convolution weights |
+| GLIGEN | gated self-attention | gate $\gamma$ in $\tanh(\gamma)$ |
+| ControlNet | trainable encoder copy | zero convolutions |
+| LoRA | low-rank update $BA$ | factor $B$ |
+
+: The "start as identity" principle. {#tbl-identity}
+
+**6. Fidelity and editability trade off everywhere.** Textual Inversion's distortion--editability curve, DreamBooth's prior preservation, InstructPix2Pix's $s_I$, Prompt-to-Prompt's injection fraction, MasaCtrl's start step and SDEdit's noise level are all knobs on one axis: how close the result stays to the source or the pretrained model, against how far the edit can go.
+
+## How the worked examples were run {#sec-repro}
+
+The chapter's central worked example is the two-dimensional reproduction of
+null-text inversion (@sec-toy, @tbl-edit-toy, @fig-toy-nulltext). What makes it
+possible is that for a Gaussian mixture the exact noise predictor is available
+in closed form, so no network has to be trained and no approximation stands
+between the claim and the measurement. That predictor is the whole of the
+trick, and it is eight lines:
+
+```{.python}
+def eps_mix(x, a, logits, shift):
+    """Exact E[eps | x_t = x] when x_0 follows a Gaussian mixture."""
+    var = a * S**2 + (1 - a)                   # variance of the noisy mixture
+    diff = x[None] - math.sqrt(a) * (MU + shift[None])
+    logp = logits - diff.pow(2).sum(1) / (2 * var)
+    r = torch.softmax(logp, 0)                 # responsibilities
+    return math.sqrt(1 - a) * (r[:, None] * diff).sum(0) / var
+```
+
+The noisy marginal of a mixture of Gaussians is again a mixture, with means
+$\sqrt{\alpha_t}\mu_k$ and variance $\alpha_t s^2 + 1 - \alpha_t$; the
+responsibilities $r$ are the posterior over components given $x_t$, and the
+score is their weighted average, which @eq-ddim-pd then turns into a noise
+prediction. The conditional model is the same function with the components
+outside the class given a logit of $-\infty$, and the "null embedding" of the
+experiment is six parameters of the unconditional one --- four mixture logits
+and a common shift of the means --- exact at their initial values, so that the
+only thing optimisation can do is what null-text optimisation does.
+
+The rest of the code for both experiments is in the book's repository under
+[`code/ch12/`](https://github.com/bispl-website/ai618-textbook/tree/main/code/ch12):
+the full sampler, inversion and per-step optimisation that produce
+@tbl-edit-toy, and the script that evaluates the shift coefficients behind
+@prp-asyrp-grid and @fig-asyrp-coeff.
+
+### The Stable Diffusion experiments
+
+The experiments of @fig-xattn and @fig-duality use Stable Diffusion v1.4 in float32 with the DDIM scheduler (scaled-linear betas 0.00085--0.012, `steps_offset=1`), 50 steps and $w = 7.5$. The three editing methods are implemented by one attention processor on the batch `[source-uncond, target-uncond, source-cond, target-cond]`: Prompt-to-Prompt copies the source's cross-attention probabilities (first 80 % of the steps) and self-attention probabilities at resolution $32 \times 32$ or lower (first 40 %); Plug-and-Play copies the source's self-attention queries and keys in decoder layers 4--11 (first 50 %) and, through a forward hook on `up_blocks[1].resnets[1].conv2`, its residual features (first 80 %), with the source prompt as negative prompt at weight $0.75(1 - i/49)$; MasaCtrl copies the source's keys and values in transformer blocks 10--15 from step 4. The seeds are 8888 (@fig-xattn) and 1234 (@fig-duality), applied to `torch.randn(1, 4, 64, 64)` through `torch.Generator().manual_seed`. On one shared B200 GPU each edit took about 10 s.
+
+## Connections and further reading
+
+* **Background and theory.** DDIM and its ODE view [@ddim; @sde], guidance [@ho2022cfg], latent diffusion [@rombach2022ldm], SDEdit [@meng2022sdedit] and *Geometry of Deep Learning* [@gdl]; DiffusionCLIP [@kim2022diffusionclip] precedes Asyrp.
+* **Inversion.** Negative-prompt inversion [@miyake2023npi], Direct Inversion [@ju2024direct] and EDICT [@wallace2023edict] are faster or exact alternatives to Null-text inversion; Imagic [@kawar2023imagic] edits by fine-tuning.
+* **Attention and correspondence.** StyleAligned [@hertz2024stylealigned], Text2Video-Zero [@khachatryan2023t2vzero] and TokenFlow [@geyer2024tokenflow] reuse the attention operators of MasaCtrl and Plug-and-Play; DIFT [@tang2023dift] explains why diffusion features match across images.
+* **Control and personalisation.** T2I-Adapter [@mou2023t2iadapter], Custom Diffusion [@kumari2023custom], LoRA [@hu2022lora] and MagicBrush [@zhang2023magicbrush].
+
+
+
+---
+
+*Based on the scribe note of Tran Dinh Phu, with the materials from Jaehyuk Kim. Edited by Jong Chul Ye.*

@@ -79,8 +79,19 @@ lectures:
       rather than developed again here.
   "11":
     chapter: chapters/ch12.qmd
+    note: >
+      Diffusion Model Applications I: Image Editing,
+      Part-4.1-Diffusion-Model-Applications.pptx slides 2-30. The instructor
+      confirmed on 2026-11-07 that lecture 11 was the first half of that deck,
+      not the acceleration and consistency models the syllabus had put here;
+      that material is Part-4 slides 132-147 and has no lecture yet.
   "12":
     chapter: chapters/ch13.qmd
+    note: >
+      Diffusion Model Applications II, the second half of the same deck,
+      slides 31-96: video generation and editing, then score distillation and
+      DreamSampler. Provisional -- confirmed only by the submissions, not yet
+      by the instructor.
   "13":
     chapter: chapters/ch14.qmd
   "14":

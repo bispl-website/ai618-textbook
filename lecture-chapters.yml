@@ -90,8 +90,7 @@ lectures:
     note: >
       Diffusion Model Applications II, the second half of the same deck,
       slides 31-96: video generation and editing, then score distillation and
-      DreamSampler. Provisional -- confirmed only by the submissions, not yet
-      by the instructor.
+      DreamSampler. The instructor confirmed the range on 2026-11-14.
   "13":
     chapter: chapters/ch14.qmd
   "14":

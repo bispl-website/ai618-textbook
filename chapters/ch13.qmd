@@ -1,10 +1,701 @@
 ---
-title: "Image Editing and Inverse Problems"
+title: "Diffusion Model Applications II: Video and Score Distillation"
 ---
 
-::: {.callout-note}
-## Not yet written
-Lecture 12 of AI618, given 2026-10-29. This chapter is merged from
-the scribe notes for that lecture; until those are written and graded it stands
-empty.
+
+<!--
+Chapter 13 is lecture 12 (2026-10-29), the second half of
+Part-4.1-Diffusion-Model-Applications.pptx, slides 31-96. Chapter number and
+lecture number have differed since 2026-10-25; lecture-chapters.yml is the map.
+
+The syllabus had lecture 12 as "Image Editing and Inverse Problems", which was
+wrong twice over -- image editing was lecture 11, and inverse problems were
+lectures 09 and 10. The instructor confirmed the range on 2026-11-14 and the
+topic list was rebuilt from the slides before the notes were read.
+
+Built on the scribe note of Hyunsung Kim (instructor's choice, 2026-11-14),
+with material from Siu Bae and Sangwoo Youn.
+
+The base note was chosen for its structure: it is the one that treats the two
+halves as a single argument, placing DreamMotion at the end of the video half
+as the first method to use a frozen model's noise prediction as a loss, so the
+reader crosses into score distillation having already seen the move. Do not
+reorder those sections without replacing that bridge.
+
+What came from the other two notes, and why each earns its place:
+
+  * @exm-sds-gaussian, from Siu Bae. The lecture asserts that score
+    distillation is prone to mode collapse and shows failure pictures; this is
+    the one case where it can be proved, and the proof shows the collapse is
+    in the expected gradient rather than in the optimiser or in the
+    approximation of the score. The caveats after it are part of the point.
+  * The PDS strided-grid analysis, from Sangwoo Youn. On the training grid the
+    reverse-mean coefficients satisfy A + B*sqrt(abar_t) = sqrt(abar_{t-1}),
+    so xi_t = 0 and BOTH coefficients of @eq-sd-pds-grad vanish. The
+    clean-sample term exists only because the method is run on a strided grid
+    with a mixed schedule convention. Checked numerically on the linear
+    schedule: zero to machine precision on adjacent steps, of order 1e-2 to
+    1e-1 on every other step. This is in neither the lecture nor the paper's
+    main text, and without it @eq-sd-pds-grad is misleading.
+  * The separation of freezing the teacher from dropping its Jacobian, from
+    Sangwoo Youn. A frozen network still has an input derivative; omitting it
+    is a second approximation, and @eq-sd-sds-grad is therefore not the
+    gradient of anything obtained by differentiating the denoising loss.
+  * @eq-vid-multidiffusion, from Siu Bae. MultiDiffusion as the least-squares
+    objective it is, which also explains FreeNoise's window fusion as the same
+    construction applied to attention features.
+  * @eq-vid-selfsim, from Siu Bae. The spatial and temporal self-similarity
+    matrices are HW x HW and N x N respectively; the temporal one compares
+    frames as wholes and tracks no fixed pixel through time. The base note
+    described both in words, which invites exactly the wrong reading.
+  * The notation clash with chapter 12, from Sangwoo Youn. Chapter 12 writes
+    alpha_t for the cumulative level; this chapter writes abar_t. The two
+    chapters are adjacent and both inherit from their sources.
+  * Smaller additions: the Lumiere "frames, not steps" guard and the Sora
+    token-drop half of the packing slide (Siu Bae); the PVDM storage count,
+    the Tune-A-Video attention-cost orders and Imagen Video's joint
+    image-and-video training (Sangwoo Youn).
+
+Slide 86 prints the DreamSampler identity with sqrt((1-abar)/abar) where
+squaring the difference of the two Tweedie expressions gives (1-abar)/abar.
+All three notes wrote the squared form. @sec-ds-observation states the correct
+constant and says the slide is wrong, so that a future editor does not
+"correct" it back.
+
+Two terminology collisions a reader will hit, both noted in the text: the DDS
+of this chapter is the delta denoising score, not the decomposed diffusion
+sampling of chapter 11; and "plug-and-play" has its own two senses, handled in
+chapter 12.
+
+The base note carried a closing table of seventeen rows covering nineteen
+methods, and described it as "the seventeen methods". The count now names the
+rows.
+-->
+
+
+## Overview {#sec-vid-overview}
+
+This chapter has two parts that look unrelated and turn out not to be.
+
+The first part is **video generation and editing with diffusion models**, all of it from before the flow-matching era: the video models in use today are flow-based and are treated after the chapters on flow models. What this part teaches is how a *pretrained image diffusion model* was stretched to video -- by inserting temporal layers into its U-Net (Imagen Video, SHOW-1, Lumiere, Tune-A-Video, ControlVideo, Ground-A-Video), by changing the latent it diffuses (PVDM, Sora), by designing the initial noise (FreeNoise), by denoising frames at different noise levels (FIFO-Diffusion), or by fine-tuning only the temporal attention on one video (VMC). The last method of the part, DreamMotion, edits a video by *optimising it* with the noise prediction of a frozen model as the loss, which is the bridge to the second part.
+
+The second part is **score distillation**: the noise-prediction loss of a frozen diffusion model used not to sample but as an objective for something else -- a NeRF (DreamFusion), an image being edited (DDS, CDS), a distribution of 3D scenes (ProlificDreamer), a latent together with its decoded image (PDS, HiFA). The part ends with the fundamental weakness of the idea, mode collapse, and with DreamSampler, which shows that a reverse-diffusion step *is* one step of score distillation and uses that to combine the two.
+
+The chapter takes the methods in order of publication within each part. For each it gives the mechanism in the notation of the original paper, and the one or two lines the papers leave implicit when they are needed to follow an equation.
+
+## Notation and conventions {#sec-vid-notation}
+
+The papers reuse letters. The chapter keeps each paper's symbols inside its section and fixes the shared ones here.
+
+| Symbol | Meaning |
+|---|---|
+| $\mathbf{x}_0$, $\mathbf{z}_0 = \mathcal{E}(\mathbf{x}_0)$ | a clean image (or video), and its latent under the autoencoder $(\mathcal{E}, \mathcal{D})$ of latent diffusion |
+| $\bar\alpha_t$ | cumulative signal level of DDPM, so $\mathbf{x}_t = \sqrt{\bar\alpha_t}\,\mathbf{x}_0 + \sqrt{1-\bar\alpha_t}\,\boldsymbol{\epsilon}$ with $\boldsymbol{\epsilon} \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$ |
+| $\alpha_t, \sigma_t$ | the *amplitudes* $\sqrt{\bar\alpha_t}$ and $\sqrt{1-\bar\alpha_t}$, used by the DreamFusion, HiFA and ProlificDreamer papers |
+| $\boldsymbol{\epsilon}_\theta(\mathbf{x}_t, t, c)$, $\hat{\boldsymbol{\epsilon}}$ | noise-prediction network with condition $c$; the papers also write $\boldsymbol{\epsilon}_\phi$ |
+| $\hat{\mathbf{x}}_{0\mid t}$, $\hat{\mathbf{z}}_{0\mid t}$ | Tweedie estimate of the clean sample from $\mathbf{x}_t$, @eq-vid-tweedie |
+| $\varnothing$, $\omega$ | the null (empty) condition, and the classifier-free guidance scale |
+| $(\cdot)^{1:N}$, $(\cdot)^n$ | the $N$ frames of a video, and frame $n$; a clip index is a superscript $\ell$ in PVDM |
+| $g(\theta)$, $g(\psi)$ | a differentiable generator (NeRF renderer, decoder, SVG rasteriser) with parameters $\theta$ or $\psi$ |
+| $w(t)$, $\omega(t)$ | a timestep weighting of a distillation loss |
+
+Typesetting is uniform across the chapter. Images, videos, latents and noise vectors are bold ($\mathbf{x}$, $\mathbf{z}$, $\mathbf{v}$, $\boldsymbol{\epsilon}$); scalars, timesteps and indices are italic ($t$, $n$, $h$, $w$, $\lambda$); descriptive labels in sub- and superscripts are upright ($\mathbf{z}^{\mathrm{s}}$, $\mathbf{x}^{\mathrm{tgt}}_0$, $\mathcal{L}_{\mathrm{SDS}}$, $\lambda_{\mathrm{rgb}}$); matrices and embeddings that are not images or noise, such as the attention projections $W^Q$ and the prompt embedding $P$, stay italic as in their papers. A few papers set some vectors in italic (the frame latents of Tune-A-Video, the noise frames of FreeNoise, the frames of VMC, and the noise $\epsilon$ of DreamFusion and DDS); their equations are reproduced here with the chapter's convention and are otherwise unchanged.
+
+**A clash with the previous chapter.** Chapter 12 wrote $\alpha_t$ for the
+*cumulative* signal level, following the DDIM convention of the Asyrp slides.
+This chapter follows the papers it covers, where $\bar\alpha_t$ is cumulative
+and $\alpha_t = \sqrt{\bar\alpha_t}$ is an amplitude. So chapter 12's
+$\alpha_t$ is this chapter's $\bar\alpha_t$, and this chapter's $\alpha_t$ is
+its square root. The two chapters are adjacent and both inherit their notation
+from their sources; this is the one place to check when carrying a formula
+across.
+
+Two further conventions need care. The Imagen Video and Lumiere figures write video sizes as frames $\times$ width $\times$ height. DDS puts a superscript $\omega$ on the noise prediction, $\boldsymbol{\epsilon}^\omega_\phi$, to say that it is the *guided* prediction of @eq-vid-cfg.
+
+## Background {#sec-vid-background}
+
+Five facts from earlier chapters are used throughout without comment. They are listed here only in the form this chapter uses them; their derivations are in the chapters named and are not repeated.
+
+1. **Tweedie's estimate** (chapter 6). With $\mathbf{x}_t = \sqrt{\bar\alpha_t}\,\mathbf{x}_0 + \sqrt{1-\bar\alpha_t}\,\boldsymbol{\epsilon}$, a noise prediction $\hat{\boldsymbol{\epsilon}} = \boldsymbol{\epsilon}_\theta(\mathbf{x}_t, t)$ gives
+$$
+\hat{\mathbf{x}}_{0\mid t} = \frac{\mathbf{x}_t - \sqrt{1-\bar\alpha_t}\,\boldsymbol{\epsilon}_\theta(\mathbf{x}_t, t)}{\sqrt{\bar\alpha_t}},
+$$ {#eq-vid-tweedie}
+which is $\mathbb{E}[\mathbf{x}_0 \mid \mathbf{x}_t]$ when $\boldsymbol{\epsilon}_\theta$ is exact. The training loss of every model below is the $\boldsymbol{\epsilon}$-prediction loss $\mathbb{E}\,\|\boldsymbol{\epsilon} - \boldsymbol{\epsilon}_\theta(\mathbf{x}_t, t)\|^2$.
+
+2. **DDIM and DDIM inversion** (chapter 6; chapter 12 for inversion). The deterministic step [@ddim] is
+$$
+\mathbf{x}_{t-1} = \sqrt{\bar\alpha_{t-1}}\,\hat{\mathbf{x}}_{0\mid t} + \sqrt{1-\bar\alpha_{t-1}}\,\boldsymbol{\epsilon}_\theta(\mathbf{x}_t, t),
+$$ {#eq-vid-ddim}
+a *denoise, then re-noise* decomposition with no random term, so it can be run upward from a real $\mathbf{x}_0$ with $\boldsymbol{\epsilon}_\theta(\mathbf{x}_t, t) \approx \boldsymbol{\epsilon}_\theta(\mathbf{x}_{t+1}, t+1)$:
+$$
+\mathbf{x}_{t+1} = \sqrt{\bar\alpha_{t+1}}\,\hat{\mathbf{x}}_{0\mid t} + \sqrt{1-\bar\alpha_{t+1}}\,\boldsymbol{\epsilon}_\theta(\mathbf{x}_t, t).
+$$ {#eq-vid-ddim-inv}
+The $\mathbf{x}_T$ so obtained reproduces $\mathbf{x}_0$ under the same prompt and keeps its layout under an edited one. Tune-A-Video, Ground-A-Video, VMC and DreamSampler start from this.
+
+3. **Classifier-free guidance** [@ho2022cfg] (chapter 11):
+$$
+\hat{\boldsymbol{\epsilon}}^\omega = \hat{\boldsymbol{\epsilon}}_\varnothing + \omega\,(\hat{\boldsymbol{\epsilon}}_c - \hat{\boldsymbol{\epsilon}}_\varnothing).
+$$ {#eq-vid-cfg}
+Guidance makes the trajectory curved and poorly invertible; null-text inversion [@mokady2023nulltext], which optimises $\varnothing$ per step so that the guided trajectory still reproduces the input, is in chapter 12 and is what Ground-A-Video uses.
+
+4. **Conditioning by concatenation** (SR3 [@saharia2022sr3]; chapter 9). The condition, a bilinearly upsampled low-resolution image, is concatenated to $\mathbf{x}_t$ along the channel axis. Every super-resolution and interpolation stage below is this with a video in place of the image.
+
+5. **Latent diffusion** (Stable Diffusion [@rombach2022ldm]; chapter 9). The diffusion runs in the latent space of an autoencoder $(\mathcal{E}, \mathcal{D})$ and text enters through cross-attention. The methods that start from Stable Diffusion inherit its U-Net, whose transformer blocks hold a self-attention and a text cross-attention; the video methods insert their temporal layers between these.
+
+## Video generation {#sec-vid-generation}
+
+### Imagen Video {#sec-vid-imagen}
+
+Imagen Video [@ho2022imagenvideo] is one of the earliest text-to-video diffusion models and the starting point that later work extended. It takes the U-Net of an image diffusion model, adds one temporal operation per block, and reaches high resolution and frame rate through a cascade of super-resolution models.
+
+**Cascade.** A frozen T5-XXL encoder (4.6B) embeds the prompt. A base video diffusion model (5.6B) generates 16 frames of $40 \times 24$ at 3 fps. Six super-resolution models then alternate between **temporal super-resolution** (TSR, more frames: 3 to 6, 12, 24 fps) and **spatial super-resolution** (SSR, larger frames: $40 \times 24$ to $80 \times 48$, $320 \times 192$, $1280 \times 768$), as @fig-vid-imagen-cascade shows. The final video is 128 frames of $1280 \times 768$ at 24 fps, 5.3 seconds. The text embedding is injected into all seven models, not only the base.
+
+![**The Imagen Video cascade.** Base model, then three TSR and three SSR models alternating; sizes are frames $\times$ width $\times$ height. Reproduced from [@ho2022imagenvideo, Fig. 6].](figures/lec12/hyunsungkim-ds-imagen-cascade.png){#fig-vid-imagen-cascade width=90%}
+
+Each SR model is a conditional diffusion model in the SR3 sense [@saharia2022sr3] of @sec-vid-background: the low-resolution video is upsampled (bilinearly for SSR; by repeating frames or filling in blank frames for TSR) and concatenated channel-wise to the noisy high-resolution video. The conditioning video receives Gaussian noise augmentation with a random signal-to-noise ratio during training, so that an SR stage does not over-trust the artefacts of the stage before it. Imagen Video is also trained jointly on images and video, by treating an image as a single-frame video with the temporal convolutions bypassed and the cross-frame temporal attention masked, so the far larger image corpus still reaches the spatial layers.
+
+**Video U-Net.** @fig-vid-imagen-unet is the building block. Each frame passes through a *spatial* convolution and a *spatial* attention, which come from the image diffusion model and run on every frame independently with shared parameters. A *temporal* attention or temporal convolution then mixes activations over frames and is what links them into a video. The base model uses temporal attention; the SR models use temporal convolution for memory, and the highest-resolution models have no spatial attention at all.
+
+![**Video U-Net block.** Spatial operations run per frame with shared parameters; one temporal operation mixes over frames. Reproduced from [@ho2022imagenvideo, Fig. 7].](figures/lec12/hyunsungkim-ds-imagen-unet.png){#fig-vid-imagen-unet width=80%}
+
+This "keep the spatial layers, insert a temporal layer" pattern is what SHOW-1, Lumiere, Tune-A-Video, ControlVideo and Ground-A-Video all repeat; ControlVideo gives it the name *temporal inflation*.
+
+### PVDM: projected latent video diffusion {#sec-vid-pvdm}
+
+PVDM [@yu2023pvdm] keeps the diffusion in a latent space but makes the latent of a video clip look like **three 2D images**, so that an image-style 2D U-Net can diffuse it.
+
+**Autoencoder** (@fig-vid-pvdm-ae). A video encoder maps the $S$ frames of a clip to a 3D latent with axes $(s, h, w)$ (time, height, width). Three learned projection networks look at this volume along each of the three perpendicular axes and produce three 2D latents: $\mathbf{z}^{\mathrm{s}}$ (time projected out; the content common to the clip), $\mathbf{z}^{\mathrm{h}}$ and $\mathbf{z}^{\mathrm{w}}$ (height or width projected out; how the clip changes in time). The video decoder reassembles the 3D latent from the three projections and decodes it to frames. In the paper's notation $\mathbf{z}^{\mathrm{s}} \in \mathbb{R}^{C \times H' \times W'}$, $\mathbf{z}^{\mathrm{h}} \in \mathbb{R}^{C \times S \times W'}$, $\mathbf{z}^{\mathrm{w}} \in \mathbb{R}^{C \times S \times H'}$, and the decoder first rebuilds a $3C$-channel grid $\mathbf{v} \in \mathbb{R}^{3C \times S \times H' \times W'}$ whose entry at position $(s, h, w)$ is
+$$
+\mathbf{v}^{shw} := [\,\mathbf{z}^{hw},\ \mathbf{z}^{sw},\ \mathbf{z}^{sh}\,],
+$$ {#eq-vid-pvdm-grid}
+where $\mathbf{z}^{hw} = \mathbf{z}^{\mathrm{s}}[:, h, w]$, $\mathbf{z}^{sw} = \mathbf{z}^{\mathrm{h}}[:, s, w]$ and $\mathbf{z}^{sh} = \mathbf{z}^{\mathrm{w}}[:, s, h]$ are the $C$-dimensional entries of the three latents at the indicated positions -- that is, each 2D latent is broadcast along the axis it lost. The saving is worth a number. A full latent volume holds $SH'W'$ positions
+where the three planes hold $H'W' + SW' + SH'$; for a $16 \times 32 \times 32$
+volume that is 16,384 against 2,048, a factor of eight. The ratio depends on
+the shape, and runtime and reconstruction quality depend on the projection and
+the decoder as well, so the factor is an illustration rather than a property of
+the method. The autoencoder is trained with a pixel reconstruction loss and LPIPS.
+
+![**PVDM autoencoder.** The 3D latent is projected along each axis into three image-like latents; the decoder reassembles it. Reproduced from [@yu2023pvdm, Fig. 2].](figures/lec12/hyunsungkim-ds-pvdm-autoencoder.png){#fig-vid-pvdm-ae width=90%}
+
+**Diffusion and clip-by-clip generation** (@fig-vid-pvdm-fw). A single 2D U-Net $\boldsymbol{\epsilon}_\theta$ denoises the three latents, with attention layers that see the features of all three so that their joint distribution is modelled. The superscript on $\mathbf{z}^\ell_t$ is the *clip index* and the subscript is the diffusion time. The first clip is generated unconditionally, with zeros concatenated, $\boldsymbol{\epsilon}_\theta(\mathbf{z}^1_t, \mathbf{0}, t)$; each later clip is generated conditioned on the clean latent of the previous clip, $\boldsymbol{\epsilon}_\theta(\mathbf{z}^\ell_t, \mathbf{z}^{\ell-1}_0, t)$, concatenated along channels as in SR3. One model learns both, with the objective
+
+$$
+\mathbb{E}\Big[\lambda\,\|\boldsymbol{\epsilon} - \boldsymbol{\epsilon}_\theta(\mathbf{z}^2_t, \mathbf{z}^1_0, t)\|_2^2 + (1-\lambda)\,\|\boldsymbol{\epsilon} - \boldsymbol{\epsilon}_\theta(\mathbf{z}^2_t, \mathbf{0}, t)\|_2^2\Big],\qquad \mathbf{z}^2_t = \sqrt{\bar\alpha_t}\,\mathbf{z}^2_0 + \sqrt{1-\bar\alpha_t}\,\boldsymbol{\epsilon} .
+$$ {#eq-vid-pvdm}
+
+![**PVDM framework.** Diffusion runs in the projected latent space; the initial clip is generated with a null condition and each future clip conditioned on the previous one. Reproduced from [@yu2023pvdm, Fig. 1].](figures/lec12/hyunsungkim-ds-pvdm-framework.png){#fig-vid-pvdm-fw width=90%}
+
+At inference the encoder is not used: each clip starts from fresh Gaussian noise $\mathbf{z}^\ell_T$, is denoised with the previous clip's *denoised* latent as condition, and is decoded once. A long video is therefore the autoregressive product $p(\mathbf{x}^1)\,p(\mathbf{x}^2 \mid \mathbf{x}^1)\cdots$, one full reverse diffusion per factor; the previous clip enters as a condition at every step, not as a starting point. This "chunked autoregressive" scheme is what FIFO-Diffusion (@sec-vid-fifo) later contrasts itself with.
+
+### SHOW-1 {#sec-vid-show1}
+
+SHOW-1 [@zhang2023show1] has the same skeleton as Imagen Video -- a keyframe model, a frame-interpolation model (temporal SR) and spatial SR models, alternated to raise both the frame count and the resolution (@fig-vid-show1) -- with two distinguishing choices.
+
+![**SHOW-1.** Top: keyframes, interpolation and first SR in pixel space, final SR in latent space. Bottom: (a) temporal modules inserted into the 2D U-Net; (b) inputs of the interpolation and SR U-Nets. Reproduced from [@zhang2023show1, Figs. 2 and 4].](figures/lec12/hyunsungkim-ds-show1-pipeline.png){#fig-vid-show1 width=85%}
+
+**Pixel first, latent last.** Keyframe generation ($8$ frames, $64 \times 40$), interpolation (to $29$ frames) and the first SR (to $256 \times 160$) are pixel-space diffusion models; only the last SR, to $576 \times 320$, is latent-based. The reason given in the paper: pixel models align motion with the text well at low resolution, where a latent would be too small ($64 \times 40$ would shrink to about $8 \times 5$), while pixel SR at high resolution costs several times the memory of latent SR.
+
+**3D U-Net by insertion.** Panel (a): a pretrained text-to-image U-Net (DeepFloyd IF) is turned into a 3D U-Net by inserting a temporal 1D convolution after each ResNet2D block and a temporal attention after the attention layers. The spatial layers stay fixed; only the temporal layers are trained.
+
+**Conditioning by concatenation and mask.** Panel (b): the interpolation U-Net sees a five-frame segment between two adjacent keyframes. Its input stacks, along channels, the noisy frames, the clean keyframes placed at the two end positions with zeros in between, and a binary mask $(1, 0, 0, 0, 1)$ saying which positions are given; three frames are generated per gap, so $N$ keyframes become $4N - 3 = 29$ frames. The SR U-Net sees the bilinearly upsampled low-resolution frames as condition; because 29 frames do not fit one pass, the video is upscaled in four segments, and the last upscaled frame of the previous segment is put in the condition channels of the next segment's first frame to keep the segments continuous. The latent SR stage is run SDEdit-style [@meng2022sdedit]: the upsampled pixel-stage video is encoded, noised to an intermediate timestep (about 900 of 1000) and denoised, by a U-Net fine-tuned only on that range of timesteps ("expert translation").
+
+### Lumiere {#sec-vid-lumiere}
+
+Lumiere [@bartal2024lumiere] keeps the cascade idea but removes its temporal
+half. One phrase below needs guarding: the base model generates all frames *at
+once* in the sense that every denoising evaluation sees the whole clip. The
+reverse process still runs its full number of steps; what is removed is the
+temporal cascade, not the sampling loop. @fig-vid-lumiere-pipe shows the difference. In the common approach (left) a base model generates distant keyframes, a cascade of TSR models fills in the frames between them, and SSR models upscale in non-overlapping windows. In Lumiere (right) a **Space-Time U-Net (STUNet)** generates all 80 frames of the low-resolution video at once, so there is no TSR cascade, and the SSR model is applied on *overlapping* temporal windows whose predictions are combined with **MultiDiffusion** [@bartal2023multidiffusion], a technique that enforces consistency across segments that would otherwise be processed independently.
+
+![**Lumiere pipeline.** (a) Keyframes, TSR cascade and windowed SSR. (b) STUNet produces all frames at once; SSR runs on overlapping windows merged by MultiDiffusion. Reproduced from [@bartal2024lumiere, Fig. 3].](figures/lec12/hyunsungkim-ds-lumiere-pipeline.png){#fig-vid-lumiere-pipe width=85%}
+
+MultiDiffusion is worth stating as the optimisation it is, because the same
+idea returns in @sec-vid-freenoise. Let $F_i$ crop window $i$, let $\Phi$ be one
+denoising step, and let $W_i$ hold non-negative per-element weights. The next
+full latent is the least-squares fit to every window's prediction,
+$$
+J_{t-1} = \arg\min_J \sum_i \big\lVert W_i \odot \big(F_i(J) - \Phi(F_i(J_t))\big) \big\rVert^2 .
+$$ {#eq-vid-multidiffusion}
+If every element is covered by at least one window of positive weight the
+objective separates over elements, and the solution at element $p$ is the
+average of the overlapping window predictions with weights $W_i(p)^2$. So at
+*every* denoising step each frame in an overlap is pulled to the consensus of
+the windows containing it. The averaging applies to one step's output and not
+to finished videos, which is why no seam appears.
+
+**STUNet** (@fig-vid-lumiere-stunet). The pretrained text-to-image U-Net is inflated into a U-Net that down- and up-samples in *both* space and time, $T \times H \times W$ to $T/2 \times H/2 \times W/2$ to $T/4 \times H/4 \times W/4$ and back. Two kinds of inflation block are used: convolution-based (pretrained spatial layers, then a 1D temporal convolution) at every level, and attention-based (pretrained spatial layers, then 1D temporal attention) only at the coarsest level, where the representation is small enough for several temporal attention layers to be cheap. The input and output have the same number of frames; the block is a U-Net used as the diffusion denoiser. Temporal downsampling is what lets one model hold a whole clip in memory, and hence what makes the keyframe-plus-TSR design unnecessary.
+
+![**STUNet.** A space-time U-Net with convolution-based inflation blocks at every level and attention-based ones at the coarsest. Reproduced from [@bartal2024lumiere, Fig. 4].](figures/lec12/hyunsungkim-ds-lumiere-stunet.png){#fig-vid-lumiere-stunet width=90%}
+
+### Sora {#sec-vid-sora}
+
+The models so far were academic; industry-scale high-resolution video generation starts with Sora. OpenAI published only a technical report, so this section follows a third-party review [@liu2024sora], whose figures are taken from the prior work Sora is believed to build on.
+
+**Spacetime patches** (@fig-vid-sora-patches). Instead of alternating TSR and SSR, Sora models the whole clip at once. A visual encoder compresses the video into a lower-dimensional 3D latent, the latent is cut into 3D patches (tubelets spanning time, height and width, as in ViViT), and each patch becomes a token. Patches of videos of different resolution, duration and aspect ratio are packed into one sequence (as in NaViT), so the model trains on videos at their native size. The same slide shows the other half of that idea: tokens are *dropped* from the packed sequence to make the batch fit, which the review reads as a form of data augmentation rather than purely as a saving.
+
+![**Sora's representation.** A video is compressed to a 3D latent and decomposed into spacetime patches. Reproduced from [@liu2024sora, Fig. 7].](figures/lec12/hyunsungkim-ds-sora-patches.png){#fig-vid-sora-patches width=85%}
+
+**Diffusion transformer** (@fig-vid-sora-dit). The tokens are denoised by a transformer rather than a U-Net. In DiT [@peebles2023dit] each block is LayerNorm, multi-head self-attention, LayerNorm and feed-forward, and the timestep $t$ and condition enter through *adaLN-Zero*: an MLP maps $(t, y)$ to the scale and shift of each LayerNorm and to a residual gain initialised at zero, so that every block starts as the identity. U-ViT instead feeds patches, $t$ and the condition all as tokens and adds U-Net-style long skip connections. From Sora on, the DiT block -- patchify plus transformer on 3D tokens -- replaces the convolutional U-Net, though in a form somewhat different from today's. The time embedding, the key ingredient of the U-Net denoiser, enters here through the adaLN conditioning.
+
+![**DiT and U-ViT.** Left: DiT block with adaLN-Zero conditioning on $t$ and $y$. Right: U-ViT treats patches, time and condition as tokens with long skip connections. Reproduced from [@liu2024sora, Fig. 11].](figures/lec12/hyunsungkim-ds-sora-dit.png){#fig-vid-sora-dit width=85%}
+
+**Video prompting.** The report demonstrates extending a video backward or forward in time, editing a video from a text instruction (the report does this SDEdit-style, by noising the input and denoising with the new prompt), and connecting two videos.
+
+## Video editing and motion customisation {#sec-vid-editing}
+
+The methods that follow are academic-scale work whose contribution is a concept or a technique rather than scale.
+
+### Tune-A-Video {#sec-vid-tav}
+
+Tune-A-Video [@wu2023tuneavideo] makes a text-to-video model out of Stable Diffusion by fine-tuning on **one video**.
+
+**Why spatio-temporal attention** (@fig-vid-tav-attn). Generating "a man is running on the beach" frame by frame with an image model gives a different man and a different beach in every frame: with spatial self-attention only, the attention matrix over frames is block-diagonal and each frame is independent. With attention across frames the matrix is full and the frames are coherent. The question is how to get that on top of an image model.
+
+![**Spatial versus spatio-temporal attention.** Per-frame attention (block diagonal) gives independent images; attention across frames gives a coherent video. Reproduced from [@wu2023tuneavideo].](figures/lec12/hyunsungkim-ds-tav-attention.png){#fig-vid-tav-attn width=85%}
+
+**Sparse-causal attention.** The self-attention of the image U-Net is changed so that frame $i$ attends to the first frame and to the previous frame:
+
+$$
+Q = W^Q \mathbf{z}_{v_i},\qquad K = W^K\,[\,\mathbf{z}_{v_1},\ \mathbf{z}_{v_{i-1}}\,],\qquad V = W^V\,[\,\mathbf{z}_{v_1},\ \mathbf{z}_{v_{i-1}}\,],
+$$ {#eq-vid-tav}
+
+with $[\cdot, \cdot]$ the concatenation along the token axis (@fig-vid-tav-sc). The query comes from the current frame; the keys and values come from the first and the previous frame, through the **frozen** projections $W^K$ and $W^V$. The key sequence is twice as long, so $QK^\top$ is an augmented attention map, and the first frame's latent in the keys and values is what carries consistency from frame 1 to frame $i$. Only $W^Q$ is updated. Attending to two frames rather than all $N$ keeps the cost linear in $N$ --- with $S$ tokens per frame, the attention scores cost $O(NS^2)$ against $O(N^2S^2)$ for attention to every frame, and each attention map is $S \times 2S$ rather than $S \times NS$ --- and it keeping $W^K, W^V$ frozen keeps the keys and values in the feature space the image model knows, so that one video does not wreck the pretrained knowledge.
+
+![**Sparse-causal attention.** Keys and values from the first and previous frame through frozen projections; the query projection is trained. Reproduced from [@wu2023tuneavideo].](figures/lec12/hyunsungkim-ds-tav-sparse-causal.png){#fig-vid-tav-sc width=60%}
+
+**Fine-tuning and inference** (@fig-vid-tav-pipe). Fine-tuning: the input video ("a man is skiing") is noised, and the U-Net is trained with the ordinary noise-prediction loss, updating only the query projections of the spatio-temporal attention and of the text cross-attention, and a newly inserted temporal attention layer. Inference: the input video is DDIM-inverted (@eq-vid-ddim-inv) to a latent noise, and that noise is denoised with the edited prompt ("Spider Man is skiing on the beach, cartoon style"). The inversion keeps the motion and layout; the prompt changes the content.
+
+![**Tune-A-Video.** Left: one-video fine-tuning of the attention projections and the temporal attention. Right: DDIM inversion of the input video and denoising with an edited prompt. Reproduced from [@wu2023tuneavideo, Fig. 4].](figures/lec12/hyunsungkim-ds-tav-pipeline.png){#fig-vid-tav-pipe width=90%}
+
+### ControlVideo {#sec-vid-controlvideo}
+
+ControlVideo [@zhang2023controlvideo] is ControlNet [@zhang2023controlnet] (chapter 12) extended to video. ControlNet adds a trainable branch that takes a depth map, edges or a pose and steers Stable Diffusion; given a *sequence* of such conditions and a prompt, ControlVideo generates a video that follows them, without any training.
+
+**Temporal inflation** (@fig-vid-controlvideo). The conditional signal goes through the ControlNet branch, whose output is added to the U-Net decoder through zero convolutions, exactly as in the image case. The latent $\mathbf{z}_T$ is denoised for $T$ steps with text cross-attention. What changes is the self-attention: originally per frame (block-diagonal over frames), it is inflated into **fully cross-frame attention**, in which the queries of every frame attend to the keys and values of all frames. Modifying the spatial attention in this way is called *temporal inflation*: the pretrained architecture is kept for the spatial attention, and temporal attention is imposed on top of it.
+
+![**ControlVideo.** ControlNet with its self-attention inflated to fully cross-frame attention; an interleaved-frame smoother removes structural flicker. Reproduced from [@zhang2023controlvideo, Fig. 2].](figures/lec12/hyunsungkim-ds-controlvideo.png){#fig-vid-controlvideo width=85%}
+
+ControlVideo is training-free: the red blocks of the figure are the attention blocks whose attention pattern is inflated, not blocks that are trained, and no weight is updated. The structural consistency comes from the ControlNet condition sequence, and the appearance consistency from the full cross-frame attention. The *interleaved-frame smoother* in the figure removes residual flicker by, at selected steps, predicting $\hat{\mathbf{z}}_{0\mid t}$ (@eq-vid-tweedie), replacing alternate frames by interpolations of their neighbours, and re-noising to $\mathbf{z}_{t-1}$ -- the denoise-then-re-noise decomposition of @eq-vid-ddim with an operation inserted on the clean estimate.
+
+Against Tune-A-Video: sparse-causal attention (two frames, $W^Q$ fine-tuned) versus full cross-frame attention (all frames, nothing fine-tuned), with the ControlNet condition supplying the structure that Tune-A-Video got from fine-tuning.
+
+### FreeNoise {#sec-vid-freenoise}
+
+The methods so far modify the attention. FreeNoise [@qiu2024freenoise] instead uses the *noise* to impose temporal consistency: it generates videos longer than the training length of a pretrained video model, without training, by designing the initial noise.
+
+**The initial noise decides the content** (@fig-vid-freenoise-noise). With deterministic DDIM sampling, the same initial noise always gives the same video, so the initialisation of the noise determines the generated content. Panel (a): inference from noise $\boldsymbol{\epsilon}_1$ gives one video; (c): from $\boldsymbol{\epsilon}_2$, another. Panel (b): simply concatenating $[\boldsymbol{\epsilon}_1, \boldsymbol{\epsilon}_2]$ to double the length makes the content change half way. Panel (d): the same $[\boldsymbol{\epsilon}_1, \boldsymbol{\epsilon}_2]$ processed with a sliding window gives a coherent long video. Temporal consistency at the noise level produces temporal coherence in the generated video; this is the key idea.
+
+![**Why the noise matters.** (a), (c): each noise gives its own video. (b): concatenated noises change content. (d): sliding-window inference over the same noises stays coherent. Reproduced from [@qiu2024freenoise, Fig. 1].](figures/lec12/hyunsungkim-ds-freenoise-noise.png){#fig-vid-freenoise-noise width=85%}
+
+**The method** (@fig-vid-freenoise-ov) has three parts.
+
+1. *Noise rescheduling.* The $N_{train}$ noise frames the model was trained with are extended to the target length $M$ not by drawing new noise but by **repeating the same noises, locally shuffled**:
+$$
+\mathbf{z}_T = \big[\,\boldsymbol{\epsilon}_1, \ldots, \boldsymbol{\epsilon}_{N_{train}},\ \mathrm{shuffle}(\boldsymbol{\epsilon}_1, \ldots, \boldsymbol{\epsilon}_S),\ \ldots,\ \mathrm{shuffle}(\boldsymbol{\epsilon}_{\bar S(i+1)}, \ldots, \boldsymbol{\epsilon}_{\bar S(i+S)}),\ \ldots\,\big].
+$$ {#eq-vid-freenoise-noise}
+Every window of the long sequence then contains the same set of noises the model was trained on, and distant frames share noises, so every noise is correlated with several frames from the start.
+2. *Sliding-window attention fusion.* In the temporal self-attention layers, attention is computed over overlapping windows and the outputs are fused; this is the sliding window of panel (d).
+3. *Multi-prompt motion injection.* To move from prompt $P_1$ to prompt $P_2$ along the video, the text cross-attention, $\widetilde F = \mathrm{Attn}_{\mathrm{cross}}(\widetilde Q, \widetilde K, \widetilde V)$ with $\widetilde Q = l_{\widetilde Q}(\widetilde F_{\mathrm{pre}})$, $\widetilde K = l_{\widetilde K}(P)$, $\widetilde V = l_{\widetilde V}(P)$, uses an interpolated prompt embedding
+$$
+\widetilde P = \begin{cases} P_1 & n < N_\gamma \\ P_1 + \dfrac{n - N_\gamma}{N_\tau - N_\gamma}\,(P_2 - P_1) & N_\gamma \le n < N_\tau \\ P_2 & \text{otherwise} \end{cases}
+$$ {#eq-vid-freenoise-prompt}
+($n$ the frame index) only in the middle timesteps $T_\alpha < t < T_\beta$ or in the deep layers $l > L$, and $P_1$ elsewhere. The quantity interpolated is the prompt embedding, not a latent; the restriction to middle timesteps reflects that layout and motion are decided at high noise levels and texture at low ones.
+
+![**FreeNoise.** Noise rescheduling extends $N_{train}$ noise frames to $M$; motion injection acts in the spatial cross-attention, window fusion in the temporal self-attention. Reproduced from [@qiu2024freenoise, Fig. 3].](figures/lec12/hyunsungkim-ds-freenoise-overview.png){#fig-vid-freenoise-ov width=85%}
+
+### FIFO-Diffusion {#sec-vid-fifo}
+
+FIFO-Diffusion [@kim2024fifo] generates videos of unbounded length from a model trained on short clips, by *diagonal denoising*: the frames in a window sit at different noise levels, and a frame leaves the window when it is clean.
+
+**Diagonal denoising** (@fig-vid-fifo-diag). Read the figure with frames down the vertical axis and denoising timesteps $\tau_4 = T > \tau_3 > \cdots > \tau_0 = 0$ along the horizontal. An image model denoises one frame across the row. A standard video model trained on $f = 4$ frames denoises four frames *at the same noise level* together. FIFO uses that same model, but on four frames that sit at **four different noise levels**, $\tau_1, \ldots, \tau_4$, and takes one denoising step on all of them at once. After the step the front frame is clean, so it is removed from the queue (dequeued) and a fresh noise frame is appended at the back (enqueued). Iterating, every step emits one finished frame and admits one new noise frame, so a 4-frame model produces a video of unbounded length. The paper shows 10,000-frame videos from VideoCrafter2, a model trained on 16 frames.
+
+![**Diagonal denoising with $f = 4$.** Frames in the queue sit at different timesteps; each step dequeues a clean frame and enqueues new noise. Right: chunked autoregressive versus FIFO on the inference-time/frame plane. Reproduced from [@kim2024fifo, Figs. 2 and 3].](figures/lec12/hyunsungkim-ds-fifo-diagonal.png){#fig-vid-fifo-diag width=95%}
+
+The timesteps $\tau_i$ are a DDIM sub-sequence, and one step is a DDIM update from $\tau_i$ to $\tau_{i-1}$; giving each frame its own $t$ is possible because $t$ enters the network only through its time embedding.
+
+**Two limitations.** First, a *training--inference mismatch*: the model was trained with all frames at the same noise level and is used with a different noise structure, so the number of distinct noise levels a window can hold is limited. Second, *drift*: consistency is enforced only inside the window, and across a long video there is no control, so the identity of a subject can change.
+
+**Mitigations** (@fig-vid-fifo-look). *Latent partitioning* splits the diffusion process into $n$ parts so that the maximum noise-level difference inside a window is smaller. *Lookahead denoising* overlaps the windows so that every frame is denoised with an adequate number of earlier, cleaner frames, at twice the computation. Overlapping and averaging reduces the mismatch but does not remove it, and it does not address the drift.
+
+![**Latent partitioning and lookahead denoising** ($f = 4$, $n = 2$). Reproduced from [@kim2024fifo, Fig. 4].](figures/lec12/hyunsungkim-ds-fifo-lookahead.png){#fig-vid-fifo-look width=85%}
+
+In practice the drift is more visible than the published examples suggest: over a long run the content drifts and the subject's identity changes. The remedy taken by the recent autoregressive video models, which are related to FIFO, is to *train with this noise structure from the beginning*, so that training and inference are aligned.
+
+### Ground-A-Video {#sec-vid-gav}
+
+Ground-A-Video [@jeong2024groundavideo] brings GLIGEN's grounding [@li2023gligen] (chapter 12) to video editing. Given "A rabbit is eating a watermelon on the table", the rabbit, the watermelon and the table are grounded with boxes, and several of them are changed at once -- "A squirrel is eating an orange on the grass, under the aurora" -- without training and with temporal consistency.
+
+![**Ground-A-Video.** Left: GLIP groundings, hand-edited groundings and prompt, DDIM inversion with null-text optimisation and optical-flow smoothing, depth maps for ControlNet. Right: inflated Stable Diffusion and inflated ControlNet with spatial-temporal attention, cross-frame gated attention on the grounding tokens, and modulated cross-attention on the text and null embeddings. Reproduced from [@jeong2024groundavideo, Fig. 3].](figures/lec12/hyunsungkim-ds-groundavideo.png){#fig-vid-gav width=90%}
+
+The pipeline (@fig-vid-gav) combines most of chapter 12 with the inflation of this chapter.
+
+* *Input preparation.* GLIP produces the groundings of the input frames automatically; the groundings and the prompt are edited by hand into the target groundings and prompt. Each frame is DDIM-inverted, then null-text optimised [@mokady2023nulltext] so that guided sampling reproduces it, and the inverted latents are smoothed with optical flow. ZoeDepth gives the depth maps that condition ControlNet.
+* *Denoising.* The smoothed latents go into an inflated Stable Diffusion and an inflated ControlNet. The transformer block carries three attentions: spatial-temporal attention (the inflation), **cross-frame gated attention**, into which the target grounding tokens are fed -- the video version of GLIGEN's gated self-attention -- and **modulated cross-attention**, which takes the target prompt $\tau$ together with the optimised null embeddings $\varnothing$. Gated attention is not added to the ControlNet branch. Where the target boxes leave a common outer region, that region is inpainted from the source before every step so that what is not edited is preserved.
+
+In short: the ControlNet architecture with inflated temporal attention, plus a grounding token and a cross-frame gated attention taken from GLIGEN.
+
+### VMC: video motion customisation {#sec-vid-vmc}
+
+Motion customisation differs from video editing: the goal is to transfer the **motion** of one video to other contexts. Textual Inversion (chapter 12) captures the *appearance* of a subject in a token $S^*$ and re-uses it elsewhere; VMC [@jeong2024vmc] captures the motion. From an 8-frame input, the motion of a bird, a car or a shark is re-rendered as "Phoenix + $M_1$ above lava" or "Tank + $M_2$ on the snow".
+
+**Motion vectors in the noisy domain** (@fig-vid-vmc). The input frames $\mathbf{v}_0^{1:N}$ are noised to $\mathbf{v}_t^{1:N}$, and the *motion vector* is the residual between consecutive frames, $\delta \mathbf{v}^n_t = \mathbf{v}^{n+1}_t - \mathbf{v}^n_t$. The difference between noisy frames still contains the motion, and that information is distilled into the **temporal attention** layers of the keyframe-generation U-Net, which are the only layers fine-tuned (Temporal Attention Adaptation). The loss aligns the ground-truth and predicted residuals of the noise, $\ell_{\mathrm{align}}(\delta\boldsymbol{\epsilon}^n_t,\ \delta\boldsymbol{\epsilon}^n_{\theta, t})$, with $\delta\boldsymbol{\epsilon}^n_t = \boldsymbol{\epsilon}^{n+1}_t - \boldsymbol{\epsilon}^n_t$ the residual of the noise that was added and $\delta\boldsymbol{\epsilon}^n_{\theta,t}$ the residual of the network's per-frame predictions. The prompt during training is appearance-invariant ("A seagull is walking").
+
+![**VMC.** (a) Training: motion vectors from consecutive noisy frames, aligned through the temporal attention of the keyframe U-Net. (b) Inference: DDIM inversion, customised keyframe generation, interpolation and super-resolution with appearance-aware prompts. Reproduced from [@jeong2024vmc, Fig. 2].](figures/lec12/hyunsungkim-ds-vmc-overview.png){#fig-vid-vmc width=90%}
+
+One line makes the figure and the loss agree. Adding noise at the same $t$ to frames $n$ and $n+1$ and subtracting,
+
+$$
+\delta \mathbf{v}^n_t = \sqrt{\bar\alpha_t}\,\delta \mathbf{v}^n_0 + \sqrt{1-\bar\alpha_t}\,\delta\boldsymbol{\epsilon}^n_t,
+$$ {#eq-vid-vmc}
+
+so the residual of the noise, $\delta\boldsymbol{\epsilon}^n_t$, carries the clean motion $\delta \mathbf{v}^n_0$ in the noisy domain, and matching the predicted residual $\delta\boldsymbol{\epsilon}^n_{\theta,t}$ to it is the ordinary noise-prediction loss applied to *differences of frames* instead of frames. Nothing in the loss asks the appearance of a single frame to be reproduced, which is why the appearance stays free for the new prompt; the paper uses a cosine similarity for $\ell_{\mathrm{align}}$ so that the direction, not the magnitude, of the motion is matched.
+
+![**VMC training.** $\delta\boldsymbol{\epsilon}^n_t$ from the forward process (blue circle) is aligned with $\delta\boldsymbol{\epsilon}^n_{\theta,t}$ from the U-Net; only the temporal attention is fine-tuned. Reproduced from [@jeong2024vmc, Fig. 3].](figures/lec12/hyunsungkim-ds-vmc-training.png){#fig-vid-vmc-train width=70%}
+
+Inference (panel (b)) is a cascade in the SHOW-1 sense -- DDIM inversion, keyframes from the customised model, temporal interpolation, spatial super-resolution -- with appearance-aware prompts ("A chicken is walking in a city", "... under deep water").
+
+### DreamMotion {#sec-vid-dreammotion}
+
+DreamMotion [@jeong2024dreammotion] reaches the same goal without training anything, and in doing so introduces the tool of the second half: the noise prediction of a frozen model as a loss on the video itself.
+
+![**DreamMotion.** (a) The reference video and the optimisation target are noised with the same $t$ and $\boldsymbol{\epsilon}$ and passed through a frozen text-to-video U-Net; the score-distillation gradient $\mathcal{L}_{\mathrm{V\text{-}DDS}}$ is masked, and spatial and temporal self-similarity losses align the feature correlations. (b) In a cascade, the optimisation is confined to the keyframe stage. Reproduced from [@jeong2024dreammotion, Fig. 4].](figures/lec12/hyunsungkim-ds-dreammotion.png){#fig-vid-dreammotion width=90%}
+
+The reference video $\hat{\mathbf{x}}^{1:N}$ ("A lion is yawning") and the video being optimised $\mathbf{x}^{1:N}$ ("A tiger is yawning") are noised with the same $t$ and $\boldsymbol{\epsilon}$ and passed through a **frozen** text-to-video U-Net, giving the reference noise $\hat{\boldsymbol{\epsilon}}_\varnothing$ and the predicted noise $\boldsymbol{\epsilon}_\varnothing$. Three losses drive $\mathbf{x}^{1:N}$: a video delta denoising score $\mathcal{L}_{\mathrm{V\text{-}DDS}} \odot \mathbf{m}^{1:N}$, the difference of the two noise predictions masked to the edit region, and two self-similarity losses $\mathcal{L}_{\mathrm{S\text{-}SSM}}$, $\mathcal{L}_{\mathrm{T\text{-}SSM}}$ that match the spatial and the temporal correlation structure of the U-Net features ($C \times H \times W \times N$) between reference and target. The two matrices are worth writing down, because they are not symmetric in
+construction and the asymmetry is the point. Taking the attention key features
+$\mathbf{K}^n_p$ at position $p$ of frame $n$, the spatial matrix compares
+positions within a frame and the temporal matrix compares *frames*, after the
+features have been averaged over space into one descriptor per frame:
+$$
+\mathrm{SS}^n_{pq} = \cos\big(\mathbf{K}^n_p, \mathbf{K}^n_q\big),
+\qquad
+\mathbf{m}_n = \frac{1}{HW}\sum_p \mathbf{K}^n_p,
+\qquad
+\mathrm{TS}_{ij} = \cos\big(\mathbf{m}_i, \mathbf{m}_j\big).
+$$ {#eq-vid-selfsim}
+So $\mathrm{SS}^n$ is $HW \times HW$ and $\mathrm{TS}$ is only $N \times N$:
+the temporal term constrains how the *frames as wholes* relate to one another
+and does not track any fixed pixel through time. A reader who assumes
+otherwise will expect the loss to pin down motion at pixel level, which it does
+not and is not meant to. The principle is that the spatio-temporal correlation
+of the reference and of the generated video should agree, so a distillation
+loss between the two spatio-temporal volumes guides the generation. In a cascaded model only the keyframe U-Net is used for the optimisation; interpolation and super-resolution follow frozen.
+
+What "delta denoising score" means is @sec-sd-dds.
+
+## Score distillation {#sec-sd}
+
+### DreamFusion and score distillation sampling {#sec-sd-dreamfusion}
+
+DreamFusion [@poole2022dreamfusion] introduced score distillation. The loss
+itself has already appeared in this book, in @sec-pnp of chapter 11, where it
+is the choice of consistency loss that turns text guidance into a
+plug-and-play problem and yields CFG++. What that section needed was the loss;
+what this one needs is its *gradient*, and the step that makes score
+distillation a method is what happens to that gradient below. The idea starts from the denoising loss of a pretrained diffusion model,
+
+$$
+\mathcal{L}_{\mathrm{SDS}}(\mathbf{z}, t, c, \boldsymbol{\epsilon}) = w(t)\,\big\|\hat{\boldsymbol{\epsilon}}_\phi(\mathbf{z}_t, t, c) - \boldsymbol{\epsilon}\big\|_2^2 .
+$$ {#eq-sd-sds}
+
+If $\mathbf{z}_t$ lies on the noisy manifold the model was trained on, then with the right $t$ and condition $c$ the model recovers the noise $\boldsymbol{\epsilon}$ that was added; the loss therefore measures whether $\mathbf{z}_t$ is on that manifold, and can be used *backwards*, to pull $\mathbf{z}$ onto it. The novelty is to apply this not to an image but to a **3D representation seen through a renderer** (@fig-sd-dreamfusion): a NeRF with parameters $\theta$ is rendered from a random camera, the rendered image is noised, the frozen Imagen U-Net predicts the noise with the prompt ("a DSLR photo of a peacock on a surfboard"), and the discrepancy $\hat{\boldsymbol{\epsilon}}_\phi - \boldsymbol{\epsilon}$ is back-propagated to the NeRF weights. Rendering the same NeRF from many cameras and applying the same loss gives a guidance signal for 3D. Before DreamFusion it was assumed that 3D generation needed a 3D diffusion model; the innovation is to generate a 3D representation with a 2D one. (The paper uses Imagen; the Stable Diffusion version is the open re-implementation.)
+
+![**DreamFusion.** A NeRF is rendered, noised, and scored by a frozen text-to-image diffusion model; the noise residual is back-propagated to the NeRF weights. Reproduced from [@poole2022dreamfusion, Fig. 3].](figures/lec12/hyunsungkim-ds-dreamfusion.png){#fig-sd-dreamfusion width=90%}
+
+**Parameters, not samples.** The contrast is between ancestral sampling, which updates a *sample* in pixel space ($\mathbf{z}_{t-1} = \mathrm{ddpm\_update}(\mathbf{z}_t)$), against SDS, which updates *parameters* by SGD ($\mathbf{x}_i = g(\theta_i)$, $\theta_{i+1} = \mathrm{opt.step}(\theta_i, \nabla_\theta \mathcal{L}(\mathbf{x}_i))$). With $\mathbf{x} = g(\theta)$ and $\mathbf{z}_t = \alpha_t \mathbf{x} + \sigma_t \boldsymbol{\epsilon}$, the chain rule gives
+
+$$
+\nabla_\theta \mathcal{L}_{\mathrm{Diff}}(\phi, \mathbf{x} = g(\theta)) = \mathbb{E}_{t,\boldsymbol{\epsilon}}\Big[ w(t)\,\underbrace{(\hat{\boldsymbol{\epsilon}}_\phi(\mathbf{z}_t; y, t) - \boldsymbol{\epsilon})}_{\text{noise residual}}\ \underbrace{\frac{\partial \hat{\boldsymbol{\epsilon}}_\phi(\mathbf{z}_t; y, t)}{\partial \mathbf{z}_t}}_{\text{U-Net Jacobian}}\ \underbrace{\frac{\partial \mathbf{x}}{\partial \theta}}_{\text{generator Jacobian}} \Big],
+$$ {#eq-sd-chain}
+
+and score distillation sampling **drops the U-Net Jacobian**, treating it as the identity:
+
+$$
+\nabla_\theta \mathcal{L}_{\mathrm{SDS}}(\phi, \mathbf{x} = g(\theta)) \triangleq \mathbb{E}_{t,\boldsymbol{\epsilon}}\Big[ w(t)\,(\hat{\boldsymbol{\epsilon}}_\phi(\mathbf{z}_t; y, t) - \boldsymbol{\epsilon})\,\frac{\partial \mathbf{x}}{\partial \theta} \Big].
+$$ {#eq-sd-sds-grad}
+
+Two things are easy to run together here and are worth separating. Freezing
+the teacher's weights is not what removes the Jacobian: a frozen network still
+has an input derivative, and $\partial\hat{\boldsymbol{\epsilon}}_\phi /
+\partial\mathbf{z}_t$ is exactly that derivative. Dropping it is a second,
+independent approximation, and @eq-sd-sds-grad is therefore not the gradient of
+@eq-sd-chain or of anything else obtained by differentiating the denoising
+loss. What it *is* the gradient of is written in @sec-ds-observation.
+
+Back-propagating through the U-Net is expensive -- the same cost that chapter 10 met in DPS [@chung2023dps] -- and the paper found that the Jacobian term hurts. By Tweedie's formula the residual is a scaled score, $\hat{\boldsymbol{\epsilon}}_\phi \approx -\sigma_t \nabla_{\mathbf{z}_t}\log p_t(\mathbf{z}_t \mid y)$, so @eq-sd-sds-grad pushes the noised rendering up the density of the model; ProlificDreamer (@sec-sd-vsd) makes this reading exact.
+
+**Janus problem.** The published results are selected ones; the important disadvantage is the *Janus face* artefact, a second face appearing on the back of an object. The loss is local: it gives consistency with each projected view but no global consistency, and no direct regularisation of the 3D structure. DreamSampler returns to this point.
+
+### Delta denoising score {#sec-sd-dds}
+
+DreamFusion's loss was then used for image editing, and DDS [@hertz2023dds] is one of the first such papers. Given a reference image $\hat{\mathbf{z}}$ with its prompt $\hat y$ ("A turtle flying a kite") and a target prompt $y$ ("... at sunset"), the image $\mathbf{z}$ is optimised with the *difference* of two noise predictions (@fig-sd-dds):
+
+$$
+\mathcal{L}_{\mathrm{DD}} = \big\|\boldsymbol{\epsilon}^\omega_\phi(\mathbf{z}_t, y, t) - \boldsymbol{\epsilon}^\omega_\phi(\hat{\mathbf{z}}_t, \hat y, t)\big\|_2^2,\qquad
+\nabla_\theta \mathcal{L}_{\mathrm{DDS}} = \big(\boldsymbol{\epsilon}^\omega_\phi(\mathbf{z}_t, y, t) - \boldsymbol{\epsilon}^\omega_\phi(\hat{\mathbf{z}}_t, \hat y, t)\big)\,\frac{\partial \mathbf{z}}{\partial \theta},
+$$ {#eq-sd-dds}
+
+where both images are noised with the *same* $\boldsymbol{\epsilon}$ and $t$, $\omega$ marks the guided prediction, and the U-Net Jacobian is dropped as in SDS.
+
+![**SDS and DDS.** Left: SDS compares the predicted noise with the added noise. Right: DDS compares the predicted noise of the target with the predicted noise of the reference under its own prompt. Reproduced from [@hertz2023dds, Fig. 2].](figures/lec12/hyunsungkim-ds-dds.png){#fig-sd-dds width=95%}
+
+The reference image and its prompt match, so the model estimates the reference noise correctly. If the prompt is changed slightly, the image and the prompt no longer match, and the estimated noise shifts; that shift guides the latent being optimised. Everything the two predictions share -- the background, the structure, and the model's own bias -- cancels in the difference, and what remains is the direction that the change of prompt asks for. In score terms the difference is $\nabla\log p(\mathbf{z}_t \mid y) - \nabla\log p(\mathbf{z}_t \mid \hat y)$ up to scale, a "conditional minus conditional" version of the "conditional minus unconditional" difference of classifier-free guidance.
+
+@fig-sd-dds-grad shows the effect: optimising "Panda snowboarding" to "Squirrel snowboarding", SDS loses the background while DDS keeps it; with the prompt unchanged SDS still degrades the image. The gradient maps for "Flamingo" to "Stork" show noise over the whole background in $\nabla\mathcal{L}_{\mathrm{SDS}}$ and signal only on the bird in $\nabla\mathcal{L}_{\mathrm{DDS}}$. The preservation is not perfect: some blur remains, and when the source and target objects differ in size there are many artefacts.
+
+![**SDS versus DDS.** Top: background preservation along the optimisation. Bottom: the SDS gradients carry background noise, the DDS gradient only the target. Reproduced from [@hertz2023dds, Figs. 3 and 4].](figures/lec12/hyunsungkim-ds-dds-gradients.png){#fig-sd-dds-grad width=95%}
+
+The DDS of this section (Delta Denoising Score) is unrelated to the DDS of chapter 11 (Decomposed Diffusion Sampling).
+
+### Contrastive denoising score {#sec-sd-cds}
+
+CDS [@nam2024cds] addresses DDS's loss of structure. Prompt-driven editing is **unsupervised image translation** with a prompt in place of a target domain, and CUT [@park2020cut] solved that problem's structure-preservation half with a patch-wise contrastive loss: in an encoder--decoder translator, the features of the translated image are passed back through the encoder, and a patch of the output is asked to match the patch *at the same location* of the input (positive pair) and not patches elsewhere (negative pairs). DDS and CUT have the same shape, but DDS uses only the noise difference as its loss, which is not sufficient for structural consistency; CDS borrows CUT's loss.
+
+![**CDS.** (a) Vanilla DDS. (b) CUT. (c) CDS: the noise difference of DDS drives the content change; a patch-contrastive loss on the self-attention features of the frozen U-Net preserves the spatial structure. Reproduced from [@nam2024cds, Fig. 2].](figures/lec12/hyunsungkim-ds-cds.png){#fig-sd-cds width=70%}
+
+In CDS (@fig-sd-cds), the source $\hat{\mathbf{z}}$ and the target $\mathbf{z}$ pass through the frozen diffusion U-Net as in DDS; the noise predictions give $\nabla\mathcal{L}_{\mathrm{DDS}}$, and the features $\hat{\mathbf{h}}$, $\mathbf{h}$ of the **self-attention layers** give the contrastive loss
+
+$$
+\ell_{\mathrm{con}}(\mathbf{z}, \hat{\mathbf{z}}) = \mathbb{E}_{\mathbf{h}}\Big[\sum_l \sum_s \ell\big(\mathbf{h}^s_l,\ \hat{\mathbf{h}}^s_l,\ \hat{\mathbf{h}}^{S \setminus s}_l\big)\Big],\qquad
+\ell(\mathbf{h}, \mathbf{h}^+, \mathbf{h}^-) = -\log\frac{\exp(\mathbf{h} \cdot \mathbf{h}^+/\tau)}{\exp(\mathbf{h} \cdot \mathbf{h}^+/\tau) + \sum \exp(\mathbf{h} \cdot \mathbf{h}^-/\tau)},
+$$ {#eq-sd-cds}
+
+an InfoNCE cross-entropy over layers $l$ and patch locations $s$. The paper's results: a cat in front of a mirror becomes a pig *together with its reflection*, which SDS and DDS cannot do; cat to bear, dogs to deer, coffee to matcha, and a NeRF whose flowers change colour, all with the structure preserved. Against DDS, Plug-and-Play, Prompt-to-Prompt, DiffuseIT and SDEdit, DDS and P2P either leave the structure unchanged or introduce odd structures and SDEdit changes the background, while CDS keeps the background -- down to a taxi behind the edited object.
+
+### ProlificDreamer: variational score distillation {#sec-sd-vsd}
+
+ProlificDreamer [@wang2023prolificdreamer] extends DreamFusion by optimising a **distribution** $\mu$ over 3D representations rather than one representation:
+
+$$
+\mu^* := \arg\min_\mu\ \mathbb{E}_{t,c}\Big[(\sigma_t/\alpha_t)\,\omega(t)\,D_{\mathrm{KL}}\big(q^\mu_t(\mathbf{x}_t \mid c, y)\ \|\ p_t(\mathbf{x}_t \mid y^c)\big)\Big],
+$$ {#eq-sd-vsd-kl}
+
+with $y$ the text, $c$ the camera, $q^\mu_t$ the distribution of noised renderings and $p_t$ the diffusion model's distribution: the KL divergence between the generated distribution and the target distribution is minimised. Differentiating in the parameters $\theta$ of a particle gives a difference of two scores,
+
+$$
+\frac{\mathrm{d}\theta_\tau}{\mathrm{d}\tau} = -\mathbb{E}_{t,\boldsymbol{\epsilon},c}\Big[\omega(t)\Big(\underbrace{-\sigma_t\nabla_{\mathbf{x}_t}\log p_t(\mathbf{x}_t \mid y^c)}_{\text{score of noisy real images}} - \underbrace{(-\sigma_t\nabla_{\mathbf{x}_t}\log q^{\mu_\tau}_t(\mathbf{x}_t \mid c, y))}_{\text{score of noisy rendered images}}\Big)\frac{\partial g(\theta_\tau, c)}{\partial\theta_\tau}\Big],
+$$ {#eq-sd-vsd-ode}
+
+and in practice
+
+$$
+\nabla_\theta \mathcal{L}_{\mathrm{VSD}}(\theta) \triangleq \mathbb{E}_{t,\boldsymbol{\epsilon},c}\Big[\omega(t)\big(\boldsymbol{\epsilon}_{\mathrm{pretrain}}(\mathbf{x}_t, t, y^c) - \boldsymbol{\epsilon}_\phi(\mathbf{x}_t, t, c, y)\big)\frac{\partial g(\theta, c)}{\partial\theta}\Big].
+$$ {#eq-sd-vsd}
+
+The first term is the pretrained score; the second is a new score function that is trained: $\boldsymbol{\epsilon}_\phi$ is a copy of the pretrained model with **LoRA** adapters, fine-tuned on the current renderings with the ordinary denoising loss, so that it estimates the score of the rendered-image distribution (@fig-sd-vsd). Fine-tuning the diffusion model towards the specific images being generated, instead of using the fixed score, is what gives the better 3D results. SDS is the special case in which $q^\mu$ is a single rendering, whose noised score is $-\boldsymbol{\epsilon}/\sigma_t$; substituting it in @eq-sd-vsd gives @eq-sd-sds-grad.
+
+![**Variational score distillation.** The rendered image is scored by the frozen model and by a LoRA-tuned copy trained on the renderings; the difference is back-propagated to the 3D particle. Reproduced from [@wang2023prolificdreamer, Fig. 2].](figures/lec12/hyunsungkim-ds-vsd.png){#fig-sd-vsd width=90%}
+
+### Posterior distillation sampling {#sec-sd-pds}
+
+PDS [@koo2023pds] applies to NeRF editing, SVG editing and more. Its loss matches, between source and target, the **stochastic latent** $\tilde{\mathbf{z}}_t$ of the DDPM reverse step rather than the noise prediction:
+
+$$
+\mathcal{L}_{\tilde{\mathbf{z}}_t}(\mathbf{x}^{\mathrm{tgt}}_0 = g(\theta)) := \mathbb{E}_{t,\boldsymbol{\epsilon}_{t-1},\boldsymbol{\epsilon}_t}\big[\|\tilde{\mathbf{z}}^{\mathrm{tgt}}_t - \tilde{\mathbf{z}}^{\mathrm{src}}_t\|_2^2\big],\qquad
+\tilde{\mathbf{z}}^{\mathrm{src}}_t := \tilde{\mathbf{z}}_t(\mathbf{x}^{\mathrm{src}}_0, y^{\mathrm{src}}; \boldsymbol{\epsilon}_\phi),\ \ \tilde{\mathbf{z}}^{\mathrm{tgt}}_t := \tilde{\mathbf{z}}_t(\mathbf{x}^{\mathrm{tgt}}_0, y^{\mathrm{tgt}}; \boldsymbol{\epsilon}_\phi),
+$$ {#eq-sd-pds}
+
+$$
+\nabla_\theta\mathcal{L}_{\mathrm{PDS}} = \mathbb{E}\Big[w(t)\,(\tilde{\mathbf{z}}^{\mathrm{tgt}}_t - \tilde{\mathbf{z}}^{\mathrm{src}}_t)\frac{\partial \mathbf{x}^{\mathrm{tgt}}_0}{\partial\theta}\Big]
+= \mathbb{E}\Big[\big(\psi(t)\,(\mathbf{x}^{\mathrm{tgt}}_0 - \mathbf{x}^{\mathrm{src}}_0) + \chi(t)\,(\hat{\boldsymbol{\epsilon}}^{\mathrm{tgt}}_t - \hat{\boldsymbol{\epsilon}}^{\mathrm{src}}_t)\big)\frac{\partial \mathbf{x}^{\mathrm{tgt}}_0}{\partial\theta}\Big].
+$$ {#eq-sd-pds-grad}
+
+The second form is the one to read: the loss minimises not only the difference in the latent (noise) space but also the difference in the pixel domain, target against source. The latent is a compressed version of the signal, and agreement in the latent does not always mean agreement in pixels; the extra term improves consistency. The decomposition comes from writing the DDPM step $\mathbf{x}_{t-1} = \boldsymbol{\mu}_\theta(\mathbf{x}_t, t) + \sigma_t \mathbf{z}$ backwards, $\tilde{\mathbf{z}}_t = (\mathbf{x}_{t-1} - \boldsymbol{\mu}_\theta(\mathbf{x}_t, t))/\sigma_t$, for the source and target forward trajectories that share $\boldsymbol{\epsilon}_t, \boldsymbol{\epsilon}_{t-1}$, and expanding $\boldsymbol{\mu}_\theta$ in terms of $\mathbf{x}_0$ and $\hat{\boldsymbol{\epsilon}}_t$; the $\chi(t)$ term is DDS, the $\psi(t)$ term is the clean-image difference, and $\psi, \chi$ are constants fixed by $\bar\alpha_t$. The same idea appears in HiFA.
+
+**Why the two timesteps are not adjacent.** The $\psi$ term looks like the
+substantial half of @eq-sd-pds-grad, and on the training grid it is not there
+at all. Write the reverse mean in Tweedie form,
+$\boldsymbol{\mu}_\theta = A_t\hat{\mathbf{x}}_{0\mid t} + B_t\mathbf{x}_t$, and
+let $t^-$ be the preceding *selected* step. Collecting the clean-sample terms
+of $\tilde{\mathbf{z}}^{\mathrm{tgt}}_t - \tilde{\mathbf{z}}^{\mathrm{src}}_t$ gives
+a coefficient proportional to
+$$
+\xi_t = \sqrt{\bar\alpha_{t^-}} - A_t - B_t\sqrt{\bar\alpha_t},
+$$ {#eq-sd-pds-xi}
+and $\psi(t) \propto \xi_t^2$, $\chi(t) \propto \xi_t$. For the DDPM posterior
+with $t^- = t-1$ the coefficients are
+$A_t = \sqrt{\bar\alpha_{t-1}}\beta_t/(1-\bar\alpha_t)$ and
+$B_t = \sqrt{\alpha_t}(1-\bar\alpha_{t-1})/(1-\bar\alpha_t)$, and
+$$
+A_t + B_t\sqrt{\bar\alpha_t}
+= \sqrt{\bar\alpha_{t-1}}\,\frac{\beta_t + \alpha_t(1-\bar\alpha_{t-1})}{1-\bar\alpha_t}
+= \sqrt{\bar\alpha_{t-1}},
+$$
+since $\beta_t + \alpha_t(1-\bar\alpha_{t-1}) = 1 - \bar\alpha_t$. So
+$\xi_t = 0$ exactly, **both** coefficients vanish, and the gradient is empty.
+The clean-sample term of @eq-sd-pds-grad exists only because the method is run
+on a strided grid, where the one-step $\alpha_t, \beta_t$ of the posterior are
+kept while the cumulative quantities move to $t^-$. That mixed convention is
+what makes $\xi_t \ne 0$. It is not an incidental implementation choice: on
+the linear schedule with every other step selected, $\xi_t$ is of order
+$10^{-2}$ to $10^{-1}$, and on adjacent steps it is zero to machine precision.
+A reader who takes @eq-sd-pds-grad at face value and runs it on consecutive
+timesteps will get no gradient at all.
+
+### HiFA {#sec-sd-hifa}
+
+HiFA [@zhu2024hifa] does text-to-3D with a latent diffusion prior and adds an image-space term (@fig-sd-hifa). Its central step is a rewriting of the SDS gradient with Tweedie's formula. With $\mathbf{z}_t = \alpha_t \mathbf{z} + \sigma_t\boldsymbol{\epsilon}$, so that $\boldsymbol{\epsilon} = (\mathbf{z}_t - \alpha_t \mathbf{z})/\sigma_t$, and the Tweedie estimate $\hat{\mathbf{z}} = (\mathbf{z}_t - \sigma_t\hat{\boldsymbol{\epsilon}})/\alpha_t$, so that $\hat{\boldsymbol{\epsilon}} = (\mathbf{z}_t - \alpha_t\hat{\mathbf{z}})/\sigma_t$,
+
+$$
+\nabla_\theta\mathcal{L}_{\mathrm{SDS}}(\phi, \mathbf{z}) = \mathbb{E}_{t,\boldsymbol{\epsilon}}\Big[\omega(t)(\hat{\boldsymbol{\epsilon}} - \boldsymbol{\epsilon})\frac{\partial \mathbf{z}}{\partial\theta}\Big]
+= \mathbb{E}_{t,\boldsymbol{\epsilon}}\Big[\omega(t)\Big(\tfrac{1}{\sigma_t}(\mathbf{z}_t - \alpha_t\hat{\mathbf{z}}) - \tfrac{1}{\sigma_t}(\mathbf{z}_t - \alpha_t \mathbf{z})\Big)\frac{\partial \mathbf{z}}{\partial\theta}\Big]
+= \mathbb{E}_{t,\boldsymbol{\epsilon}}\Big[\omega(t)\frac{\alpha_t}{\sigma_t}(\mathbf{z} - \hat{\mathbf{z}})\frac{\partial \mathbf{z}}{\partial\theta}\Big].
+$$ {#eq-sd-hifa-identity}
+
+SDS is therefore the gradient of $\|\mathbf{z} - \hat{\mathbf{z}}\|^2$: it pulls the rendered latent towards its own denoised estimate. HiFA adds the same term after the decoder,
+
+$$
+\mathcal{L}_{\mathrm{SDS+}}(\phi, \mathbf{z}, \mathbf{x}) = \mathbb{E}_{t,\boldsymbol{\epsilon}}\,\omega(t)\big[\|\mathbf{z} - \hat{\mathbf{z}}\|^2 + \lambda_{\mathrm{rgb}}\|\mathbf{x} - \hat{\mathbf{x}}\|^2\big],
+$$ {#eq-sd-hifa}
+
+with $\hat{\mathbf{x}} = \mathcal{D}(\hat{\mathbf{z}})$: image-domain SDS and latent-domain SDS together, and the paper's ablation (latent only, image only, both) shows the gain in consistency.
+
+![**HiFA.** The rendering is encoded, noised, denoised once to $\hat{\mathbf{z}}$ and decoded; the loss is taken in both latent and image space. Reproduced from [@zhu2024hifa, Fig. 2].](figures/lec12/hyunsungkim-ds-hifa.png){#fig-sd-hifa width=85%}
+
+### Limitation: optimisation collapses to a mode {#sec-sd-limit}
+
+With so many variants the question is whether there is a unified way to see score distillation as an optimisation framework. Before that, the limitation that all of them share (@fig-sd-limit). SDS, and DDS with it, is fully based on optimisation: only the loss guides the search, so it is prone to **mode collapse**. The Janus faces in NeRF and the failed edits are the symptoms. Reverse diffusion sampling, by contrast, adds a fresh noise at every step; the stochasticity makes it easy to move from one mode to another, so it is robust to mode collapse.
+
+"Prone to mode collapse" can be left as a description of the pictures, or it
+can be proved. In the one case where every quantity is available in closed
+form it is a short calculation, and it shows that the collapse is not a
+failure of optimisation but the fixed point the expected update has.
+
+::: {#exm-sds-gaussian}
+## SDS on a one-dimensional Gaussian collapses to the mean
+Let the data be $p_0 = \mathcal{N}(\mu, v)$ in one dimension with $v > 0$, let
+the generator be the identity $x = g(\theta) = \theta$, and fix a timestep with
+amplitudes $a, \sigma \in (0,1)$, $a^2 + \sigma^2 = 1$. Then
+$\mathbf{z}_t \sim \mathcal{N}(a\mu,\ a^2 v + \sigma^2)$ and the exact Tweedie
+denoiser is the Gaussian posterior mean
+$$
+\hat{\mathbf{z}}_{0\mid t}(\mathbf{z}_t) = \mu + k\,(\mathbf{z}_t - a\mu),
+\qquad k = \frac{a v}{a^2 v + \sigma^2}.
+$$
+By @eq-ds-equiv the SDS gradient is $w\,\frac{a}{\sigma}(\theta - \hat{\mathbf{z}}_{0\mid t})$ with $\mathbf{z}_t = a\theta + \sigma\boldsymbol{\epsilon}$, so taking the expectation over the noise,
+$$
+\mathbb{E}_{\boldsymbol{\epsilon}}\big[\theta - \hat{\mathbf{z}}_{0\mid t}\big] = (1 - ka)\,(\theta - \mu),
+\qquad 1 - ka = \frac{\sigma^2}{a^2 v + \sigma^2} \in (0,1).
+$$
+The expected update $\theta \leftarrow \theta - \eta\,w\,\frac{a}{\sigma}(1-ka)(\theta-\mu)$ therefore contracts towards $\mu$ from any initialisation, for any small enough positive step size. A population of particles driven by it all converge on $\mu$ and the population variance goes to zero, while an exact reverse sampler started from the terminal Gaussian returns $\mathcal{N}(\mu, v)$ and keeps the variance $v$.
 :::
+
+The example is one-dimensional and uses the exact denoiser, so it says nothing
+about what a trained network does on images. What it does show is that the
+collapse survives both of those idealisations: it is in the expected gradient
+itself, not in the approximation of the score or in the optimiser. Hence the
+question: can the score-distillation loss be used *inside* ancestral sampling?
+
+![**Score distillation is prone to mode collapse.** The loss alone guides an optimisation; failures in NeRF (Janus) and in editing. Reproduced from the lecture slides [@lecture-slides-applications].](figures/lec12/hyunsungkim-ds-sds-limitations.png){#fig-sd-limit width=85%}
+
+Score distillation originated in 3D generation but has become important for modern diffusion models and distillation techniques: DMD (Distribution Matching Distillation) [@yin2024dmd] and the formulations using forward and reverse KL divergence are directly related. These are left to a later chapter.
+
+## DreamSampler {#sec-dreamsampler}
+
+DreamSampler [@kim2024dreamsampler] joins the two halves of this chapter: it shows that one step of reverse diffusion contains one step of score distillation, and uses that to put the two together.
+
+### Key observation {#sec-ds-observation}
+
+A DDPM/DDIM step (@eq-vid-ddim) re-noises the output of the Tweedie denoiser, and the denoised point can be written, trivially, as the solution of a least-squares problem:
+
+$$
+\bar{\mathbf{z}} = \arg\min_{\mathbf{z}}\ \|\mathbf{z} - \hat{\mathbf{z}}_{0\mid t}\|^2,\qquad \mathbf{z}_{t-1} = \sqrt{\bar\alpha_{t-1}}\,\bar{\mathbf{z}} + \sqrt{1-\bar\alpha_{t-1}}\,\tilde{\boldsymbol{\epsilon}} .
+$$ {#eq-ds-recast}
+
+The minimiser is the Tweedie mean itself, so the rewriting changes nothing yet. It matters because the objective *is the score-distillation loss*. Writing $\mathbf{z}$ and $\boldsymbol{\epsilon}$ through the same $\mathbf{z}_t = \sqrt{\bar\alpha_t}\,\mathbf{z} + \sqrt{1-\bar\alpha_t}\,\boldsymbol{\epsilon}$,
+
+$$
+\|\mathbf{z} - \hat{\mathbf{z}}_{0\mid t}\|^2 = \Big\|\frac{\mathbf{z}_t - \sqrt{1-\bar\alpha_t}\,\boldsymbol{\epsilon}}{\sqrt{\bar\alpha_t}} - \frac{\mathbf{z}_t - \sqrt{1-\bar\alpha_t}\,\boldsymbol{\epsilon}_\theta(\mathbf{z}_t, t)}{\sqrt{\bar\alpha_t}}\Big\|^2 = \frac{1-\bar\alpha_t}{\bar\alpha_t}\,\|\boldsymbol{\epsilon} - \boldsymbol{\epsilon}_\theta(\mathbf{z}_t, t)\|^2,
+$$ {#eq-ds-equiv}
+
+which is @eq-sd-sds up to $w(t)$ -- the HiFA identity read in the other
+direction; the constant is absorbed into $w(t)$. The constant is
+$(1-\bar\alpha_t)/\bar\alpha_t$ and not its square root: the two Tweedie
+expressions differ by $\sqrt{1-\bar\alpha_t}/\sqrt{\bar\alpha_t}$ times a
+residual, and squaring that scales the squared norm by the square of the
+factor. The lecture slide prints the square root. All three scribe notes for
+this lecture write the squared form, so the point is recorded here only to
+stop a future editor from "correcting" it back. So one step of reverse diffusion contains one score-distillation problem, solved exactly; and if $\mathbf{z} = g(\psi)$ depends on parameters, the same problem is a score-distillation step in $\psi$.
+
+### Recasting as optimisation {#sec-ds-recast}
+
+DreamSampler replaces $\bar{\mathbf{z}}$ by a generator and adds a regulariser:
+
+$$
+\mathbf{z}_{t-1} = \sqrt{\bar\alpha_{t-1}}\,g(\psi_t) + \sqrt{1-\bar\alpha_{t-1}}\,\tilde{\boldsymbol{\epsilon}},\qquad
+\psi_t = \arg\min_\psi\ \|g(\psi) - \hat{\mathbf{z}}_{0\mid t}\|^2 + \lambda_{\mathrm{reg}}\,\mathcal{R}(g(\psi)).
+$$ {#eq-ds-sampler}
+
+Two things are gained. (i) *Any parameterisation* $\psi$: $g(\psi)$ can be the projection of a NeRF, an editing latent, an SVG rasteriser; the Tweedie estimate is still the target, but the optimisation is over $\psi$. Distillation and reverse sampling are combined, because after the inner optimisation the result is re-noised, and the stochasticity avoids the mode collapse of @sec-sd-limit. (ii) *Task-adaptive regularisation* $\mathcal{R}$: once the step is an optimisation, any regulariser can be added. A 3D-consistency regulariser in the NeRF domain would prevent the Janus problem; the original score distillation has only the loss and no place for such a term. With one inner solve and no re-noising, @eq-ds-sampler is SDS; with $g$ the identity and $\mathcal{R} = 0$ it is DDIM; everything else is between (@fig-ds-diagram).
+
+![**DreamSampler.** Reverse diffusion (denoise, re-noise), score distillation (the inner least-squares problem) and data consistency or conditioning (the regulariser) in one loop. Reproduced from [@kim2024dreamsampler, Fig. 2].](figures/lec12/hyunsungkim-ds-dreamsampler-diagram.png){#fig-ds-diagram width=80%}
+
+For inpainting, for instance, the data consistency -- the background outside the mask must match the measurement -- is the regulariser, and the SDS loss supplies the rest.
+
+### Geometry {#sec-ds-geometry}
+
+@fig-ds-geometry is the manifold picture of chapters 10--11 with the generator added. (a) From $\mathbf{z}_t$ on $\mathcal{M}_t$, the Tweedie estimate $\hat{\mathbf{z}}_{0\mid t} = \mathbb{E}[\mathbf{z}_0 \mid \mathbf{z}_t]$ lands on $\mathcal{M}_0$; the generator output $g(\psi)$ is pulled towards it by $\lambda_{\mathrm{ds}}\|g(\psi) - \hat{\mathbf{z}}_{0\mid t}\|^2 + \lambda_{\mathrm{reg}}\mathcal{R}(g(\psi))$, with $\mathcal{R}$ (the line $\mathbf{y} = \mathcal{A}\mathbf{x}$) also acting on $\mathcal{M}_0$. (b) The updated $g(\psi + \Delta\psi)$ is re-noised with the target-conditioned prediction $\boldsymbol{\epsilon}^{\mathrm{tgt}}_\theta$ to $\mathbf{z}_{t-1}$. In one phrase, distillation and reverse sampling are unified within $\mathcal{M}_0$. Tweedie's denoiser is the projection onto $\mathcal{M}_0$ (chapter 10); DreamSampler makes the move *along* $\mathcal{M}_0$ an optimisation over any parameters.
+
+![**Geometry of DreamSampler.** (a) Distillation and regularisation act on $\mathcal{M}_0$ around the Tweedie estimate. (b) The updated generator output is re-noised to $\mathcal{M}_{t-1}$. Reproduced from [@kim2024dreamsampler, Fig. 3].](figures/lec12/hyunsungkim-ds-dreamsampler-geometry.png){#fig-ds-geometry width=95%}
+
+### Applications {#sec-ds-applications}
+
+**Text-guided editing (Theorem 1).** Delta denoising score is obtained from
+
+$$
+\min_{\mathbf{z}}\ \|\mathbf{z} - \hat{\mathbf{z}}_{0\mid t}(c_\varnothing)\|^2 + \gamma \mathcal{R}(\mathbf{z}),\qquad \mathcal{R}(\mathbf{z}) = \frac{1}{1-\gamma}\,\|\mathbf{z} - \hat{\mathbf{z}}_{0\mid t}(c_{\mathrm{tgt}})\|^2,
+$$ {#eq-ds-thm1}
+
+a *proximal pivot* on the Tweedie estimate under the null text $c_\varnothing$ and a *text guidance* term on the estimate under the target text $c_{\mathrm{tgt}}$; the pair amounts to DDIM inversion under the null text plus CFG guidance under the target text, and the combination ends in the CFG++ structure of chapter 11. Explicitly, the objective is proportional to $(1-\gamma)\|\mathbf{z} - \hat{\mathbf{z}}_\varnothing\|^2 + \gamma\|\mathbf{z} - \hat{\mathbf{z}}_{\mathrm{tgt}}\|^2$, so its minimiser is the weighted mean
+
+$$
+\mathbf{z}^* = \hat{\mathbf{z}}_{0\mid t}(c_\varnothing) + \gamma\,\big(\hat{\mathbf{z}}_{0\mid t}(c_{\mathrm{tgt}}) - \hat{\mathbf{z}}_{0\mid t}(c_\varnothing)\big),
+$$ {#eq-ds-thm1-sol}
+
+and re-noising it with the unconditional noise is the CFG++ update [@chung2025cfgpp] of chapter 11, with $\gamma$ in the role of the interpolation weight $\lambda \in [0, 1]$; the difference of the two Tweedie estimates is, by @eq-vid-tweedie, the difference of the two noise predictions, which is DDS. Examples: glasses added to cats in photographs, illustrations and paintings, horses to zebras including cartoons.
+
+**Text-guided inpainting.** The regulariser gains a data-consistency term (@fig-ds-inpaint):
+
+$$
+\mathcal{R}(\mathbf{z}) = (1-\gamma)\,\big\|\mathcal{M} \odot \big(\mathbf{z} - \hat{\mathbf{z}}_{0\mid t}(c_{\mathrm{tgt}})\big)\big\|^2 + \gamma\,\big\|\mathbf{y} - \mathcal{A}\,\mathcal{D}_\varphi(\mathbf{z})\big\|^2,
+$$ {#eq-ds-inpaint}
+
+text guidance inside the mask $\mathcal{M}$, and agreement of the decoded image with the measurement $\mathbf{y}$ through the forward operator $\mathcal{A}$ outside it -- the likelihood term of DPS, now as a regulariser. Closed eyes are a hard case because most face data has open eyes; score distillation and data consistency together handle it. The paper compares with TReg, Stable-Inpaint and Stable-Repaint.
+
+![**Text-guided inpainting with DreamSampler.** Top: measurements. Bottom: reconstructions for "glasses" and "closed eyes". Reproduced from [@kim2024dreamsampler].](figures/lec12/hyunsungkim-ds-dreamsampler-inpainting.png){#fig-ds-inpaint width=90%}
+
+**SVG reconstruction and super-resolution NeRF.** Because the step is parameterised, the domain need not be pixels. From a blurred or downsampled measurement, the SVG parameters are optimised directly, where other pipelines (PSLD then LIVE vectorisation, VectorFusion) reconstruct an image first and vectorise it, with visibly worse results. From blurred multi-view measurements a NeRF is reconstructed at high quality.
+
+The general form of score distillation, then, is this: every score-distillation technique is directly related to diffusion sampling, the inner optimisation can be combined with re-noising, and a regularisation term can be added for the task at hand to guide the signal.
+
+## Summary {#sec-vid-summary}
+
+@tbl-vid-methods puts the nineteen methods in one place --- seventeen rows, two of which pair a method with its successor --- by what is kept frozen, what is changed, and where the temporal (or 3D) consistency comes from.
+
+| Method | Base model | What is trained or optimised | Where consistency comes from |
+|---|---|---|---|
+| Imagen Video | trained from scratch | all seven models | temporal attention/convolution; TSR/SSR cascade |
+| PVDM | trained from scratch | projected autoencoder, 2D U-Net | three projected latents; previous-clip condition |
+| SHOW-1 | DeepFloyd IF | inserted temporal layers | keyframes, masked interpolation, segment conditioning |
+| Lumiere | pretrained T2I U-Net | inflated STUNet | all frames at once; MultiDiffusion for SSR |
+| Sora | trained from scratch | DiT on spacetime patches | whole clip as one token sequence |
+| Tune-A-Video | Stable Diffusion | $W^Q$ of attentions, temporal attention (one video) | sparse-causal attention; DDIM inversion |
+| ControlVideo | SD + ControlNet | nothing | fully cross-frame attention; condition sequence; smoother |
+| FreeNoise | pretrained T2V | nothing | repeated, locally shuffled noise; window fusion |
+| FIFO-Diffusion | pretrained T2V | nothing | diagonal denoising queue |
+| Ground-A-Video | SD + ControlNet | nothing (null-text optimised per frame) | inflation, gated attention on groundings, flow smoothing |
+| VMC | cascaded T2V | temporal attention (one video) | noise-residual alignment |
+| DreamMotion | frozen T2V | the video itself | V-DDS and self-similarity losses |
+| DreamFusion | frozen T2I | NeRF weights | SDS from many views |
+| DDS / CDS | frozen T2I | the image | difference of predictions; contrastive features |
+| ProlificDreamer | frozen T2I + LoRA | 3D particles, LoRA | VSD, difference of two scores |
+| PDS / HiFA | frozen (latent) T2I | NeRF or image | latent and pixel terms |
+| DreamSampler | frozen (latent) T2I | any $g(\psi)$ per step | re-noising plus task regulariser |
+
+: What each method keeps, changes, and relies on. {#tbl-vid-methods}
+
+Two threads run through the chapter. The first is *reuse*: every method after Sora starts from a frozen pretrained model and changes as little as possible -- an attention pattern, one projection, the noise, the schedule of timesteps. The second is the *noise-prediction loss as a measuring stick*: it trains the model, it scores a rendering (SDS), it scores an edit (DDS), and, read through Tweedie's formula, it is the inner step of reverse diffusion itself (DreamSampler).
+
+
+---
+
+*Based on the scribe note of Hyunsung Kim, with the materials from Siu Bae and Sangwoo Youn. Edited by Jong Chul Ye.*

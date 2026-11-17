@@ -32,9 +32,9 @@ book:
           - chapters/ch11.qmd
           - chapters/ch12.qmd
           - chapters/ch13.qmd
-          - chapters/ch14.qmd
       - part: "Flow Models"
         chapters:
+          - chapters/ch14.qmd
           - chapters/ch15.qmd
           - chapters/ch16.qmd
           - chapters/ch17.qmd

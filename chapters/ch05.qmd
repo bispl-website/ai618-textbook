@@ -1050,12 +1050,12 @@ training phase: how do we estimate the score from noisy samples?
 For a density $p_{data}(x)$ (slide 31), the score $\nabla_x \log p_{data}(x)$ is a vector field: at
 every point it points in the direction in which the density increases fastest,
 towards the nearby modes, with a magnitude that is large where the density
-changes quickly relative to its value (@fig-score). It is the same object that diffusion models learn.
+changes quickly relative to its value (@fig-score-arrows). It is the same object that diffusion models learn.
 Two features make it convenient: it does not depend on the normalizing constant
 of $p$, since $\nabla \log (c\, p) = \nabla \log p$, and it can be estimated from
 samples. Before diffusion models, two classical estimators were known.
 
-![A two-mode density (left) and its score (right). Each arrow points in the local direction of steepest increase of the log-density, and the arrows vanish at the modes. From slide 31 of the course slides [@lecture-slides-ssl]; the slide credits Yang Song's blog post on score-based generative modelling.](figures/lec05/present091-slide-score.png){#fig-score width=70%}
+![A two-mode density (left) and its score (right). Each arrow points in the local direction of steepest increase of the log-density, and the arrows vanish at the modes. From slide 31 of the course slides [@lecture-slides-ssl]; the slide credits Yang Song's blog post on score-based generative modelling.](figures/lec05/present091-slide-score.png){#fig-score-arrows width=70%}
 
 ### Denoising autoencoders estimate the score
 

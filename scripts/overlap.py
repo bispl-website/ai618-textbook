@@ -50,7 +50,17 @@ REPO = Path(__file__).resolve().parent.parent
 SHINGLE = 8
 FLAG_JACCARD = 0.08          # chapters are longer than notes; flag earlier
 FLAG_CONTAINMENT = 0.20
-LABEL_RE = re.compile(r"\{#((?:sec|eq|fig|tbl|thm|lem|prp|cor|def|exm|alg)-[A-Za-z0-9_-]+)\}")
+# The closing brace used to be required here, which made every label that
+# carries attributes invisible: a figure is written `{#fig-map width=85%}` and
+# a table `{#tbl-x .striped}`, so none of them were ever compared. `fig-map`
+# was defined in both ch01 and ch14 for four days under a clean report from
+# this script, with each chapter's `@fig-map` resolving to one of the two
+# figures. The label now ends at whitespace or the brace, whichever comes
+# first. `rem` and `lst` joined the list for the same reason: a kind that is
+# not listed cannot clash.
+LABEL_RE = re.compile(
+    r"\{#((?:sec|eq|fig|tbl|thm|lem|prp|cor|def|exm|alg|rem|lst)"
+    r"-[A-Za-z0-9_-]+)(?=[\s}])")
 # Every chapter has these by design, so reporting them as overlap buries the
 # one heading that actually says the same thing twice.
 BOILERPLATE = {"(chapter head)", "overview", "notation", "summary",

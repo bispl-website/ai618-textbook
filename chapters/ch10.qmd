@@ -92,9 +92,9 @@ $$
 \mathbf{y} = \mathcal{A}(\mathbf{x}_0) + \mathbf{n}, \qquad \mathbf{y}, \mathbf{n} \in \mathbb{R}^n, \quad \mathbf{x}_0 \in \mathbb{R}^d .
 $$ {#eq-forward-model}
 
-@fig-inverse shows typical instances. Inpainting, super-resolution and deblurring are linear; phase retrieval and deblurring with a learned blur model are nonlinear.
+@fig-inverse-examples shows typical instances. Inpainting, super-resolution and deblurring are linear; phase retrieval and deblurring with a learned blur model are nonlinear.
 
-![Linear (top) and nonlinear (bottom) inverse problems: in each pair, the measurement $\mathbf{y}$ is on the left and a diffusion-based reconstruction on the right. Reproduced from [@chung2023dps, Fig. 1].](figures/lec09/kietngt00-dps-fig1-overview.png){#fig-inverse width=90%}
+![Linear (top) and nonlinear (bottom) inverse problems: in each pair, the measurement $\mathbf{y}$ is on the left and a diffusion-based reconstruction on the right. Reproduced from [@chung2023dps, Fig. 1].](figures/lec09/kietngt00-dps-fig1-overview.png){#fig-inverse-examples width=90%}
 
 Recovering $\mathbf{x}_0$ from $\mathbf{y}$ is *ill-posed*: the measurement alone does not determine a unique, stable answer. In particular, two problems arised from the inverse problem setup. First, there are usually fewer measurements than unknowns ($n < d$), so information is lost: inpainting discards pixels, super-resolution averages them, and accelerated MRI skips Fourier coefficients. Infinitely many images then explain $\mathbf{y}$ equally well. Second, even when $\mathcal{A}$ is invertible, inverting it can amplify the noise enormously. For a linear $A$, $A^{-1}\mathbf{y} = \mathbf{x}_0 + A^{-1}\mathbf{n}$. In directions that $A$ nearly erases, such as the fine details removed by a blur, $A^{-1}$ must multiply by a very large factor to restore the signal, and it multiplies the noise $\mathbf{n}$ by the same factor. Fitting the data alone, $\min_{\mathbf{x}} \|\mathbf{y} - \mathcal{A}(\mathbf{x})\|_2^2$, therefore cannot pick a good solution. The missing information must come from a *prior*: a probability distribution $p(\mathbf{x}_0)$ that is high on plausible images and low on implausible ones. This is where a generative model enters. With a diffusion model as the prior, the resulting problem can be written as a constrained fit,
 

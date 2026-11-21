@@ -22,7 +22,7 @@
 #
 # Every entry below was checked against the chapter's own provenance comment,
 # the lecture README in the scribe repository, and the chapter title.
-# Verified 2026-10-31.
+# Verified 2026-10-31; lectures 14 and 15 revised 2026-11-21.
 
 lectures:
   "00":
@@ -95,8 +95,26 @@ lectures:
     chapter: chapters/ch14.qmd
   "14":
     chapter: chapters/ch15.qmd
+    also:
+      - chapters/ch16.qmd
+    note: >-
+      ReFlow, flow models at scale, and the opening of Part 6. The lecture ran
+      to slide 9 of the distillation deck, so chapter 15 carries an "Early
+      few-step methods" section (progressive distillation and the denoising
+      diffusion GAN). On 2026-11-21 the instructor decided that this section
+      joins lecture 15's fuller treatment in chapter 16 once that chapter is
+      written; until then it stays in chapter 15, which is why chapter 15's
+      title no longer names it. The section's labels carry no chapter prefix
+      (sec-early-fewstep, eq-pd-ddim-step) so the move is a cut and paste, and
+      its figures stay under figures/lec14/.
   "15":
     chapter: chapters/ch16.qmd
+    note: >-
+      Distillation and flow maps. This chapter also absorbs the "Early few-step
+      methods" section of chapter 15 (lecture 14's last nine slides) when it is
+      written -- see the entry for lecture 14. The stub title is provisional
+      until the deck is in hand; the syllabus called the lecture "Rectified
+      Flow", which chapter 15 has already covered.
   "16":
     chapter: chapters/ch17.qmd
   "17":

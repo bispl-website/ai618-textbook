@@ -1,10 +1,26 @@
 ---
-title: "Rectified Flow"
+title: "Few-Step Generation: Distillation and Flow Maps"
 ---
+
+<!--
+Lecture 15 of AI618 (2026-11-10). The title above is provisional: it was set on
+2026-11-21 from what lecture 14 announced the rest of Part 6 would cover, not
+from this lecture's own deck, and stage 3 of the chapter pipeline replaces it
+once the deck is in hand. The syllabus title was "Rectified Flow", which
+chapter 15 has already covered.
+
+This chapter absorbs the "Early few-step methods" section of chapter 15
+(@sec-early-fewstep: progressive distillation, the denoising diffusion GAN and
+the Part 6 timeline table), which lecture 14 reached in its last nine slides.
+That section is lodged in chapter 15 only until this one is written; see
+chapter 15's provenance comment and the lecture 14 entry of
+lecture-chapters.yml for what moves and what stays behind.
+-->
 
 ::: {.callout-note}
 ## Not yet written
 Lecture 15 of AI618, given 2026-11-10. This chapter is merged from
 the scribe notes for that lecture; until those are written and graded it stands
-empty.
+empty. It will also take over the early few-step methods that chapter 15
+currently carries at the end.
 :::

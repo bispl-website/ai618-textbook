@@ -1,5 +1,5 @@
 ---
-title: "ReFlow, Flow Models at Scale, and Early Few-Step Methods"
+title: "ReFlow and Flow Models at Scale"
 ---
 
 
@@ -11,6 +11,20 @@ Built on the scribe note of Yoojin Oh, with the timeline, the runnable
 one-dimensional check and the figure-licensing note taken from Yoonjae Jung's,
 and the generative learning trilemma written for this chapter because no note
 stated it.
+
+The "Early few-step methods" section (@sec-early-fewstep, Part 6 slides 1-9)
+is lodged here, not settled here. The instructor decided on 2026-11-21 that
+this material joins lecture 15's fuller treatment of distillation and flow maps
+in chapter 16, and that it stays here only until that chapter is written, so
+that the published book does not lose the opening of Part 6 in the meantime.
+Its labels were stripped of the `rf-` prefix on that date (sec-early-fewstep,
+eq-pd-ddim-step) so that the move is a cut and paste rather than a rename pass.
+When it moves: the three pointers at it from this chapter -- the overview list,
+the last line of @sec-reflow-tradeoffs and item 5 of the summary -- become
+forward references to chapter 16; tbl-timeline goes with it, being Part 6's own
+roadmap; and the figures stay under figures/lec14/, because that is the lecture
+they came from. The chapter's title dropped "and Early Few-Step Methods" on the
+same date for the same reason.
 
 Two things an editor should not undo:
 
@@ -33,7 +47,7 @@ The previous lecture built flow models: a velocity field, learned by plain regre
 
 2.  **Flow models at scale** (slides 32--44; @sec-applications). Stable Diffusion 3 scales rectified flow to text-to-image generation [@esser2024sd3]. FlowDPS and FlowEdit reuse a pre-trained flow without retraining, for inverse problems and image editing [@kim2025flowdps; @kulikov2024flowedit]. Both rest on the flow version of Tweedie's formula, which splits each Euler step into a denoising and a re-noising step.
 
-3.  **Early few-step methods** (Part 6, slides 1--9; @sec-rf-fewstep). Progressive distillation halves the number of steps with an exact regression target [@salimans2022], and the denoising diffusion GAN makes large stochastic steps possible [@xiao2022ddgan].
+3.  **Early few-step methods** (Part 6, slides 1--9; @sec-early-fewstep). Progressive distillation halves the number of steps with an exact regression target [@salimans2022], and the denoising diffusion GAN makes large stochastic steps possible [@xiao2022ddgan].
 
 After this chapter, the reader should be able to prove what one round of ReFlow does to a coupling and why $n$-RF straightens at rate $O(1/K)$; explain why a straight flow samples in one step and 1-rectified flow cannot; derive the flow Tweedie formula, the FlowDPS update and the FlowEdit ODE; and derive the progressive distillation target. Figures and examples marked "own computation" are new to this chapter.
 
@@ -408,7 +422,7 @@ ReFlow buys straightness with computation and some fidelity.
 
 -   **Fidelity.** The pairs of round $n$ come from a learned, discretized model, so $Z_0$ follows the model distribution $\hat p_0$ rather than $p_0$. Each round adds its own regression error on top of the errors of the rounds before.
 
-As the lecture added, distilling the reflowed flow into a one-step map then removes the ODE solve from sampling altogether (@sec-rf-fewstep).
+As the lecture added, distilling the reflowed flow into a one-step map then removes the ODE solve from sampling altogether (@sec-early-fewstep).
 
 ## Scaling and applications {#sec-applications}
 
@@ -655,7 +669,7 @@ The last definition makes $p_t$ computable from the current edit $x_t$ without k
 
 **Conditional versus marginal.** For a fixed $\epsilon$, however, $q_t$ and $p_t$ are straight lines with the conditional velocities $\epsilon - x_{src}$ and $\epsilon - x_{tgt}$, whereas the network returns marginal ones. FlowEdit therefore uses the expectation over the noise, $\mathbb{E}_\epsilon\big[v^{tgt}_t(p_t) - v^{src}_t(q_t) \mid x_{src}\big]$, estimated by redrawing $\epsilon$ at every step and optionally averaging $n_{avg}$ draws; sharing $\epsilon$ between the two terms reduces the variance of the difference.
 
-## Early few-step methods {#sec-rf-fewstep}
+## Early few-step methods {#sec-early-fewstep}
 
 ### Why distillation? {#sec-why-distill}
 
@@ -699,9 +713,9 @@ Progressive distillation [@salimans2022] (Part 6, slides 6--8) distills a traine
 
 $$
 z_s = \alpha_s\,\hat{x} + \frac{\sigma_s}{\sigma_t}\,\big(z_t - \alpha_t\hat{x}\big).
-$$ {#eq-rf-ddim-step}
+$$ {#eq-pd-ddim-step}
 
-**The distillation target.** The student should do in *one* DDIM step what the teacher does in *two*. With $N$ student steps, $t = i/N$, $t' = t - 0.5/N$ and $t'' = t - 1/N$, the teacher takes two steps $z_t \to z_{t'} \to z_{t''}$ with @eq-rf-ddim-step. Requiring one student step from $z_t$ to land exactly on $z_{t''}$ gives a linear equation for the student's prediction $\tilde{x}$:
+**The distillation target.** The student should do in *one* DDIM step what the teacher does in *two*. With $N$ student steps, $t = i/N$, $t' = t - 0.5/N$ and $t'' = t - 1/N$, the teacher takes two steps $z_t \to z_{t'} \to z_{t''}$ with @eq-pd-ddim-step. Requiring one student step from $z_t$ to land exactly on $z_{t''}$ gives a linear equation for the student's prediction $\tilde{x}$:
 
 $$
 z_{t''} = \alpha_{t''}\tilde{x} + \frac{\sigma_{t''}}{\sigma_t}\big(z_t - \alpha_t\tilde{x}\big)

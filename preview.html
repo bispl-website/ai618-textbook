@@ -1,0 +1,965 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AI618 Scribe Preview</title>
+<!--
+  A scribe note, rendered and checked in the browser.
+
+  Nothing here is uploaded. The note and the figures are read with FileReader
+  and stay in this tab; the page is static and has no endpoint to send them to.
+
+  The checks are a port of scripts/check_submission.py. They are kept in the
+  same order, with the same messages, so that a note which passes here passes
+  there -- except for the one check the browser cannot make (whether the
+  author is the lecture's assigned scribe, which needs roster.yml), and one it
+  can make that the server cannot: \( .. \) renders as literal prose in both
+  the HTML and the PDF build while quarto still exits 0.
+-->
+<script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<script>
+window.MathJax = {
+  // The renderer hands maths over as \( .. \) and \[ .. \]; a bare $ is
+  // consumed before Markdown runs, so it is not a delimiter here.
+  tex: { inlineMath: [["\\(", "\\)"]], displayMath: [["\\[", "\\]"]],
+         processEscapes: true, packages: {"[+]": ["ams", "boldsymbol", "mathtools"]} },
+  options: { skipHtmlTags: ["script", "noscript", "style", "textarea", "pre"] },
+  startup: { typeset: false }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-chtml-full.js" id="MathJax-script" async></script>
+<style>
+:root{
+  --bg:#fbfaf8; --panel:#fff; --ink:#1b1a18; --ink-2:#5c5750; --line:#e5e0d8;
+  --accent:#8a5a2b; --ok:#2f6b3a; --warn:#8a6a10; --bad:#9b2c2c;
+  --okbg:#eef6ef; --warnbg:#fbf5e4; --badbg:#fbeeee; --code:#f4f1ec;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;
+  --sans:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#17161a; --panel:#1e1d22; --ink:#ece9e4; --ink-2:#a19b93; --line:#33313a;
+  --accent:#d8a66a; --ok:#7fc08c; --warn:#dcb455; --bad:#e08585;
+  --okbg:#1d2a20; --warnbg:#2b2518; --badbg:#2d1d1d; --code:#26242b;
+  color-scheme:dark; } }
+:root[data-theme="dark"]{
+  --bg:#17161a; --panel:#1e1d22; --ink:#ece9e4; --ink-2:#a19b93; --line:#33313a;
+  --accent:#d8a66a; --ok:#7fc08c; --warn:#dcb455; --bad:#e08585;
+  --okbg:#1d2a20; --warnbg:#2b2518; --badbg:#2d1d1d; --code:#26242b;
+  color-scheme:dark; }
+*{box-sizing:border-box}
+html{height:100%}
+/* The page is a header above two panes that scroll inside themselves, so
+   the body owns the viewport and main takes what is left. main used to be
+   calc(100vh - 52px), which was the header's height on the day it was
+   written; the header has wrapped to two rows since, and everything below
+   the fold became unreachable. A column flex has no number to go stale. */
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.6 var(--sans);
+  display:flex;flex-direction:column;height:100vh;height:100dvh;overflow:hidden}
+header{flex:0 0 auto;border-bottom:1px solid var(--line);background:var(--panel);
+  padding-block:10px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+header h1{margin:0;font:600 15px/1.3 var(--sans);letter-spacing:.2px}
+header .sub{color:var(--ink-2);font-size:12.5px}
+header .spacer{flex:1}
+main{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  gap:1px;background:var(--line);flex:1 1 auto;min-height:0;overflow:hidden}
+main[data-view="src"],main[data-view="out"]{grid-template-columns:minmax(0,1fr)}
+main[data-view="src"] > .pane:nth-child(2){display:none}
+main[data-view="out"] > .pane:nth-child(1){display:none}
+/* Narrow screens never show both: the second pane would sit below the fold
+   and look like nothing had rendered, which is exactly how this started. */
+@media (max-width:900px){
+  main{grid-template-columns:minmax(0,1fr)}
+  main[data-view="both"] > .pane:nth-child(2){display:none}
+}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+.seg button{border:0;border-radius:0;padding:6px 10px;background:var(--panel)}
+.seg button + button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--bg)}
+.seg button[aria-pressed="true"]:hover{color:var(--bg)}
+/* min-height:0 on both: a flex or grid child defaults to min-height:auto,
+   which is 'as tall as my content'. A descendant with overflow-y:auto then
+   never has a reason to scroll -- it just makes its parent taller, past the
+   bottom of the screen. This is why the rendered pane would not scroll. */
+.pane{background:var(--bg);min-width:0;min-height:0;display:flex;flex-direction:column}
+.pane > .hd{padding:8px 14px;border-bottom:1px solid var(--line);
+  font:600 11px/1.4 var(--sans);letter-spacing:.09em;text-transform:uppercase;
+  color:var(--ink-2);background:var(--panel);display:flex;gap:10px;align-items:center}
+.pane > .hd .spacer{flex:1}
+button,label.btn{font:500 12px/1 var(--sans);padding:6px 11px;border-radius:6px;
+  border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
+button:hover,label.btn:hover{border-color:var(--accent);color:var(--accent)}
+button:disabled{opacity:.45;cursor:default;border-color:var(--line);color:var(--ink-2)}
+#src{flex:1;min-height:0;width:100%;border:0;resize:none;padding:14px 16px;background:var(--bg);
+  color:var(--ink);font:13px/1.65 var(--mono);outline:none;tab-size:2}
+#out{flex:1;min-height:0;overflow-y:auto;padding:22px 26px 60px;
+  font-family:var(--serif);font-size:15.5px}
+#out h1{font-size:1.7em;margin:.2em 0 .5em;line-height:1.25}
+#out h2{font-size:1.32em;margin:1.6em 0 .5em;line-height:1.3;
+  border-bottom:1px solid var(--line);padding-bottom:.2em}
+#out h3{font-size:1.12em;margin:1.3em 0 .4em}
+#out p{margin:.75em 0}
+#out code{font:.88em var(--mono);background:var(--code);padding:.12em .35em;border-radius:3px}
+#out pre{background:var(--code);padding:12px 14px;border-radius:7px;overflow-x:auto}
+#out pre code{background:none;padding:0}
+#out table{border-collapse:collapse;margin:1.1em 0;font-size:.93em;
+  display:block;overflow-x:auto;max-width:100%}
+#out th,#out td{border:1px solid var(--line);padding:5px 10px;text-align:left}
+#out th{background:var(--panel)}
+#out blockquote{margin:1em 0;padding-left:14px;border-left:3px solid var(--line);color:var(--ink-2)}
+#out figure{margin:1.4em 0;text-align:center}
+#out figure img{max-width:100%;border-radius:4px}
+#out figcaption{font-size:.86em;color:var(--ink-2);margin-top:.5em;
+  font-family:var(--sans);text-align:left}
+#out .thm{margin:1.2em 0;padding:11px 14px;border:1px solid var(--line);
+  border-left:3px solid var(--accent);border-radius:5px;background:var(--panel)}
+#out .thm > .lbl{font-family:var(--sans);font-weight:600;font-size:.9em;margin-bottom:.25em}
+#out .callout{margin:1.2em 0;padding:11px 14px;border-radius:5px;
+  background:var(--panel);border:1px solid var(--line)}
+#out .xref{color:var(--accent);text-decoration:none}
+#out .xref:hover{text-decoration:underline}
+#out .xbad{color:var(--bad);background:var(--badbg);padding:0 .25em;border-radius:3px;
+  font-family:var(--sans);font-size:.85em}
+#out .cite{color:var(--accent)}
+#out .citebad{color:var(--bad);background:var(--badbg);padding:0 .25em;border-radius:3px;
+  font-family:var(--sans);font-size:.85em}
+#out .refs{margin-top:2.5em;border-top:1px solid var(--line);padding-top:1em;
+  font-size:.88em;font-family:var(--sans)}
+#out .refs .r{margin:.45em 0;color:var(--ink-2)}
+/* The editor takes what is left; the status block below it is what the grip
+   resizes. --statush is the only number, and the drag is the only thing that
+   writes it. #checks used to cap itself at 38vh, which fought the drag. */
+#grip{flex:0 0 7px;cursor:row-resize;background:var(--line);position:relative}
+#grip::after{content:"";position:absolute;left:50%;top:50%;width:34px;height:3px;
+  transform:translate(-50%,-50%);border-radius:2px;background:var(--ink-2);opacity:.35}
+#grip:hover::after,#grip.dragging::after{opacity:.8}
+#status{flex:0 0 var(--statush,220px);min-height:0;display:flex;flex-direction:column;
+  overflow:hidden}
+#checks{flex:1 1 auto;min-height:0;overflow-y:auto;border-top:1px solid var(--line);
+  background:var(--panel)}
+#checks .row{display:flex;gap:9px;padding:6px 14px;border-bottom:1px solid var(--line);
+  font:12.5px/1.5 var(--sans);align-items:flex-start}
+#checks .row:last-child{border-bottom:0}
+#checks .row .tag{flex:0 0 auto;font:600 10px/1.6 var(--sans);letter-spacing:.06em;
+  padding:0 6px;border-radius:3px}
+.t-err{background:var(--badbg);color:var(--bad)}
+.t-warn{background:var(--warnbg);color:var(--warn)}
+.t-ok{background:var(--okbg);color:var(--ok)}
+#checks .row .ln{flex:0 0 auto;color:var(--ink-2);font:11.5px/1.7 var(--mono);min-width:38px}
+#checks .row .msg{min-width:0}
+#checks .row .hint{color:var(--ink-2);display:block;margin-top:2px}
+#submitbar{flex:1 0 100%;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;
+  margin-top:2px;padding-top:9px;border-top:1px solid var(--line)}
+#codebar{display:flex;gap:9px;align-items:baseline;flex-wrap:wrap;min-width:0}
+#codebar .clabel{flex:0 0 auto;font:600 10px/1.6 var(--sans);letter-spacing:.06em;
+  text-transform:uppercase;color:var(--ink-2)}
+#codebar .chint{flex:1 1 220px;min-width:0;color:var(--ink-2);font:12px/1.5 var(--sans)}
+#figs{flex:0 0 auto;max-height:45%;overflow-y:auto;padding:7px 14px;background:var(--panel);
+  font:12px/1.5 var(--sans);color:var(--ink-2)}
+#figs .f{display:inline-block;margin:2px 7px 2px 0;padding:1px 7px;border-radius:3px;
+  background:var(--code);font-family:var(--mono);font-size:11.5px}
+#figs .f.un{background:var(--warnbg);color:var(--warn)}
+.sum{display:flex;gap:7px;align-items:center;font:12px/1 var(--sans)}
+.pill{padding:3px 8px;border-radius:999px;font-weight:600;font-size:11.5px}
+.code{padding:3px 9px;border-radius:999px;border:1px solid var(--line);
+  background:var(--card);color:var(--fg);font:600 11.5px/1 var(--mono);
+  cursor:pointer;letter-spacing:.04em}
+.code:hover{border-color:var(--accent)}
+.code.copied{border-color:var(--ok);color:var(--ok)}
+.p-ok{background:var(--okbg);color:var(--ok)}
+.p-warn{background:var(--warnbg);color:var(--warn)}
+.p-bad{background:var(--badbg);color:var(--bad)}
+.hidden{display:none!important}
+</style>
+
+<header>
+  <h1>AI618 Scribe Preview</h1>
+  <span class="sub">Your note and figures never leave this tab &mdash; nothing is uploaded.</span>
+  <span class="spacer"></span>
+  <span class="sum" id="sum"></span>
+  <label class="btn">Open note<input type="file" id="fqmd" accept=".qmd,.md,.markdown,.bib" hidden></label>
+  <label class="btn">Add figures<input type="file" id="ffig" accept="image/*,.pdf" multiple hidden></label>
+  <label class="btn">Add .bib<input type="file" id="fbib" accept=".bib" hidden></label>
+  <span class="seg" id="view">
+    <button data-v="src">Edit</button><button data-v="both">Side by side</button><button data-v="out">Render</button>
+  </span>
+  <button id="save">Download</button>
+  <button id="theme" title="Light/dark">◐</button>
+  <div id="submitbar" hidden>
+    <span id="codebar" hidden>
+      <span class="clabel">Preview code</span>
+      <button class="code" id="pcode" title="Click to copy"></button>
+      <span class="chint">Paste this into the <b>Preview code</b> box on the
+        submission form. It is calculated from this note, so copy it
+        <b>after your last edit</b> &mdash; change one character and it changes
+        too.</span>
+    </span>
+  </div>
+</header>
+
+<main>
+  <div class="pane">
+    <div class="hd"><span id="fname">New note</span><span class="spacer"></span>
+      <span id="wc"></span></div>
+    <textarea id="src" spellcheck="false" placeholder="Paste a .qmd here, or open a file with 'Open note' above."></textarea>
+    <div id="grip" title="Drag to resize"></div>
+    <div id="status">
+      <div id="figs"></div>
+      <div id="checks"></div>
+    </div>
+  </div>
+  <div class="pane">
+    <div class="hd">Rendered output<span class="spacer"></span><span id="rstat"></span></div>
+    <div id="out"></div>
+  </div>
+</main>
+
+<script>
+"use strict";
+
+// Where the Tally form lives. Empty hides the hand-off button, which is what
+// it was until the form was published -- a button that opens an unpublished
+// form is worse than no button. The form is behind a class password, so this
+// address alone lets nobody in.
+const TALLY_URL = "https://tally.so/r/Nq780b";
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c =>
+  ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+// ------------------------------------------------------------------ state --
+const figures = new Map();   // basename -> {file, url}
+const bibEntries = new Map();  // key -> {id, title, author, year}, from a .bib
+
+// Loose on purpose: the page needs the keys, so that a citation can be told
+// apart from a typo, and enough of each entry to print a reference list. It
+// is not a BibTeX implementation and does not need to be.
+function parseBib(text){
+  const out = new Map();
+  const re = /@(\w+)\s*\{\s*([^,\s]+)\s*,([\s\S]*?)\n\}/g;
+  let m;
+  while ((m = re.exec(text)) !== null){
+    const body = m[3];
+    const field = n => {
+      const r = new RegExp(n + '\\s*=\\s*[{"]([\\s\\S]*?)["}]\\s*,?\\s*\\n', "i").exec(body);
+      return r ? r[1].replace(/[{}]/g, "").replace(/\s+/g, " ").trim() : "";
+    };
+    out.set(m[2], {id: m[2], title: field("title"),
+                   author: field("author"), year: field("year")});
+  }
+  return out;
+}
+let noteName = "";           // the .qmd's filename, which the checks need
+
+// --------------------------------------------------------------- checking --
+// A port of scripts/check_submission.py. Same order, same wording, so that a
+// note which passes here passes there. Two differences, both deliberate:
+// roster membership is not checked (the browser has no roster.yml), and
+// \( .. \) is (quarto renders it as prose and still exits 0).
+
+const SUBMISSION_RE = /^([A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?)$/;
+const HTML_PATTERNS = [
+  [/<\s*(div|span|br|hr|img|table|tr|td|th|p|b|i|u|em|strong|center|font|sub|sup)\b/i,
+   "raw HTML tag"],
+  [/\{=html\}/, "raw HTML block ({=html})"]
+];
+const SVG_RE = /!\[[^\]]*\]\(([^)]*\.svg)[^)]*\)|\bsrc\s*=\s*['"][^'"]*\.svg/i;
+const BROWSER_BLOCK_RE = /^```+\s*\{\.?(mermaid|dot|graphviz)\b/i;
+// `{python}` asks quarto to RUN the block through a Jupyter kernel;
+// `{.python}` is a CSS class and only gets highlighted. One dot apart, and
+// the server has no kernel: the render fails outright with "Jupyter is not
+// available", which says nothing about the note. All 48 notes so far use
+// the dotted form, so this is about the first person who does not.
+const EXEC_BLOCK_RE = /^```+\s*\{\s*(python|r|julia|ojs|bash|sh)\b/i;
+const IMAGE_RE = /!\[[^\]]*\]\(\s*([^)\s]+)/g;
+const ENV_RE = /\\(begin|end)\{([A-Za-z*]+)\}/g;
+const CONFLICT_OPEN_RE = /^(?:<{7}|>{7})(?![<>])(?:\s|$)/;
+const CONFLICT_MID_RE = /^={7}(?!=)\s*$/;
+const REQUIRED_FRONTMATTER = ["title", "lecture", "author", "date"];
+const INLINE_MATH_RE = /(?<!\\)\$\$?[\s\S]*?(?<!\\)\$\$?|\\\([\s\S]*?\\\)/g;
+const CODE_SPAN_RE = /`+[^`]*`+/g;
+
+// Blank out maths and inline code but keep the length, so columns still line
+// up. "$0<p<1$" is a statement about an l_p norm, not a paragraph tag.
+function maskMath(line){
+  const blank = m => " ".repeat(m.length);
+  return line.replace(CODE_SPAN_RE, blank).replace(INLINE_MATH_RE, blank);
+}
+
+function splitFrontmatter(text){
+  const lines = text.split("\n");
+  if (lines[0] !== "---") return [null, 0];
+  for (let i = 1; i < lines.length; i++){
+    if (lines[i] === "---" || lines[i] === "..."){
+      try { return [jsyaml.load(lines.slice(1, i).join("\n")) || {}, i + 1]; }
+      catch (e) { return [null, i + 1]; }
+    }
+  }
+  return [null, 0];
+}
+
+function checkNote(text){
+  text = text.replace(/\r\n?/g, "\n");   // a Windows note is not a broken one
+  const out = [];
+  const err = (ln, msg, hint) => out.push({kind:"err", ln, msg, hint});
+  const warn = (ln, msg, hint) => out.push({kind:"warn", ln, msg, hint});
+  const lines = text.split("\n");
+
+  // The filename is the submission path's only free part, and the server
+  // matches the author against it.
+  const stem = noteName.replace(/\.(qmd|md|markdown)$/i, "");
+  if (noteName && !SUBMISSION_RE.test(stem))
+    err(null, `'${stem}' is not a usable filename`,
+        "the file must be named <your-github-username>.qmd");
+
+  // Conflict markers first: they are legal Markdown, so the HTML build says
+  // nothing and the PDF build dies pointing at generated .tex.
+  let conflicts = [];
+  lines.forEach((l, i) => { if (CONFLICT_OPEN_RE.test(l)) conflicts.push(i + 1); });
+  if (conflicts.length)
+    lines.forEach((l, i) => { if (CONFLICT_MID_RE.test(l)) conflicts.push(i + 1); });
+  for (const i of [...new Set(conflicts)].sort((a,b)=>a-b))
+    err(i, `git conflict marker left in the file: ${JSON.stringify(lines[i-1].slice(0,48))}`,
+        "finish the merge: delete every <<<<<<< / ======= / >>>>>>> line");
+
+  const [fm, fmLines] = splitFrontmatter(text);
+  if (fm === null){
+    err(1, "missing or unparseable YAML frontmatter",
+        conflicts.length ? "resolve the conflict markers above first"
+                         : "copy the frontmatter block from template.qmd");
+  } else {
+    for (const k of REQUIRED_FRONTMATTER)
+      if (!(k in fm) || ["", "None", "null"].includes(String(fm[k]).trim()))
+        err(1, `frontmatter is missing '${k}'`);
+    const author = String(fm.author ?? "").trim();
+    if (author && stem && author.toLowerCase() !== stem.toLowerCase())
+      err(1, `frontmatter author '${author}' does not match the filename '${stem}'`);
+    if (String(fm.title ?? "").includes("<"))
+      err(1, "the title is still the template placeholder");
+  }
+
+  // Body. Fenced code and HTML comments are skipped: a <div> in a fence is
+  // content, and the template's comments explain the rules using the tags
+  // they forbid.
+  let inFence = false, inComment = false, inDisplay = false;
+  lines.forEach((line, idx) => {
+    const i = idx + 1, stripped = line.trim();
+    if (stripped.startsWith("```") || stripped.startsWith("~~~")){
+      if (!inFence){
+        const x = EXEC_BLOCK_RE.exec(stripped);
+        if (x) err(i, `{${x[1]}} block — quarto would run this, and the server has no kernel`,
+                   `write \`{.${x[1]}}\` with a dot to show the code instead of running it`);
+        const m = BROWSER_BLOCK_RE.exec(stripped);
+        if (m) warn(i, `{${m[1]}} block — quarto draws this with a headless browser`,
+                    "exporting the diagram as PDF or PNG removes the dependency");
+      }
+      inFence = !inFence; return;
+    }
+    if (inFence) return;
+
+    const wasDisplay = inDisplay;
+    if ((line.match(/\$\$/g) || []).length % 2) inDisplay = !inDisplay;
+
+    let scan = line;
+    if (inComment){
+      if (scan.includes("-->")){ scan = scan.split("-->").slice(1).join("-->"); inComment = false; }
+      else return;
+    }
+    while (scan.includes("<!--")){
+      const k = scan.indexOf("<!--"), head = scan.slice(0, k), rest = scan.slice(k + 4);
+      const e = rest.indexOf("-->");
+      if (e >= 0) scan = head + rest.slice(e + 3);
+      else { scan = head; inComment = true; break; }
+    }
+
+    const markup = (wasDisplay && inDisplay) ? "" : maskMath(scan);
+    for (const [pat, label] of HTML_PATTERNS)
+      if (pat.test(markup))
+        err(i, `${label} — breaks the PDF build`,
+            "use Markdown, or a Quarto div (::: {.class}) if you need a container");
+    if (SVG_RE.test(markup))
+      err(i, "SVG figure — not supported by the LaTeX/PDF build",
+          "export the figure as PDF (vector) or PNG at >=300 dpi");
+
+    for (let c = 0; c < scan.length; c++){
+      if (scan.codePointAt(c) > 127){
+        err(i, `non-ASCII character at column ${c + 1}: ${JSON.stringify(scan[c])}`,
+            "write math as $...$ (e.g. $\\alpha$), '---' for an em dash, straight quotes");
+        break;
+      }
+    }
+
+    // Not a server check. quarto renders \( .. \) as literal prose in BOTH
+    // builds and still exits 0, so nothing downstream ever reports it.
+    if (!(wasDisplay && inDisplay) && /\\\(.*?\\\)/.test(scan.replace(CODE_SPAN_RE, "")))
+      warn(i, "\\( .. \\) is not maths here — it renders as literal text",
+           "quarto wants $ .. $; the build succeeds either way, which is why nobody tells you");
+  });
+
+  // Referenced figures must exist, or the PDF build fails at binding time.
+  // Here "exist" means "was added to this page".
+  lines.forEach((line, idx) => {
+    const i = idx + 1;
+    IMAGE_RE.lastIndex = 0;
+    let m;
+    while ((m = IMAGE_RE.exec(line)) !== null){
+      const t = m[1].replace(/^<|>$/g, "");
+      if (/^(https?:|data:)/.test(t)){ err(i, "remote image URL", "commit the figure into the repo"); continue; }
+      if (t.includes("<")){ err(i, "figure path is still a template placeholder"); continue; }
+      if (!figures.has(t.split("/").pop()))
+        err(i, `figure not added: ${t}`, "use 'Add figures' above, or commit it under lectures/lecNN/figures/");
+    }
+  });
+
+  // Unbalanced LaTeX environments render as a wall of raw source in HTML and
+  // fail the PDF build outright.
+  const depth = {};
+  lines.forEach((line, idx) => {
+    ENV_RE.lastIndex = 0;
+    let m;
+    while ((m = ENV_RE.exec(line)) !== null){
+      const env = m[2];
+      depth[env] = (depth[env] || 0) + (m[1] === "begin" ? 1 : -1);
+      if (depth[env] < 0){ err(idx + 1, `\\end{${env}} without a matching \\begin`); depth[env] = 0; }
+    }
+  });
+  for (const [env, d] of Object.entries(depth))
+    if (d > 0) err(null, `${d} unclosed \\begin{${env}}`);
+
+  let body = lines.slice(fmLines).join("\n").replace(/<!--[\s\S]*?-->/g, "");
+  const words = (body.match(/\b[\w'-]+\b/g) || []).length;
+  if (words < 900)
+    warn(null, `${words} words — short for a chapter-length note`,
+         "no penalty here, but coverage is worth 25 points");
+  if (/<[a-z-]+>/.test(body))
+    warn(null, "looks like an unreplaced <placeholder> from the template");
+
+  return {items: out, words};
+}
+</script>
+
+<script>
+"use strict";
+// --------------------------------------------------------------- rendering --
+// Quarto's own constructs are handled before Markdown sees the text, because
+// Markdown has nothing to say about them: display maths carrying {#eq-},
+// ::: theorem and callout divs, images with an attribute block, headings with
+// {#sec-}, and table captions. Each becomes a stashed fragment that the
+// Markdown pass carries through untouched.
+//
+// Numbering is done here rather than left to MathJax's AMS tags: the numbers
+// have to agree with what @eq-, @fig-, @thm- resolve to, and one counter that
+// both halves read is simpler than two that must not drift.
+
+const KINDS = {
+  eq:"Equation", fig:"Figure", tbl:"Table", sec:"Section",
+  thm:"Theorem", def:"Definition", lem:"Lemma", prp:"Proposition",
+  cor:"Corollary", exm:"Example", rem:"Remark"
+};
+const KIND_RE = Object.keys(KINDS).join("|");
+
+function render(text){
+  text = text.replace(/\r\n?/g, "\n");
+  const [fm, fmLines] = splitFrontmatter(text);
+  let s = text.split("\n").slice(fmLines).join("\n");
+
+  const blocks = [], inlines = [];
+  const blk = h => `QZBLK${blocks.push(h) - 1}ZQ`;
+  const inl = h => `QZINL${inlines.push(h) - 1}ZQ`;
+  const labels = new Map();
+  const counters = {};
+  const next = k => (counters[k] = (counters[k] || 0) + 1);
+  const mark = (kind, name, num) => labels.set(name, {kind, num, id: "x-" + name});
+
+  // 1. fenced code, before anything else can look inside it
+  s = s.replace(/^(```+|~~~+)([^\n]*)\n([\s\S]*?)^\1[^\n]*$/gm, (m, f, info, code) =>
+    blk(`<pre><code>${esc(code.replace(/\n$/, ""))}</code></pre>`));
+
+  // 2. display maths, with the {#eq-} that may follow the closing $$
+  s = s.replace(/\$\$([\s\S]*?)\$\$[ \t]*(?:\{#(eq-[\w-]+)[^}]*\})?/g, (m, tex, name) => {
+    if (!name) return blk(`<div class="dmath">\\[${tex}\\]</div>`);
+    const n = next("eq"); mark("eq", name, n);
+    return blk(`<div class="dmath" id="x-${esc(name)}">\\[${tex}\\]` +
+               `<span class="eqno">(${n})</span></div>`);
+  });
+
+  // 3. inline maths. Stays inline, so it gets an inline token.
+  s = s.replace(/(?<![\\$])\$(?!\$)((?:[^$\n\\]|\\.)+?)\$(?!\$)/g,
+                (m, tex) => inl(`\\(${tex}\\)`));
+
+  // 4. the image rule, used twice: standalone, and for each subfigure inside
+  //    a ::: {#fig-} panel, which quarto numbers under the panel's own
+  //    number as 5(a), 5(b). The caption pattern allows one level of nested
+  //    brackets, because captions carry citations.
+  const IMG_RE = /!\[((?:[^\[\]]|\[[^\[\]]*\])*)\]\(\s*([^)\s]+)[^)]*\)[ \t]*(?:\{([^}]*)\})?/g;
+  const doImages = (txt, parent) => {
+    let sub = 0;
+    return txt.replace(IMG_RE, (m, cap, src, attrs) => {
+      attrs = attrs || "";
+      const name = (attrs.match(/#(fig-[\w-]+)/) || [])[1];
+      const w = (attrs.match(/width\s*=\s*"?([\d.]+%?)"?/) || [])[1];
+      const got = figures.get(src.split("/").pop());
+      const img = got ? `<img src="${got.url}"${w ? ` style="width:${w}"` : ""}>`
+                      : `<div class="xbad">figure not added: ${esc(src)}</div>`;
+      let num = null;
+      if (parent !== null) num = `${parent}(${String.fromCharCode(97 + sub++)})`;
+      else if (name) num = String(next("fig"));
+      if (name && num) mark("fig", name, num);
+      const lead = num ? `Figure ${num}: ` : "";
+      return blk(`<figure${name ? ` id="x-${esc(name)}"` : ""}>${img}` +
+                 (cap.trim() ? `<figcaption>${lead}${marked.parseInline(cap)}</figcaption>`
+                             : "") + `</figure>`);
+    });
+  };
+
+  // 5. ::: {#fig-} panels first -- their subfigures must be numbered under
+  //    the panel, and the generic div rule below would swallow them whole.
+  s = s.replace(/^::: *\{#(fig-[\w-]+)[^}]*\}[ \t]*\n([\s\S]*?)^:::+[ \t]*$/gm,
+    (m, name, inner) => {
+      const n = next("fig"); mark("fig", name, n);
+      const parts = inner.trimEnd().split(/\n[ \t]*\n/);
+      let cap = "";
+      if (parts.length > 1 && !/!\[/.test(parts[parts.length - 1])) cap = parts.pop();
+      return blk(`<figure class="panel" id="x-${esc(name)}">` +
+                 marked.parse(doImages(parts.join("\n\n"), n)) +
+                 (cap ? `<figcaption>Figure ${n}: ${marked.parseInline(cap)}</figcaption>` : "") +
+                 `</figure>`);
+    });
+
+  // 6. theorem-like divs and callouts
+  const THM_RE = Object.keys(KINDS)
+    .filter(k => !["eq", "fig", "tbl", "sec"].includes(k)).join("|");
+  s = s.replace(new RegExp(
+      `^::: *\\{#(${THM_RE})-([\\w-]+)[^}]*\\}[ \\t]*\\n([\\s\\S]*?)^:::+[ \\t]*$`, "gm"),
+    (m, kind, tail, inner) => {
+      const name = `${kind}-${tail}`, n = next(kind); mark(kind, name, n);
+      return blk(`<div class="thm" id="x-${esc(name)}">` +
+                 `<div class="lbl">${KINDS[kind]} ${n}</div>` +
+                 marked.parse(inner) + `</div>`);
+    });
+  s = s.replace(/^::: *\{\.callout-([a-z]+)[^}]*\}[ \t]*\n([\s\S]*?)^:::+[ \t]*$/gm,
+    (m, kind, inner) => blk(`<div class="callout"><div class="lbl">${esc(kind)}</div>` +
+                            marked.parse(inner) + `</div>`));
+
+  // 7. standalone images
+  s = doImages(s, null);
+
+  // 6. headings. Section numbers are hierarchical, as number-sections gives.
+  const secNum = [0, 0, 0, 0];
+  s = s.replace(/^(#{1,6})[ \t]+(.*?)[ \t]*(?:\{([^}]*)\})?[ \t]*$/gm, (m, hashes, title, attrs) => {
+    const lv = hashes.length;
+    if (lv >= 2 && lv <= 5){ secNum[lv - 2]++; for (let i = lv - 1; i < 4; i++) secNum[i] = 0; }
+    const num = secNum.slice(0, Math.max(0, lv - 1)).filter(Boolean).join(".");
+    const name = ((attrs || "").match(/#(sec-[\w-]+)/) || [])[1];
+    if (name) labels.set(name, {kind: "sec", num: num || "?", id: "x-" + name});
+    return blk(`<h${lv}${name ? ` id="x-${esc(name)}"` : ""}>` +
+               marked.parseInline(title) + `</h${lv}>`);
+  });
+
+  // 7. table captions, which quarto writes on their own line after the table
+  s = s.replace(/^:[ \t]+(.*?)[ \t]*\{#(tbl-[\w-]+)[^}]*\}[ \t]*$/gm, (m, cap, name) => {
+    const n = next("tbl"); mark("tbl", name, n);
+    return blk(`<div class="tcap" id="x-${esc(name)}">Table ${n}: ${marked.parseInline(cap)}</div>`);
+  });
+
+  let html = marked.parse(s);
+
+  // 8. put the stashed fragments back. A block token that Markdown wrapped in
+  //    a paragraph of its own loses the paragraph with it.
+  html = html.replace(/<p>\s*QZBLK(\d+)ZQ\s*<\/p>/g, (m, i) => blocks[+i])
+             .replace(/QZBLK(\d+)ZQ/g, (m, i) => blocks[+i])
+             .replace(/QZINL(\d+)ZQ/g, (m, i) => inlines[+i]);
+
+  // 9. cross-references and citations, with the maths held aside so that a
+  //    stray "@" inside it is not mistaken for either.
+  const held = [];
+  html = html.replace(/\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)/g,
+                      m => `QZMATH${held.push(m) - 1}ZQ`);
+
+  const unresolved = new Set();
+  html = html.replace(new RegExp(`@((?:${KIND_RE})-[\\w-]+)`, "g"), (m, name) => {
+    const t = labels.get(name);
+    if (!t){ unresolved.add(name); return `<span class="xbad">?${esc(m)}</span>`; }
+    return `<a class="xref" href="#${t.id}">${KINDS[t.kind]}&nbsp;${t.num}</a>`;
+  });
+
+  // The frontmatter's own CSL-JSON, plus any .bib the student added. A note
+  // that points `bibliography:` at a file we do not hold is not a note with
+  // missing citations -- it is a note whose citations cannot be checked here,
+  // and saying otherwise would be a false alarm on a correct submission.
+  const bib = new Map();
+  for (const r of (fm && Array.isArray(fm.references) ? fm.references : []))
+    if (r && r.id) bib.set(String(r.id), r);
+  for (const [k, v] of bibEntries)
+    if (!bib.has(k)) bib.set(k, {id: k, title: v.title, year: v.year,
+                                 author: v.author ? [{family: v.author}] : []});
+  const declared = fm && fm.bibliography ? String(fm.bibliography) : "";
+  const bibUnread = !!declared && declared !== "[]" && bibEntries.size === 0;
+  const cited = [], missing = new Set();
+  html = html.replace(/\[(@[\w:.+-]+(?:[;,]\s*@[\w:.+-]+)*)\]/g, (m, inner) => {
+    const keys = inner.split(/[;,]/).map(k => k.trim().replace(/^@/, ""));
+    return "[" + keys.map(k => {
+      if (!bib.has(k)){ missing.add(k); return `<span class="citebad">?${esc(k)}</span>`; }
+      let n = cited.indexOf(k); if (n < 0) n = cited.push(k) - 1;
+      return `<a class="cite" href="#bib-${esc(k)}">${n + 1}</a>`;
+    }).join(", ") + "]";
+  });
+
+  if (cited.length){
+    html += `<div class="refs"><b>References</b>` + cited.map((k, i) => {
+      const r = bib.get(k), au = (r.author || []).map(a =>
+        typeof a === "string" ? a : [a.family, a.given].filter(Boolean).join(", ")).join("; ");
+      const yr = r.issued && r.issued["date-parts"] ? r.issued["date-parts"][0][0]
+                                                   : (r.year || "");
+      return `<div class="r" id="bib-${esc(k)}">[${i + 1}] ${esc(au)}${au ? ". " : ""}` +
+             `${esc(r.title || k)}${yr ? ". " + esc(yr) : ""}.</div>`;
+    }).join("") + `</div>`;
+  }
+
+  html = html.replace(/QZMATH(\d+)ZQ/g, (m, i) => held[+i]);
+  return {html, labels, unresolved, missing, cited, bibUnread, declared,
+          counts: {eq: counters.eq || 0, fig: counters.fig || 0,
+                   tbl: counters.tbl || 0, thm: Object.keys(KINDS)
+                     .filter(k => !["eq","fig","tbl","sec"].includes(k))
+                     .reduce((a, k) => a + (counters[k] || 0), 0)}};
+}
+</script>
+
+<style>
+#out .dmath{display:flex;align-items:center;gap:12px;margin:1.1em 0}
+#out .dmath mjx-container{flex:1;margin:0!important}
+#out .dmath .eqno{flex:0 0 auto;color:var(--ink-2);font-family:var(--sans);font-size:.9em}
+#out .tcap{font-size:.86em;color:var(--ink-2);font-family:var(--sans);margin:-.6em 0 1.2em}
+#out .callout .lbl{font-family:var(--sans);font-weight:600;font-size:.82em;
+  text-transform:uppercase;letter-spacing:.07em;color:var(--accent);margin-bottom:.3em}
+</style>
+
+<script>
+"use strict";
+// --------------------------------------------------------------------- UI --
+
+let timer = null;
+const debounce = fn => { clearTimeout(timer); timer = setTimeout(fn, 180); };
+
+function drawChecks(res, rend){
+  const box = $("checks");
+  const errs = res.items.filter(x => x.kind === "err");
+  const warns = res.items.filter(x => x.kind === "warn");
+
+  // Unresolved cross-references and citations are render findings, not
+  // checker findings, and quarto reports them only as a line on stderr that
+  // nobody downstream reads. They belong in the same list.
+  const extra = [];
+  for (const n of rend.unresolved)
+    extra.push({kind:"err", ln:null, msg:`cross-reference @${n} does not resolve`,
+                hint:"it prints as \"?\" in the PDF and the build still succeeds"});
+  if (rend.bibUnread){
+    if (rend.missing.size)
+      extra.push({kind:"warn", ln:null,
+                  msg:`${rend.missing.size} citation(s) could not be checked here`,
+                  hint:`this note cites '${rend.declared}', which is not loaded \u2014 ` +
+                       `drop that .bib on the page to check them`});
+  } else {
+    for (const k of rend.missing)
+      extra.push({kind:"err", ln:null, msg:`citation ${k} is not in the bibliography`,
+                  hint:"it vanishes from the PDF entirely and the build still succeeds"});
+  }
+
+  const all = [...errs, ...extra, ...warns];
+  if (!all.length){
+    box.innerHTML = `<div class="row"><span class="tag t-ok">OK</span>` +
+      `<span class="msg">All checks passed. The only thing the server also ` +
+      `looks at is <b>whether you are this lecture's assigned scribe</b>.</span></div>`;
+  } else {
+    box.innerHTML = all.map(x =>
+      `<div class="row"><span class="tag ${x.kind === "err" ? "t-err" : "t-warn"}">` +
+      `${x.kind === "err" ? "ERROR" : "WARN"}</span>` +
+      `<span class="ln">${x.ln ? "L" + x.ln : ""}</span>` +
+      `<span class="msg">${esc(x.msg)}` +
+      (x.hint ? `<span class="hint">&rarr; ${esc(x.hint)}</span>` : "") +
+      `</span></div>`).join("");
+  }
+
+  const nerr = errs.length + extra.length;
+  $("sum").innerHTML =
+    (nerr ? `<span class="pill p-bad">${nerr} error(s)</span>` : `<span class="pill p-ok">Passed</span>`) +
+    (warns.length ? `<span class="pill p-warn">${warns.length} warning(s)</span>` : "");
+  $("wc").textContent = `${res.words.toLocaleString()} words`;
+  $("rstat").textContent =
+    `${rend.counts.eq} eq · ${rend.counts.fig} fig · ${rend.counts.tbl} tbl · ${rend.counts.thm} thm`;
+}
+
+// ---------------------------------------------------------- preview code --
+//
+// A short string that says "this exact note went through this page". The form
+// asks for it and intake.py recomputes it from the .qmd that was uploaded, so
+// a code that does not match means the note was edited after it was checked,
+// or never checked at all.
+//
+// It is a speed bump, not a signature: anyone can type anything into the form
+// field. What it buys is that a note which quietly changed between preview and
+// submission stops looking like one that did not.
+//
+// The normalisation and the hash below are duplicated in scripts/intake.py and
+// have to stay identical. Both are deliberately boring for that reason: no
+// crypto, no library, nothing with a version.
+
+function codeText(s){
+  return s.replace(/\r\n?/g, "\n")
+          .split("\n").map(l => l.replace(/[ \t]+$/, "")).join("\n")
+          .replace(/^\n+|\n+$/g, "");
+}
+
+function fnv1a(s){
+  let h = 0x811c9dc5;
+  for (const b of new TextEncoder().encode(s)){
+    h ^= b;
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h;
+}
+
+function previewCode(text){
+  const m = /^lecture:\s*"?(\d{1,2})"?\s*$/m.exec(codeText(text));
+  const lec = m ? String(+m[1]).padStart(2, "0") : "??";
+  const h = fnv1a(codeText(text)).toString(16).toUpperCase().padStart(8, "0");
+  return `L${lec}-${h.slice(2)}`;
+}
+
+function drawCode(text){
+  const grp = $("codebar"), b = $("pcode");
+  if (!text.trim()){ grp.hidden = true; return; }
+  grp.hidden = false;
+  $("submitbar").hidden = false;
+  b.textContent = previewCode(text);
+  b.classList.remove("copied");
+}
+
+$("pcode").addEventListener("click", async ev => {
+  const b = ev.currentTarget, code = b.textContent;
+  try { await navigator.clipboard.writeText(code); }
+  catch (e){
+    // Clipboard access is refused in some views. Select it instead, so the
+    // student can copy by hand rather than being told nothing happened.
+    const r = document.createRange(); r.selectNodeContents(b);
+    const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+    return;
+  }
+  b.classList.add("copied");
+  b.textContent = "copied";
+  setTimeout(() => { b.textContent = code; b.classList.remove("copied"); }, 900);
+});
+
+
+// ------------------------------------------------------------------ grip --
+//
+// The status block has one useful height and it is not the same one twice: a
+// note with twelve figures and no errors wants it small, a note with thirty
+// warnings wants it large. Rather than guess, let it be dragged, and remember
+// where it was left.
+
+const GRIP_KEY = "ai618.preview.statush";
+const pane = () => $("grip").parentElement;
+
+function setStatusHeight(px){
+  const box = pane().getBoundingClientRect();
+  const h = Math.max(42, Math.min(px, box.height - 120));
+  $("status").style.setProperty("--statush", h + "px");
+  try { localStorage.setItem(GRIP_KEY, String(Math.round(h))); } catch (e) {}
+}
+
+(() => {
+  let saved = null;
+  try { saved = localStorage.getItem(GRIP_KEY); } catch (e) {}
+  if (saved) $("status").style.setProperty("--statush", saved + "px");
+})();
+
+$("grip").addEventListener("pointerdown", ev => {
+  ev.preventDefault();
+  const g = $("grip");
+  g.setPointerCapture(ev.pointerId);
+  g.classList.add("dragging");
+  const bottom = pane().getBoundingClientRect().bottom;
+  const move = e => setStatusHeight(bottom - e.clientY);
+  const up = e => {
+    g.classList.remove("dragging");
+    g.removeEventListener("pointermove", move);
+    g.removeEventListener("pointerup", up);
+    g.removeEventListener("pointercancel", up);
+  };
+  g.addEventListener("pointermove", move);
+  g.addEventListener("pointerup", up);
+  g.addEventListener("pointercancel", up);
+});
+
+
+function drawFigs(text){
+  const used = new Set();
+  const re = /!\[(?:[^\[\]]|\[[^\[\]]*\])*\]\(\s*([^)\s]+)/g;
+  let m; while ((m = re.exec(text)) !== null) used.add(m[1].split("/").pop());
+  const names = [...figures.keys()];
+  const bibNote = bibEntries.size
+    ? ` <span class="f">.bib ${bibEntries.size} entries</span>` : "";
+  $("figs").innerHTML = bibNote + (names.length
+    ? `${names.length} figure(s) &mdash; ` + names.map(n =>
+        `<span class="f${used.has(n) ? "" : " un"}">${esc(n)}${used.has(n) ? "" : " (not referenced)"}</span>`).join("")
+    : ` No figures added. Drag in the files the note references as <code>![](../figures/..)</code>.`);
+}
+
+function update(){
+  const text = $("src").value;
+  let rend;
+  try { rend = render(text); }
+  catch (e){ $("out").innerHTML = `<div class="xbad">Render failed: ${esc(e.message)}</div>`; return; }
+  $("out").innerHTML = rend.html;
+  drawChecks(checkNote(text), rend);
+  drawFigs(text);
+  drawCode(text);
+  if (window.MathJax && window.MathJax.typesetPromise)
+    window.MathJax.typesetPromise([$("out")]).catch(e => console.warn(e));
+}
+
+$("src").addEventListener("input", () => debounce(update));
+
+$("fqmd").addEventListener("change", async ev => {
+  const f = ev.target.files[0]; if (!f) return;
+  noteName = f.name; $("fname").textContent = f.name;
+  $("src").value = await f.text();
+  update();
+});
+
+async function addFile(f){
+  if (/\.bib$/i.test(f.name)){
+    for (const [k, v] of parseBib(await f.text())) bibEntries.set(k, v);
+    return;
+  }
+  const old = figures.get(f.name);
+  if (old) URL.revokeObjectURL(old.url);
+  figures.set(f.name, {file: f, url: URL.createObjectURL(f)});
+}
+
+// Two buttons, one handler. addFile() already sorts a .bib from a figure by
+// its name, so the split is for the person using the page: "add figures" and
+// "add a bibliography" are different errands, and a file picker filtered to
+// one of them is easier to get right than one that offers both.
+for (const id of ["ffig", "fbib"])
+  $(id).addEventListener("change", async ev => {
+    for (const f of ev.target.files) await addFile(f);
+    ev.target.value = "";   // so picking the same file twice still fires
+    update();
+  });
+
+// Dropping files anywhere is the same as using the two buttons.
+document.addEventListener("dragover", e => e.preventDefault());
+document.addEventListener("drop", async e => {
+  e.preventDefault();
+  for (const f of e.dataTransfer.files){
+    if (/\.(qmd|md|markdown)$/i.test(f.name)){
+      noteName = f.name; $("fname").textContent = f.name; $("src").value = await f.text();
+    } else await addFile(f);
+  }
+  update();
+});
+
+$("save").addEventListener("click", () => {
+  const blob = new Blob([$("src").value], {type: "text/markdown"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = noteName || "note.qmd";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+
+// The view switch. On a narrow screen "Side by side" shows the editor alone,
+// so the switch is the only way to reach the render -- which is the point of it.
+const main = document.querySelector("main");
+function setView(v){
+  main.setAttribute("data-view", v);
+  for (const b of $("view").querySelectorAll("button"))
+    b.setAttribute("aria-pressed", String(b.dataset.v === v));
+  try { localStorage.setItem("ai618-preview-view", v); } catch (e) {}
+  if (v !== "src" && window.MathJax && window.MathJax.typesetPromise)
+    window.MathJax.typesetPromise([$("out")]).catch(() => {});
+}
+for (const b of $("view").querySelectorAll("button"))
+  b.addEventListener("click", () => setView(b.dataset.v));
+let view0 = "both";
+try { view0 = localStorage.getItem("ai618-preview-view") || "both"; } catch (e) {}
+if (!["src", "both", "out"].includes(view0)) view0 = "both";
+setView(view0);
+
+$("theme").addEventListener("click", () => {
+  const now = document.documentElement.getAttribute("data-theme");
+  const dark = now ? now === "dark"
+                   : matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.setAttribute("data-theme", dark ? "light" : "dark");
+});
+
+// The hand-off to the form. This page uploads nothing, so the button only
+// opens the form in a new tab; the student attaches the files there.
+//
+// Nothing is carried over. The form asks for the lecture and the username
+// itself, and shows only that lecture's assigned scribes, so there is no
+// per-student link to preserve and no token to lose.
+//
+// Shown only once TALLY_URL is set, so the button never points at nothing.
+// Leave TALLY_URL empty until the form is published: a button that opens an
+// unpublished form is worse than no button.
+if (TALLY_URL){
+  const b = document.createElement("button");
+  b.textContent = "Go to the submission form";
+  b.addEventListener("click", () => window.open(TALLY_URL, "_blank", "noopener"));
+  $("submitbar").prepend(b);
+  $("submitbar").hidden = false;
+}
+
+// A note to start from, so the page is not an empty box on arrival.
+$("src").value = `---
+title: "Lecture NN --- Title"
+lecture: NN
+author: "your-github-username"
+date: "2026-01-01"
+format:
+  pdf:
+    toc: true
+    number-sections: true
+---
+
+## Setup {#sec-setup}
+
+Let $x_t$ be the state at time $t$. The forward process is
+
+$$
+x_t = \\sqrt{\\bar\\alpha_t}\\, x_0 + \\sqrt{1 - \\bar\\alpha_t}\\, \\epsilon
+$$ {#eq-forward}
+
+and @eq-forward is what @sec-setup is about.
+
+::: {#thm-tweedie}
+For the path of @eq-forward, the posterior mean is
+$\\mathbb{E}[x_0 \\mid x_t] = (x_t - \\sqrt{1-\\bar\\alpha_t}\\,\\epsilon_\\theta)/\\sqrt{\\bar\\alpha_t}$.
+:::
+
+@thm-tweedie is Tweedie's formula.
+`;
+noteName = "your-github-username.qmd";
+$("fname").textContent = noteName;
+
+// Render at once. js-yaml and marked are ordinary blocking scripts, so they
+// are here already; only the typesetting needs MathJax, and update() checks
+// for it. Waiting on MathJax.startup.promise was wrong twice over: the page
+// installs window.MathJax itself as a configuration object, so MathJax.startup
+// was truthy long before MathJax existed, and reading .promise off it threw --
+// which left the first render never run and the pane blank until the first
+// keystroke.
+update();
+
+// MathJax arrives later, being async. Typeset again when it does.
+const mjWait = setInterval(() => {
+  if (window.MathJax && window.MathJax.typesetPromise){ clearInterval(mjWait); update(); }
+}, 120);
+setTimeout(() => clearInterval(mjWait), 20000);
+</script>

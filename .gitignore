@@ -21,5 +21,9 @@ drafts/*.md
 # Quarto leaves per-file HTML beside the sources when a single format is
 # rendered; the book itself goes to _book/.
 /*.html
+# -- except this one, which is a source file and not Quarto's leavings. It is
+# the page students check a note on before submitting, and _quarto.yml carries
+# it into the site as a resource.
+!preview.html
 chapters/*.html
 site_libs/

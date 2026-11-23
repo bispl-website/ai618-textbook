@@ -1,6 +1,12 @@
 project:
   type: book
   output-dir: _book
+  # Carried into _book as-is, so the site serves it at /preview.html. It is
+  # not a chapter and must not become one: students open it to check a note
+  # before submitting, and it renders and checks the .qmd entirely in their
+  # own browser. Nothing it does reaches this server.
+  resources:
+    - preview.html
 
 book:
   title: "Generative Models and Unsupervised Learning"

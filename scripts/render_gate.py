@@ -49,6 +49,15 @@ KINDS = ("eq", "sec", "fig", "tbl", "def", "prp", "thm", "lem",
          "exm", "cor", "rem", "alg", "lst")
 UNRESOLVED = re.compile(r"\?(" + "|".join(KINDS) + r")-[A-Za-z0-9_-]+")
 IMG = re.compile(r'<img[^>]+src="([^"]+)"')
+# A page may carry script that builds an <img> at run time. preview.html --
+# the students' in-browser note checker, served from the book as a resource
+# -- writes `<img src="${got.url}">` from a FileReader blob, and this check
+# read it as a figure missing from the build and refused every push from
+# 2026-11-25, when that line was added, until it was first run afterwards.
+# Script is not markup: it is cut out before the page is scanned.
+SCRIPT = re.compile(r"(?is)<script\b.*?</script\s*>")
+# And a src the template language has not filled in is not a path either.
+UNFILLED = re.compile(r"\$\{|\{\{|<%")
 
 
 def render(log_path: Path) -> int:
@@ -115,8 +124,10 @@ def gate_build() -> list[str]:
         html = page.read_text(encoding="utf-8", errors="replace")
         for ref in sorted(set(UNRESOLVED.findall(html))):
             bad.append(f"{page.name}: unresolved crossref `?{ref}-...`")
-        for src in sorted(set(IMG.findall(html))):
+        for src in sorted(set(IMG.findall(SCRIPT.sub("", html)))):
             if src.startswith(("http://", "https://", "data:")):
+                continue
+            if UNFILLED.search(src):
                 continue
             if not (page.parent / src).exists():
                 bad.append(f"{page.name}: <img src=\"{src}\"> is not in the build")

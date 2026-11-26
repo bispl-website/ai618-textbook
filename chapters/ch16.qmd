@@ -4,22 +4,29 @@ title: "Flow Map Distillation"
 
 
 <!--
-DRAFT seeded by scripts/promote.py from the strongest lec15 scribe note.
-Base note: ChungEunho. Merge sources: ChungEunho, Lee-Gyubin.
+Lecture 15 of AI618 (2026-11-10), taught from `Part-6-Distillation_v2.pptx`
+slides 1-51.
 
-This repository is public and this comment ships in the page source, so it
-carries no scores and no per-note criticism. Both live in
-drafts/lec15-merge.md, which .gitignore keeps out of the repository.
+Built on the scribe note of Eunho Chung, with the materials from Gyubin Lee.
 
-Before this chapter is publishable:
+Not in any scribe note, and written for this chapter:
+* Progressive distillation (Salimans & Ho, ICLR 2022, slides 6-8)
+* Generative learning trilemma and denoising diffusion GAN (Xiao, Kreis &
+  Vahdat, ICLR 2022, slide 9)
+* The four-family taxonomy of approaches (slide 3)
+* Timeline of flow maps (slide 5)
 
-1. Fill the gaps listed in drafts/lec15-merge.md, which also says which of
-   the other notes covered each one.
-2. Resolve every suspected error in the worksheet against the lecture itself.
-3. Reconcile notation with the neighbouring chapters.
-4. Copy-edit. The scribe repository never penalised English fluency, so some
-   base notes need a real pass here.
-5. Replace this comment and the contributor list below with the final credit.
+From lecture-chapters.yml, which is where the mapping and its reasons are
+kept:
+Distillation and flow maps. This chapter also absorbs the "Early few-step
+methods" section of chapter 15 (lecture 14's last nine slides) when it is
+written -- see the entry for lecture 14. The stub title is provisional until
+the deck is in hand; the syllabus called the lecture "Rectified Flow", which
+chapter 15 has already covered.
+
+Written at stage 5 on 2026-11-26 from the deck record, the merge worksheet and
+lecture-chapters.yml, replacing promote.py's DRAFT comment. A decision an
+editor made that is not in those three files is not in here either: add it.
 -->
 
 
@@ -1498,3 +1505,7 @@ KAIST). The underlying papers are the following.
   Generative Modeling", 2025, arXiv:2505.13447.
 * J. C. Ye, *Geometry of Deep Learning: A Signal Processing Perspective*,
   Springer, 2022. Course textbook.
+
+---
+
+*Based on the scribe note of Eunho Chung, with the materials from Gyubin Lee. Edited by Jong Chul Ye.*

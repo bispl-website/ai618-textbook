@@ -39,6 +39,34 @@ REPO = Path(__file__).resolve().parent.parent
 CHAPTER_MAP = REPO / "lecture-chapters.yml"
 
 
+STOP = {"the", "a", "an", "of", "on", "in", "and", "for", "to", "at", "as",
+        "its", "it", "with", "by", "from", "this", "that", "is", "are", "be",
+        "or", "not", "only"}
+
+
+def topic_words(topic: str) -> set[str]:
+    """A gap's topic as the words that carry it, for comparing two of them."""
+    out = set()
+    for w in re.split(r"[^0-9a-z]+", topic.lower()):
+        if not w or w in STOP:
+            continue
+        out.add(w[:-1] if len(w) > 3 and w.endswith("s") else w)
+    return out
+
+
+def same_topic(a: set[str], b: set[str]) -> bool:
+    """Whether two graders are describing the same hole.
+
+    Thresholds measured against lec15's two readings, where the four true
+    pairs scored 0.44 or better on Jaccard and 0.67 on containment, and
+    every unrelated pair 0.18 and 0.33 or worse.
+    """
+    if not a or not b:
+        return False
+    shared = len(a & b)
+    return shared / len(a | b) >= 0.4 or shared / min(len(a), len(b)) >= 0.6
+
+
 def chapter_for(lec: str) -> tuple[Path, list[str], str]:
     """Resolve `lecNN` to the chapter file its notes are promoted into.
 
@@ -140,12 +168,27 @@ def worksheet(lec: str, records: list[dict], scribe_repo: Path) -> str:
     L.append(f"The base note is `{records[0]['github']}`. Every gap below was reported "
              "against it; the source column says which other note to lift the material "
              "from, where one of them covered it.\n")
-    others = {r["github"]: {g["topic"].lower() for g in r["coverage_gaps"]} for r in records[1:]}
+    # Matched on words, not on the string. The topics are free text from
+    # the grader and two readings of the same hole never spell it the same
+    # way -- lec15 had "Progressive distillation (... , slides 6-8)"
+    # against "... ; slides 6-8)" and "Timeline of flow maps (slide 5)"
+    # against "Flow-map timeline on slide 5". On an exact match every one
+    # of them read as covered, so the worksheet told the editor to lift
+    # from a note that was missing it too, which is the opposite of what
+    # the column is for.
+    others = {r["github"]: [topic_words(g["topic"]) for g in r["coverage_gaps"]]
+              for r in records[1:]}
+    L.append("The *covered by* column is matched on the words of the topic, not on "
+             "the string: two readings of the same hole never spell it the same way. "
+             "It is a pointer, not a promise -- read the other note before lifting "
+             "from it.\n")
     L.append("| severity | topic | what is missing | covered by |")
     L.append("|---|---|---|---|")
     for gap in sorted(records[0]["coverage_gaps"],
                       key=lambda g: {"missing": 0, "thin": 1, "minor": 2}.get(g["severity"], 3)):
-        covered = [name for name, gaps in others.items() if gap["topic"].lower() not in gaps]
+        mine = topic_words(gap["topic"])
+        covered = [name for name, gaps in others.items()
+                   if not any(same_topic(mine, g) for g in gaps)]
         note = gap["note"].replace("\n", " ").replace("|", "\\|")
         L.append(f"| {gap['severity']} | {gap['topic']} | {note} | "
                  f"{', '.join(f'`{c}`' for c in covered) or '**nobody — write it**'} |")

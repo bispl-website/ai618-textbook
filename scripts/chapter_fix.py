@@ -63,6 +63,21 @@ CREDIT = re.compile(r"\*Based on the scribe note of (.+?)\. Edited by [^*]+\*", 
 SEEDED_COMMENT = "DRAFT seeded by scripts/promote.py"
 
 
+def roster_editor(scribe_repo: Path) -> str:
+    """Who the credit line says edited the chapter.
+
+    From roster.yml, which is the course's own file. It was a string in
+    this function below until 2026-11-26, when the dashboard started
+    proposing the whole line before this script writes it: a person's
+    name in two programs drifts the way a title in two files does.
+    """
+    import yaml
+    path = scribe_repo / "roster.yml"
+    data = (yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+            if path.exists() else {})
+    return (data.get("editor") or "").strip() or "Jong Chul Ye"
+
+
 def roster_credits(scribe_repo: Path) -> dict[str, str]:
     """GitHub login -> the spelling the book credits that person by."""
     import yaml
@@ -80,7 +95,8 @@ def roster_credits(scribe_repo: Path) -> dict[str, str]:
     return out
 
 
-def credit_line(base: str, materials: list[str], who: dict[str, str]) -> str:
+def credit_line(base: str, materials: list[str], who: dict[str, str],
+                editor: str = "Jong Chul Ye") -> str:
     def name(login: str) -> str:
         n = who.get(login)
         if not n:
@@ -97,7 +113,7 @@ def credit_line(base: str, materials: list[str], who: dict[str, str]) -> str:
         tail = (", with the materials from "
                 + ", ".join(names[:-1]) + f" and {names[-1]}")
     return (f"*Based on the scribe note of {name(base)}{tail}. "
-            "Edited by Jong Chul Ye.*")
+            f"Edited by {editor}.*")
 
 
 def other_labels(target: Path) -> dict[str, str]:
@@ -214,7 +230,7 @@ def main() -> int:  # noqa: C901  (a checklist; splitting it hides the order)
         fixed.append("removed promote.py's placeholder credit line of logins")
     if args.base:
         mats = [m.strip() for m in args.materials.split(",") if m.strip()]
-        line = credit_line(args.base, mats, who)
+        line = credit_line(args.base, mats, who, roster_editor(scribe_repo))
         text = CREDIT.sub("", text).rstrip()
         text = re.sub(r"\n+---\s*\Z", "", text).rstrip() + f"\n\n---\n\n{line}\n"
         fixed.append("wrote the credit line from the roster's spellings")

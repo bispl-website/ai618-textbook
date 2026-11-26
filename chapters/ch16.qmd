@@ -1,5 +1,5 @@
 ---
-title: "Flow Maps: Theory and Training in Practice"
+title: "Flow Map Distillation"
 ---
 
 
@@ -21,11 +21,6 @@ Before this chapter is publishable:
    base notes need a real pass here.
 5. Replace this comment and the contributor list below with the final credit.
 -->
-
-::: {.callout-important}
-## Draft
-This chapter is a merge in progress and has not been edited or checked.
-:::
 
 
 ## Overview
@@ -72,7 +67,7 @@ convergence of the discrete Eulerian loss (@prp-eulerconv), the fixed point of t
 stop-gradient loss (@prp-fixed), the reduction of consistency training to a
 teacher-free loss (@prp-ct), and the slide exercise that the Eulerian loss
 becomes flow matching in the limit $t \to s$ (@prp-fm-limit). A worked example
-with a closed-form flow map and runnable code is in @sec-worked.
+with a closed-form flow map and runnable code is in @sec-ch15-worked.
 
 ## Notation
 
@@ -263,7 +258,7 @@ independent endpoints. Color marks the mixture component the path ends in.
 Left: the paths of $I_t$ cross (two of them are drawn in black), so a point
 $(t,x)$ does not determine where a path is going. Right: solutions of
 $\dot{x}_t = b_t(x_t)$ from the same starting points never cross, yet at every
-$t$ the two panels have the same density of points (@prp-pf).](figures/lec15/ChungEunho-interpolant-vs-ode.pdf){#fig-interp width=95%}
+$t$ the two panels have the same density of points (@prp-pf).](figures/lec15/ChungEunho-interpolant-vs-ode.png){#fig-interp width=95%}
 
 ### Learning the velocity
 
@@ -365,7 +360,7 @@ solutions are not stated as a result on the slides, but they are used
 repeatedly below (for instance in the multi-step sampler of @sec-ctm), so we
 record them.
 
-::: {#prp-semigroup}
+::: {#prp-ch15-semigroup}
 ## Elementary properties of the flow map
 For all $s,u,t \in [0,1]$ and $x \in \mathbb{R}^d$:
 
@@ -642,7 +637,7 @@ $\delta^{-2}\mathcal{L}_{\mathrm{DEMD}}(\hat{X}) \to \mathcal{L}_{\mathrm{EMD}}(
 difference of the function $g(s) = \hat{X}_{s,t}(x_s)$ from the proof of
 @prp-suff along a teacher trajectory. The loss asks that moving the starting
 point a little along the teacher trajectory does not change where the student
-lands. Both convergence statements are checked numerically in @sec-worked.
+lands. Both convergence statements are checked numerically in @sec-ch15-worked.
 
 ::: {.callout-note}
 ## A question from the class: what if the loss is not the MSE?
@@ -702,7 +697,7 @@ followed by a teacher step. (b) Discrete EMD compares the student's jump from
 $x_s$ with its jump from the point one teacher step later on the same
 trajectory. (c) With a stop-gradient the second point is a fixed target and
 only $\hat{X}_{s,t}(x_s)$ is moved; this is the loss of consistency models and
-CTM.](figures/lec15/ChungEunho-distillation-schematic.pdf){#fig-schematic width=100%}
+CTM.](figures/lec15/ChungEunho-distillation-schematic.png){#fig-schematic width=100%}
 
 ## Flow Map Training in Practice
 
@@ -728,7 +723,7 @@ slide (the vertical axis is logarithmic here). One-step generators (red) went
 from 34.24 to 1.45 between 2024 and 2026 and are now close to many-step models
 (blue) that use $250\times2$ network evaluations. The change of slope
 coincides with the move from consistency models, which learn only jumps to the
-endpoint, to general flow maps.](figures/lec15/ChungEunho-timeline.pdf){#fig-timeline width=75%}
+endpoint, to general flow maps.](figures/lec15/ChungEunho-timeline.png){#fig-timeline width=75%}
 
 Why did one-step generation improve so much once flow maps replaced
 consistency models? The explanation given in the lecture is that a flow map
@@ -828,7 +823,7 @@ that selects it. (The proposition is about fixed points of an idealized model
 class; it does not prove that training a neural network converges to it.)
 Second, the student is exactly as accurate as the teacher run with step
 $\delta$: distillation inherits the teacher's discretization error. Both are
-visible in the worked example of @sec-worked, where the distilled one-step map
+visible in the worked example of @sec-ch15-worked, where the distilled one-step map
 agrees with the 16-step Euler teacher to three digits rather than with the
 exact flow map.
 
@@ -1170,7 +1165,7 @@ $$
 x_1 = (X_{t_2,1}\circ X_{t_1,t_2}\circ X_{0,t_1})(x_0), \qquad 0 < t_1 < t_2 < 1 ,
 $$ {#eq-multistep}
    which for the exact flow map equals $X_{0,1}(x_0)$ by the composition
-   property (@prp-semigroup). For a learned flow map the two differ, and
+   property (@prp-ch15-semigroup). For a learned flow map the two differ, and
    three short jumps are usually more accurate than one long jump.
 
 The plot on the slide shows FID against NFE for the samplers of the paper.
@@ -1238,7 +1233,7 @@ $\gamma = 1$ and $\gamma = 0.5$ change identity from one NFE to the next,
 because of the re-noising, while CTM with $\gamma = 0$ keeps the same cat and
 only refines it.
 
-## Worked Example {#sec-worked}
+## Worked Example {#sec-ch15-worked}
 
 We carry one example through every object of the lecture, in closed form and
 with code. Take $d = 1$,
@@ -1268,7 +1263,7 @@ $$
 X_{s,t}(x) = 2t + \frac{\sigma_t}{\sigma_s}\,(x - 2s) .
 $$ {#eq-ex-flowmap}
 In particular $X_{0,1}(x) = 2 + 0.5\,x$, which indeed maps
-$\mathcal{N}(0,1)$ to $\mathcal{N}(2, 0.25)$, as @prp-semigroup requires. One
+$\mathcal{N}(0,1)$ to $\mathcal{N}(2, 0.25)$, as @prp-ch15-semigroup requires. One
 can check the two equations of @prp-suff by hand:
 $\partial_t X_{s,t}(x) = 2 + (\dot\sigma_t/\sigma_s)(x-2s) = b_t(X_{s,t}(x))$,
 and
@@ -1415,7 +1410,7 @@ as the number of steps grows, and with one step it is constant. The distilled
 one-step map (circles) lies on the 16-step teacher it was distilled from, not
 on the exact map. Right: the rescaled discrete losses of a deliberately wrong
 map converge to the continuous Eulerian and Lagrangian losses (dotted lines)
-as $\delta\to0$.](figures/lec15/ChungEunho-worked-example.pdf){#fig-worked width=100%}
+as $\delta\to0$.](figures/lec15/ChungEunho-worked-example.png){#fig-worked width=100%}
 
 ## Summary
 
@@ -1503,10 +1498,3 @@ KAIST). The underlying papers are the following.
   Generative Modeling", 2025, arXiv:2505.13447.
 * J. C. Ye, *Geometry of Deep Learning: A Signal Processing Perspective*,
   Springer, 2022. Course textbook.
-
-::: {#refs}
-:::
-
----
-
-*Scribe notes for this lecture: ChungEunho, Lee-Gyubin.*

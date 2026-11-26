@@ -1,26 +1,1512 @@
 ---
-title: "Few-Step Generation: Distillation and Flow Maps"
+title: "Flow Maps: Theory and Training in Practice"
 ---
 
-<!--
-Lecture 15 of AI618 (2026-11-10). The title above is provisional: it was set on
-2026-11-21 from what lecture 14 announced the rest of Part 6 would cover, not
-from this lecture's own deck, and stage 3 of the chapter pipeline replaces it
-once the deck is in hand. The syllabus title was "Rectified Flow", which
-chapter 15 has already covered.
 
-This chapter absorbs the "Early few-step methods" section of chapter 15
-(@sec-early-fewstep: progressive distillation, the denoising diffusion GAN and
-the Part 6 timeline table), which lecture 14 reached in its last nine slides.
-That section is lodged in chapter 15 only until this one is written; see
-chapter 15's provenance comment and the lecture 14 entry of
-lecture-chapters.yml for what moves and what stays behind.
+<!--
+DRAFT seeded by scripts/promote.py from the strongest lec15 scribe note.
+Base note: ChungEunho. Merge sources: ChungEunho, Lee-Gyubin.
+
+This repository is public and this comment ships in the page source, so it
+carries no scores and no per-note criticism. Both live in
+drafts/lec15-merge.md, which .gitignore keeps out of the repository.
+
+Before this chapter is publishable:
+
+1. Fill the gaps listed in drafts/lec15-merge.md, which also says which of
+   the other notes covered each one.
+2. Resolve every suspected error in the worksheet against the lecture itself.
+3. Reconcile notation with the neighbouring chapters.
+4. Copy-edit. The scribe repository never penalised English fluency, so some
+   base notes need a real pass here.
+5. Replace this comment and the contributor list below with the final credit.
 -->
 
-::: {.callout-note}
-## Not yet written
-Lecture 15 of AI618, given 2026-11-10. This chapter is merged from
-the scribe notes for that lecture; until those are written and graded it stands
-empty. It will also take over the early few-step methods that chapter 15
-currently carries at the end.
+::: {.callout-important}
+## Draft
+This chapter is a merge in progress and has not been edited or checked.
 :::
+
+
+## Overview
+
+Diffusion and flow models generate a sample by integrating an ordinary
+differential equation (ODE) from a simple distribution to the data
+distribution. Every sample therefore costs tens or hundreds of network
+evaluations. The first part of this lecture block looked at early ways around
+that cost (progressive distillation, denoising diffusion GANs). This lecture
+gives the general theory behind the modern few-step and one-step generators,
+and then reads three concrete methods through that theory.
+
+The idea is to stop learning the *velocity* of the ODE and to learn its
+*solution operator* instead. A velocity field tells us where a point moves in an
+infinitesimal time; the **flow map** $X_{s,t}$ tells us where a point that is
+at $x$ at time $s$ will be at time $t$, for any pair $(s,t)$. A network that
+represents the flow map can jump from noise to data in one evaluation.
+
+The lecture has two parts, and the note follows them in order.
+
+1. **Flow maps: theory.** We set up *stochastic interpolants*, a single
+   framework that contains both flow matching and diffusion models, and recall
+   how the velocity $b$ is learned by regression. We then define the flow map,
+   see why learning it directly from its definition is inefficient, and derive
+   two differential characterizations of it, the *Lagrangian* and the
+   *Eulerian* equation. Each one gives a distillation loss (LMD and EMD) and a
+   derivative-free discrete version of it (DLMD and DEMD).
+2. **Flow map training in practice.** Consistency models (CM), latent
+   consistency models (LCM) and consistency trajectory models (CTM) are shown
+   to be instances of the discrete Eulerian loss with a stop-gradient. CTM
+   additionally reveals that a flow map contains a flow matching model on its
+   diagonal $s=t$, which is what stabilizes training.
+
+After reading the note you should be able to (i) state and prove why the
+regression loss recovers the probability flow velocity, (ii) derive the
+Lagrangian and Eulerian equations and prove that each one characterizes the
+flow map, (iii) show that the discrete losses converge to the continuous ones,
+and (iv) explain CM, LCM and CTM as special cases, including what the
+stop-gradient and the flow matching term are for.
+
+The derivations that the slides state without proof, or leave as an exercise,
+are carried out in full: the proofs of @prp-pf, @prp-learn and @prp-suff, the
+convergence of the discrete Eulerian loss (@prp-eulerconv), the fixed point of the
+stop-gradient loss (@prp-fixed), the reduction of consistency training to a
+teacher-free loss (@prp-ct), and the slide exercise that the Eulerian loss
+becomes flow matching in the limit $t \to s$ (@prp-fm-limit). A worked example
+with a closed-form flow map and runnable code is in @sec-worked.
+
+## Notation
+
+The notation is that of the lecture slides. Time runs over $[0,1]$.
+
+| Symbol | Meaning |
+|---|---|
+| $p_0, p_1$ | the two probability densities on $\mathbb{R}^d$ we want to translate between |
+| $x_0 \sim p_0,\ x_1 \sim p_1,\ z \sim \mathcal{N}(0,I)$ | endpoint samples and an independent Gaussian latent variable |
+| $I_t$ | stochastic interpolant, $I_t = \alpha_t x_0 + \beta_t x_1 + \gamma_t z$ |
+| $\dot{I}_t$ | time derivative of the interpolant, $\dot\alpha_t x_0 + \dot\beta_t x_1 + \dot\gamma_t z$ |
+| $\rho_t$ | probability density of $I_t$ (so $\rho_0 = p_0$, $\rho_1 = p_1$) |
+| $b_t(x)$ | velocity field, $b_t(x) = \mathbb{E}[\dot{I}_t \mid I_t = x]$ |
+| $\hat{b}$ | a candidate (learned) velocity field |
+| $(x_t)_{t \in [0,1]}$ | a solution of the ODE $\dot{x}_t = b_t(x_t)$ |
+| $X_{s,t}$ | flow map: $X_{s,t}(x_s) = x_t$ |
+| $\hat{X}_{s,t}$ | a candidate (learned) flow map |
+| $\nabla X_{s,t}(x)$ | Jacobian of $x \mapsto X_{s,t}(x)$, a $d \times d$ matrix |
+| $\partial_s, \partial_t$ | partial derivatives in the start time $s$ and the destination time $t$ |
+| $w_{s,t} > 0$ | a positive weight on the pair $(s,t)$ |
+| $\mathrm{ODESolve}_{s,t}(x)$ | the result of numerically integrating $\dot{x} = b(x)$ from time $s$ to time $t$, started at $x$ |
+| $\mathrm{sg}[\cdot]$ | stop-gradient: the argument is treated as a constant when differentiating the loss |
+| $X_s$ | consistency model, $X_s = X_{s,1}$ |
+| $F_{s,t}$ | average velocity in the parametrization $X_{s,t}(x) = x + (t-s)F_{s,t}(x)$ |
+| NFE | number of function (network) evaluations used to draw one sample |
+
+Two conventions deserve a warning. First, the expression
+$b_s(x) \cdot \nabla X_{s,t}(x)$ on the slides means the directional
+derivative of $X_{s,t}$ along $b_s(x)$, that is the matrix-vector product
+$\nabla X_{s,t}(x)\, b_s(x)$. Second, the slides do not fix which of $p_0$ and
+$p_1$ is the data distribution, because the theory is symmetric in time:
+$X_{s,t}$ is defined for $s<t$ and for $s>t$. When a direction is needed, the
+consistency model of @def-cm takes time $1$ as the destination, so there $p_1$
+plays the role of data and $p_0$ of noise.
+
+## Stochastic Interpolants
+
+### Definition and examples
+
+We want to translate between two distributions $p_0$ and $p_1$, for instance
+from noise to images or from one image domain to another. The starting point is
+to connect a sample of $p_0$ and a sample of $p_1$ by an explicit path.
+
+::: {#def-interpolant}
+## Stochastic interpolant (slide Definition 1)
+A *stochastic interpolant* between probability densities $p_0$ and $p_1$ is the
+stochastic process
+$$
+I_t = \alpha_t x_0 + \beta_t x_1 + \gamma_t z,
+\qquad x_0 \sim p_0,\quad x_1 \sim p_1,\quad z \sim \mathcal{N}(0, I),
+$$ {#eq-interpolant}
+for $t \in [0,1]$, where $z$ is independent of $(x_0,x_1)$ and the scalar
+coefficients satisfy
+$$
+\alpha_0 = \beta_1 = 1, \qquad \alpha_1 = \beta_0 = 0, \qquad \gamma_0 = \gamma_1 = 0 .
+$$
+:::
+
+The boundary conditions say exactly that $I_0 = x_0 \sim p_0$ and
+$I_1 = x_1 \sim p_1$. In between, $I_t$ is a random point whose density we call
+$\rho_t$; the family $(\rho_t)_{t\in[0,1]}$ is a path of densities from $p_0$
+to $p_1$. We assume throughout that $\alpha,\beta,\gamma$ are continuous on
+$[0,1]$ and differentiable on the open interval $(0,1)$, so that
+$\dot{I}_t = \dot\alpha_t x_0 + \dot\beta_t x_1 + \dot\gamma_t z$ exists for
+$0<t<1$. (Differentiability at the endpoints would be too much to ask: for
+$\gamma_t = \sqrt{2t(1-t)}$, used below, $\dot\gamma_t$ is unbounded as
+$t\to0$ and $t\to1$.) The pair $(x_0,x_1)$ may be drawn from any coupling of $p_0$ and $p_1$;
+the simplest choice, used in the examples below, is to draw them independently.
+
+The slides show four choices of coefficients, each visualized as a sequence of
+images going from a daisy ($x_0$) to a passion flower ($x_1$):
+
+| Name on the slide | Interpolant | What the path looks like |
+|---|---|---|
+| Without latent variable | $x_t = (1-t)x_0 + t x_1$ | a cross-fade of the two images |
+| With latent variable | $x_t = (1-t)x_0 + t x_1 + \sqrt{2t(1-t)}\, z$ | a cross-fade with extra noise that peaks at $t = 1/2$ |
+| Gaussian encoding-decoding | $x_t = \cos^2(\pi t)\big(1_{[0,1/2)}(t)\, x_0 + 1_{(1/2,1]}(t)\, x_1\big) + \sqrt{2t(1-t)}\, z$ | $x_0$ is destroyed into pure noise at $t = 1/2$, then $x_1$ is created from it |
+| One-sided | $x_t = (1-t) x_0 + t z$ | the image is turned into noise; $p_1 = \mathcal{N}(0,I)$ |
+
+The second and third rows show what the latent variable $z$ is for: it adds
+randomness in the middle of the path that is present at neither endpoint. In
+the third row $\cos^2(\pi/2) = 0$, so at $t = 1/2$ the interpolant is the pure
+noise $z/\sqrt{2}$ and carries no information about either endpoint.
+
+Two special cases cover the models of the previous lectures.
+
+* **Flow model.** $I_t = (1-t)x_0 + t x_1$, that is $\alpha_t = 1-t$,
+  $\beta_t = t$, $\gamma_t = 0$. This is the linear interpolation path of flow
+  matching and rectified flow.
+* **DDPM.** $I_t = \sqrt{\alpha_t}\, x_0 + \sqrt{1-\alpha_t}\, z$. Here, and only
+  here, $\alpha_t$ denotes the cumulative noise schedule of DDPM (usually
+  written $\bar\alpha_t$), not the interpolant coefficient
+  of @def-interpolant. In the language of @def-interpolant this is a one-sided
+  interpolant with $x_0$ the data, $p_1 = \mathcal{N}(0,I)$ and $x_1 = z$:
+  the coefficient of $x_0$ is $\sqrt{\bar\alpha_t}$ and the coefficient of
+  $x_1$ is $\sqrt{1-\bar\alpha_t}$, with the diffusion time rescaled to
+  $[0,1]$. The boundary conditions hold because $\bar\alpha = 1$ at the data
+  end and $\bar\alpha \approx 0$ at the noise end.
+
+::: {.callout-important}
+## Emphasized in the lecture
+All subsequent theory holds for diffusion **and** flow models. Everything
+below is stated for a general interpolant and uses only the velocity $b$, so
+the same flow map theory applies to both families.
+:::
+
+### The probability flow ODE
+
+The interpolant is easy to sample but it is not a generative model: to produce
+$I_t$ we need both endpoints. The next result replaces the interpolant by a
+deterministic ODE that has the same marginal densities and needs only one
+endpoint.
+
+::: {#prp-pf}
+## Probability flow (slide Proposition 1)
+For all $t \in [0,1]$, the probability density of $I_t$ is the same as the
+probability density of the solution to the ODE
+$$
+\dot{x}_t = b_t(x_t), \qquad x_{t=0} = x_0 \sim p_0 \quad \text{or} \quad x_{t=1} = x_1 \sim p_1,
+$$ {#eq-pfode}
+where $b$ is the velocity given by
+$$
+b_t(x) = \mathbb{E}[\dot{I}_t \mid I_t = x]
+       = \mathbb{E}[\dot\alpha_t x_0 + \dot\beta_t x_1 + \dot\gamma_t z \mid I_t = x].
+$$ {#eq-velocity}
+:::
+
+The slide states this without proof. The proof below assumes that, for
+$t\in(0,1)$, $I_t$ has a density $\rho_t$ that is differentiable in $t$ and
+continuous up to $t=0$ and $t=1$, that $\mathbb{E}\|\dot{I}_t\| < \infty$, and
+that $b_t(x)$ is continuous in $t$ and locally Lipschitz in $x$ with at most
+linear growth, so that the ODE @eq-pfode has a unique solution through every
+point. The continuity equation below is understood in the weak sense, that is,
+tested against smooth functions; no differentiability of $\rho_t$ in $x$ is
+needed.
+
+::: {.proof}
+*Step 1: $\rho_t$ solves a continuity equation.* Let
+$\varphi : \mathbb{R}^d \to \mathbb{R}$ be a smooth test function with compact
+support. By the chain rule and then the tower property of conditional
+expectation,
+$$
+\begin{aligned}
+\frac{d}{dt} \mathbb{E}[\varphi(I_t)]
+  &= \mathbb{E}\big[\nabla\varphi(I_t) \cdot \dot{I}_t\big]
+   = \mathbb{E}\Big[\nabla\varphi(I_t) \cdot \mathbb{E}[\dot{I}_t \mid I_t]\Big] \\
+  &= \mathbb{E}\big[\nabla\varphi(I_t) \cdot b_t(I_t)\big]
+   = \int \nabla\varphi(x) \cdot b_t(x)\, \rho_t(x)\, dx .
+\end{aligned}
+$$
+The left-hand side is $\int \varphi(x)\, \partial_t \rho_t(x)\, dx$.
+Integrating the right-hand side by parts (the boundary term vanishes because
+$\varphi$ has compact support) gives
+$-\int \varphi(x)\, \nabla \cdot (b_t(x)\rho_t(x))\, dx$. Since $\varphi$ is
+arbitrary, this is the weak form of
+$$
+\partial_t \rho_t + \nabla \cdot (b_t \rho_t) = 0 , \qquad \rho_0 = p_0,\quad \rho_1 = p_1 .
+$$ {#eq-continuity}
+
+*Step 2: the ODE solution solves the same equation.* Let $x_t$ solve
+@eq-pfode with $x_0 \sim p_0$ and let $q_t$ be the density of $x_t$. The same
+computation, now with $\dot{x}_t = b_t(x_t)$ in place of $\dot{I}_t$, gives
+$\frac{d}{dt}\mathbb{E}[\varphi(x_t)] = \mathbb{E}[\nabla\varphi(x_t)\cdot b_t(x_t)]$,
+hence $\partial_t q_t + \nabla\cdot(b_t q_t) = 0$ with $q_0 = p_0$.
+
+*Step 3: uniqueness.* Under the regularity assumed for $b$, the continuity
+equation with velocity $b$ has a unique solution for a given initial density
+(it is the push-forward of the initial density by the flow of the ODE).
+Therefore $q_t = \rho_t$ for all $t$. Starting instead from $x_1 \sim p_1$ and
+integrating backward in time is the same argument with the terminal condition
+$\rho_1 = p_1$.
+:::
+
+The proposition does **not** say that the ODE trajectories are the interpolant
+trajectories. Only the one-time marginals agree. The slide illustrates the
+difference with two panels, reproduced with a one-dimensional example
+in @fig-interp. The paths $t \mapsto I_t$ are straight lines between independently
+drawn endpoints and they cross each other. At a crossing point $x$ several
+different values of $\dot{I}_t$ occur, and $b_t(x)$ is their average. The ODE
+replaces the bundle of crossing paths by a single deterministic direction at
+each point, so its solutions cannot cross (two solutions that meet would
+coincide by uniqueness), and the map from start to end becomes a deterministic
+transport.
+
+![Interpolant paths versus ODE solutions for $p_0 = \mathcal{N}(0,1)$ and a
+two-component Gaussian mixture $p_1$, with $I_t = (1-t)x_0 + t x_1$ and
+independent endpoints. Color marks the mixture component the path ends in.
+Left: the paths of $I_t$ cross (two of them are drawn in black), so a point
+$(t,x)$ does not determine where a path is going. Right: solutions of
+$\dot{x}_t = b_t(x_t)$ from the same starting points never cross, yet at every
+$t$ the two panels have the same density of points (@prp-pf).](figures/lec15/ChungEunho-interpolant-vs-ode.pdf){#fig-interp width=95%}
+
+### Learning the velocity
+
+The velocity $b_t(x)$ in @eq-velocity is a conditional expectation and has no
+closed form in general. It can however be learned from samples of the
+interpolant alone.
+
+::: {#prp-learn}
+## Learning flows (slide Proposition 2)
+The velocity $b$ can be learned by solving the regression
+$$
+b = \arg\min_{\hat{b}} \int_0^1 \mathbb{E}\big[\|\hat{b}(I_t) - \dot{I}_t\|^2\big]\, dt ,
+$$ {#eq-regression}
+where $\mathbb{E}$ is the expectation over $x_0 \sim p_0$, $x_1 \sim p_1$,
+$z \sim \mathcal{N}(0,I)$, and $\hat{b}(I_t)$ is short for $\hat{b}_t(I_t)$.
+:::
+
+The proof is again not on the slides. It assumes
+$\mathbb{E}\|\dot{I}_t\|^2 < \infty$, and the minimum is taken over
+candidates with $\mathbb{E}\|\hat{b}_t(I_t)\|^2 < \infty$.
+
+::: {.proof}
+Fix $t$ and add and subtract $b_t(I_t)$ inside the norm:
+$$
+\begin{aligned}
+\mathbb{E}\|\hat{b}_t(I_t) - \dot{I}_t\|^2
+ &= \mathbb{E}\|\hat{b}_t(I_t) - b_t(I_t)\|^2
+  + \mathbb{E}\|b_t(I_t) - \dot{I}_t\|^2 \\
+ &\quad + 2\, \mathbb{E}\big[(\hat{b}_t(I_t) - b_t(I_t)) \cdot (b_t(I_t) - \dot{I}_t)\big].
+\end{aligned}
+$$
+In the cross term, condition on $I_t$. The first factor is a function of $I_t$
+and comes out of the conditional expectation, and
+$\mathbb{E}[b_t(I_t) - \dot{I}_t \mid I_t] = b_t(I_t) - b_t(I_t) = 0$ by the
+definition @eq-velocity. So the cross term vanishes and
+$$
+\mathbb{E}\|\hat{b}_t(I_t) - \dot{I}_t\|^2
+ = \underbrace{\mathbb{E}\|\hat{b}_t(I_t) - b_t(I_t)\|^2}_{\geq 0,\ \text{zero iff } \hat{b}_t = b_t\ \rho_t\text{-a.e.}}
+ + \underbrace{\mathbb{E}\|b_t(I_t) - \dot{I}_t\|^2}_{\text{does not depend on } \hat{b}} .
+$$ {#eq-decomp}
+Integrating over $t$, the objective is minimized exactly when
+$\hat{b}_t = b_t$ almost everywhere with respect to $\rho_t$, for almost every
+$t$.
+:::
+
+The picture on the slide shows one point $I_t$ with a fan of dotted arrows
+$\dot{I}_t$ (one for each pair of endpoints whose path passes through that
+point) and one solid arrow $b(I_t) = \mathbb{E}[\dot{I}_t \mid I_t]$, their
+average. Two remarks from the lecture annotate the formula. The network input
+$I_t$ is a sample from the *marginal* density $\rho_t$, which is easy to draw.
+The regression target $\dot{I}_t$ is a single sample of the conditional
+velocity, which is noisy; the conditional mean $b$ itself is intractable, but
+@eq-decomp shows that regressing on the noisy target has the same minimizer,
+and that the minimum value of the loss is not zero but the conditional
+variance $\int_0^1\mathbb{E}\|b_t(I_t) - \dot{I}_t\|^2 dt$.
+
+::: {#cor-fm}
+## Flow matching (slide Corollary 2.1)
+The flow ODE with $I_t = (1-t)x_0 + t x_1$ can be learned by
+$$
+b = \arg\min_{\hat{b}} \int_0^1 \mathbb{E}\big[\|\hat{b}(I_t) - (x_1 - x_0)\|^2\big]\, dt ,
+$$ {#eq-fm}
+that is, by solving the flow matching loss.
+:::
+
+::: {.proof}
+For $\alpha_t = 1-t$, $\beta_t = t$, $\gamma_t = 0$ we have
+$\dot{I}_t = x_1 - x_0$. Substitute into @eq-regression.
+:::
+
+## Flow Maps
+
+The ODE @eq-pfode turns a sample of $p_0$ into a sample of $p_1$, but only
+after many small solver steps, each of which evaluates the network $\hat{b}$.
+To generate in one or a few steps we want the solution of the ODE itself as a
+function.
+
+::: {#def-flowmap}
+## Flow map (slide Definition 2)
+A *flow map* $X_{s,t} : \mathbb{R}^d \to \mathbb{R}^d$ is the unique map such
+that
+$$
+X_{s,t}(x_s) = x_t \qquad \forall (s,t) \in [0,1]^2 ,
+$$ {#eq-flowmap}
+where $(x_t)_{t\in[0,1]}$ is any solution to the ODE $\dot{x}_t = b_t(x_t)$.
+:::
+
+In words: $X_{s,t}$ takes the position at the *starting time* $s$ of any ODE
+trajectory and returns the position of the same trajectory at the
+*destination time* $t$. It is a function of two time variables. The slide
+contrasts the two objects with a figure: flow matching learns a tangent
+$v_\theta(x_t,t)$ at each point of a trajectory, a flow map learns the jump
+$x_s \mapsto x_t$ between any two points of it. In the words of the lecture, a
+flow map learns *all the geometry of the transitions*: one network knows every
+transition $s \to t$ at once.
+
+The following consequences of @def-flowmap and of the uniqueness of ODE
+solutions are not stated as a result on the slides, but they are used
+repeatedly below (for instance in the multi-step sampler of @sec-ctm), so we
+record them.
+
+::: {#prp-semigroup}
+## Elementary properties of the flow map
+For all $s,u,t \in [0,1]$ and $x \in \mathbb{R}^d$:
+
+1. $X_{s,s}(x) = x$ (identity on the diagonal);
+2. $X_{u,t}(X_{s,u}(x)) = X_{s,t}(x)$ (composition);
+3. $X_{t,s} = X_{s,t}^{-1}$ (inverse);
+4. if $x_0 \sim p_0$ then $X_{0,t}(x_0) \sim \rho_t$; in particular
+   $X_{0,1}(x_0) \sim p_1$, a one-step sampler.
+:::
+
+::: {.proof}
+Let $(x_\tau)$ be the solution with $x_s = x$. (1) $X_{s,s}(x_s) = x_s$.
+(2) $X_{s,u}(x) = x_u$ and $X_{u,t}(x_u) = x_t = X_{s,t}(x)$. (3) Take $t = s$
+in (2) with the roles of $s,u$ exchanged. (4) $X_{0,t}(x_0) = x_t$, whose
+density is $\rho_t$ by @prp-pf.
+:::
+
+### The obvious approach and why it is inefficient
+
+How do we learn a flow map? The lecture first considers the obvious approach,
+written on the slide for the map from time $1$ to time $0$:
+
+1. sample a lot of $x_1 \sim p_1$ (say $N$ points);
+2. solve the ODE $\dot{x}_t = b(x_t)$ with a large number of discretization
+   steps to get $x_0$;
+3. optimize the flow map by
+$$
+\min_{X} \frac{1}{N} \sum_{n=1}^{N} d\big(x_0^{(n)}, X_{1,0}(x_1^{(n)})\big),
+$$ {#eq-naive}
+where $d$ is any loss function (for example the mean squared error, MSE, or
+the perceptual distance LPIPS) and $(x_1^{(n)}, x_0^{(n)})$ is the $n$-th pair
+of ODE endpoints. (The slide omits the sample index $n$; it is added here.)
+
+This is regression on the definition @eq-flowmap itself. It is correct, but
+*trying to optimize a flow map using the definition itself was inefficient*:
+every training pair requires a complete, accurate ODE solve with the given
+velocity $b$, so building the training set costs as much as running the slow sampler
+$N$ times, and the pairs only supervise one pair of times, $(s,t) = (1,0)$.
+The question that organizes the rest of the lecture is therefore:
+
+> Why not try using the first-order derivative of the definition?
+
+A derivative of @eq-flowmap is a *local* condition. It can be checked at a
+single time pair with a single evaluation of $b$, without solving the ODE.
+
+## Flow Map Distillation
+
+### Lagrangian and Eulerian equations
+
+The definition $X_{s,t}(x_s) = x_t$ contains two time variables, and we can
+differentiate it with respect to either. The slide states the two results; the
+computations are as follows.
+
+**Derivative with respect to $t$.** Fix $s$ and a trajectory $(x_\tau)$.
+Differentiating $X_{s,t}(x_s) = x_t$ in $t$ gives
+$\partial_t X_{s,t}(x_s) = \dot{x}_t = b_t(x_t) = b_t(X_{s,t}(x_s))$. Since a
+trajectory passes through every point $x$ at time $s$, we may write $x$ for
+$x_s$:
+$$
+\partial_t X_{s,t}(x) = b_t(X_{s,t}(x)), \qquad X_{s,s}(x) = x .
+$$ {#eq-lagrangian}
+
+**Derivative with respect to $s$.** Fix $t$ and differentiate
+$X_{s,t}(x_s) = x_t$ in $s$. The right-hand side does not depend on $s$. On the
+left, $s$ appears twice, in the index and in the argument $x_s$, so by the
+chain rule
+$$
+0 = \frac{d}{ds}\big[X_{s,t}(x_s)\big]
+  = \partial_s X_{s,t}(x_s) + \nabla X_{s,t}(x_s)\, \dot{x}_s
+  = \partial_s X_{s,t}(x_s) + \nabla X_{s,t}(x_s)\, b_s(x_s) .
+$$
+Writing $x$ for $x_s$ again, and using the slide notation
+$b_s(x)\cdot\nabla X_{s,t}(x)$ for $\nabla X_{s,t}(x)\,b_s(x)$,
+$$
+\partial_s X_{s,t}(x) + b_s(x) \cdot \nabla X_{s,t}(x) = 0, \qquad X_{t,t}(x) = x .
+$$ {#eq-eulerian}
+
+The names come from fluid mechanics. @eq-lagrangian follows one particle as the
+destination time advances: it is the ODE itself, with $X_{s,t}(x)$ as the
+moving particle. @eq-eulerian keeps the destination fixed and asks how the
+answer changes when the starting point is moved; it is a linear transport
+equation in the variables $(s,x)$, and it says that $X_{s,t}(\cdot)$ is
+constant along trajectories.
+
+We derived the two equations as *necessary* conditions. The key fact is that
+each of them is also *sufficient*.
+
+::: {#prp-suff}
+## Sufficient condition for flow maps (slide Proposition 3)
+$X_{s,t}$ is a flow map if it satisfies the *Lagrangian equation* or the
+*Eulerian equation* for all $(s,t,x) \in [0,1]^2 \times \mathbb{R}^d$:
+
+* Lagrangian equation: $\partial_t X_{s,t}(x) = b_t(X_{s,t}(x))$, $\ X_{s,s}(x) = x$;
+* Eulerian equation: $\partial_s X_{s,t}(x) + b_s(x)\cdot\nabla X_{s,t}(x) = 0$, $\ X_{t,t}(x) = x$.
+:::
+
+The slide gives no proof. We assume, as in @prp-pf, that the ODE has a unique
+solution through every point, and that the candidate $X$ is continuously
+differentiable in $(s,t,x)$.
+
+::: {.proof}
+Let $(x_\tau)_{\tau\in[0,1]}$ be any solution of $\dot{x}_\tau = b_\tau(x_\tau)$.
+We must show $X_{s,t}(x_s) = x_t$.
+
+*Lagrangian case.* Fix $s$ and define the curve $y_t = X_{s,t}(x_s)$.
+By @eq-lagrangian, $\dot{y}_t = b_t(y_t)$ and $y_s = X_{s,s}(x_s) = x_s$. So
+$(y_t)$ and $(x_t)$ solve the same ODE and agree at time $s$. By uniqueness
+they agree at all times: $X_{s,t}(x_s) = y_t = x_t$.
+
+*Eulerian case.* Fix $t$ and define $g(s) = X_{s,t}(x_s)$. By the chain rule
+and @eq-eulerian,
+$$
+g'(s) = \partial_s X_{s,t}(x_s) + \nabla X_{s,t}(x_s)\, b_s(x_s) = 0 .
+$$
+So $g$ is constant in $s$, and its value is obtained at $s = t$ from the
+boundary condition: $g(s) = g(t) = X_{t,t}(x_t) = x_t$. Hence
+$X_{s,t}(x_s) = x_t$.
+:::
+
+Note the different roles of the boundary conditions. In the Lagrangian
+equation the identity is imposed at the start of the jump, in the Eulerian
+equation at its end; both say $X_{s,s} = \mathrm{id}$, but the Eulerian
+argument *propagates* that information from $s = t$ back to all other $s$.
+This will matter when we discuss the stop-gradient.
+
+### Lagrangian and Eulerian map distillation
+
+A differential equation that characterizes the flow map can be turned into a
+loss: penalize the squared residual of the equation. Because the residual
+involves the velocity $b$, which in practice is a pre-trained diffusion or
+flow model (the *teacher*), this is a *distillation* of the teacher into a
+flow map (the *student*).
+
+::: {#cor-fmd}
+## Flow map distillation (slide Corollary 3.1)
+The flow map is a global minimizer of the losses
+
+* Lagrangian Map Distillation:
+$$
+\mathcal{L}_{\mathrm{LMD}}(\hat{X}) = \mathbb{E}_{s,t\in[0,1]}\Big[w_{s,t}\, \mathbb{E}\big[\|\partial_t \hat{X}_{s,t}(I_s) - b_t(\hat{X}_{s,t}(I_s))\|^2\big]\Big],
+$$ {#eq-lmd}
+* Eulerian Map Distillation:
+$$
+\mathcal{L}_{\mathrm{EMD}}(\hat{X}) = \mathbb{E}_{s,t\in[0,1]}\Big[w_{s,t}\, \mathbb{E}\big[\|\partial_s \hat{X}_{s,t}(I_s) + b_s(I_s)\cdot\nabla\hat{X}_{s,t}(I_s)\|^2\big]\Big],
+$$ {#eq-emd}
+
+subject to $\hat{X}_{s,s}(x) = x$ for all $(s,x) \in [0,1]\times\mathbb{R}^d$,
+with $w_{s,t} > 0$.
+:::
+
+Here the outer expectation draws the pair $(s,t)$ from a distribution on
+$[0,1]^2$ (for example uniformly), and the inner expectation draws the point at
+which the equation is tested, $I_s \sim \rho_s$, from the interpolant.
+
+::: {.proof}
+Both losses are expectations of non-negative quantities, so they are bounded
+below by $0$. The true flow map $X$ satisfies the constraint and, by
+@eq-lagrangian and @eq-eulerian, makes both residuals vanish identically, so
+it attains the value $0$ and is a global minimizer.
+
+Conversely, suppose $\mathcal{L}_{\mathrm{LMD}}(\hat{X}) = 0$ or
+$\mathcal{L}_{\mathrm{EMD}}(\hat{X}) = 0$, and assume in addition that the
+pair $(s,t)$ has a positive density on $[0,1]^2$, that $\rho_s > 0$ everywhere,
+and that the residual is continuous in $(s,t,x)$. Then the residual, being
+zero almost everywhere and continuous, is zero everywhere, and @prp-suff shows
+that $\hat{X}$ is the flow map. Under these assumptions the flow map is the
+*unique* minimizer.
+:::
+
+The constraint $\hat{X}_{s,s} = \mathrm{id}$ cannot be dropped: for example
+any $\hat{X}_{s,t}(x)$ that is constant in $(s,x)$ has zero Eulerian residual.
+In practice it is built into the network, as in the parametrization
+$\hat{X}_{s,t}(x) = x + (t-s)\hat{F}_{s,t}(x)$ of @sec-ctm.
+
+### Discrete version
+
+The losses @eq-lmd and @eq-emd contain derivatives of the network with respect
+to its time inputs and, for EMD, a Jacobian-vector product. Replacing the
+derivatives by finite differences gives losses that only need forward
+evaluations of $\hat{X}$ and one short solver step of the teacher.
+
+::: {#cor-discrete}
+## Flow map distillation, discrete variant (slide Corollary 3.2)
+The following losses converge to Lagrangian / Eulerian Map Distillation as
+$\delta \to 0$:
+
+* Discrete LMD:
+$$
+\mathcal{L}_{\mathrm{DLMD}}(\hat{X}) = \mathbb{E}_{s,t\in[0,1]}\Big[w_{s,t}\, \mathbb{E}\big[\|\hat{X}_{s,t}(I_s) - \mathrm{ODESolve}_{t-\delta,t}(\hat{X}_{s,t-\delta}(I_s))\|^2\big]\Big],
+$$ {#eq-dlmd}
+* Discrete EMD:
+$$
+\mathcal{L}_{\mathrm{DEMD}}(\hat{X}) = \mathbb{E}_{s,t\in[0,1]}\Big[w_{s,t}\, \mathbb{E}\big[\|\hat{X}_{s,t}(I_s) - \hat{X}_{s+\delta,t}(\mathrm{ODESolve}_{s,s+\delta}(I_s))\|^2\big]\Big],
+$$ {#eq-demd}
+
+subject to $\hat{X}_{s,s}(x) = x$ for all $(s,x) \in [0,1]\times\mathbb{R}^d$,
+with $w_{s,t} > 0$.
+:::
+
+Here $\delta > 0$ is a small step, and the pair $(s,t)$ is restricted so that
+the shifted times $t-\delta$ and $s+\delta$ stay in $[0,1]$; the slides do not
+spell this out. The precise meaning of "converge", made explicit by the proof on the slide, is
+that $\delta^{-2}\mathcal{L}_{\mathrm{DLMD}} \to \mathcal{L}_{\mathrm{LMD}}$
+and $\delta^{-2}\mathcal{L}_{\mathrm{DEMD}} \to \mathcal{L}_{\mathrm{EMD}}$:
+the discrete losses themselves tend to zero like $\delta^2$, and the rescaled
+losses tend to the continuous ones. The factor $\delta^{-2}$ is a constant and
+does not change the minimizer.
+
+Both proofs use one property of the solver: over a step of length $\delta$ it
+agrees with an Euler step up to second order,
+$$
+\mathrm{ODESolve}_{u,u+\delta}(y) = y + \delta\, b_u(y) + O(\delta^2) .
+$$ {#eq-euler-step}
+This holds with no remainder if the solver *is* one Euler step, and with an
+$O(\delta^2)$ remainder for the exact solution $X_{u,u+\delta}$ and for any
+consistent higher-order solver. We assume that $\hat{X}$ is twice continuously
+differentiable in $(s,t,x)$, that $b$ is continuously differentiable, and that
+the remainders are dominated by an integrable function, so that the limit can
+be taken inside the expectations.
+
+::: {.proof}
+*Discrete LMD (the proof on the slide, with the remainders written out).*
+Abbreviate $y_\delta = \hat{X}_{s,t-\delta}(I_s)$. Then
+$$
+\begin{aligned}
+\delta^{-2}\mathcal{L}_{\mathrm{DLMD}}(\hat{X})
+ &= \delta^{-2}\,\mathbb{E}_{s,t}\Big[w_{s,t}\,\mathbb{E}\big[\|\hat{X}_{s,t}(I_s) - \mathrm{ODESolve}_{t-\delta,t}(y_\delta)\|^2\big]\Big] \\
+ &= \mathbb{E}_{s,t}\Big[w_{s,t}\,\mathbb{E}\big[\|(\hat{X}_{s,t}(I_s) - \mathrm{ODESolve}_{t-\delta,t}(y_\delta))/\delta\|^2\big]\Big] \\
+ &= \mathbb{E}_{s,t}\Big[w_{s,t}\,\mathbb{E}\big[\|(\hat{X}_{s,t}(I_s) - (y_\delta + \delta\, b_{t-\delta}(y_\delta)))/\delta + O(\delta)\|^2\big]\Big] \\
+ &= \mathbb{E}_{s,t}\Big[w_{s,t}\,\mathbb{E}\big[\|(\hat{X}_{s,t}(I_s) - \hat{X}_{s,t-\delta}(I_s))/\delta - b_{t-\delta}(\hat{X}_{s,t-\delta}(I_s)) + O(\delta)\|^2\big]\Big] \\
+ &\to \mathbb{E}_{s,t}\Big[w_{s,t}\,\mathbb{E}\big[\|\partial_t\hat{X}_{s,t}(I_s) - b_t(\hat{X}_{s,t}(I_s))\|^2\big]\Big] \quad \text{as } \delta \to 0 \\
+ &= \mathcal{L}_{\mathrm{LMD}}(\hat{X}) .
+\end{aligned}
+$$
+The third line is @eq-euler-step with $u = t-\delta$. In the limit, the
+backward difference quotient converges to $\partial_t\hat{X}_{s,t}(I_s)$, and
+$b_{t-\delta}(\hat{X}_{s,t-\delta}(I_s)) \to b_t(\hat{X}_{s,t}(I_s))$ by
+continuity of $b$ and $\hat{X}$.
+:::
+
+The slide proves only the Lagrangian half. The Eulerian half is the one that
+consistency models and CTM use, so we carry it out.
+
+::: {#prp-eulerconv}
+## Convergence of the discrete Eulerian loss
+Under the assumptions above,
+$\delta^{-2}\mathcal{L}_{\mathrm{DEMD}}(\hat{X}) \to \mathcal{L}_{\mathrm{EMD}}(\hat{X})$
+as $\delta \to 0$.
+:::
+
+::: {.proof}
+Fix $(s,t)$ and $x = I_s$, and write
+$x_\delta = \mathrm{ODESolve}_{s,s+\delta}(x) = x + \delta\, b_s(x) + O(\delta^2)$
+by @eq-euler-step. Expand $\hat{X}_{s+\delta,t}(x_\delta)$ to first order
+around $(s,x)$, in the start time and in the space variable simultaneously:
+$$
+\begin{aligned}
+\hat{X}_{s+\delta,t}(x_\delta)
+ &= \hat{X}_{s,t}(x) + \delta\,\partial_s\hat{X}_{s,t}(x) + \nabla\hat{X}_{s,t}(x)\,(x_\delta - x) + O(\delta^2) \\
+ &= \hat{X}_{s,t}(x) + \delta\,\big[\partial_s\hat{X}_{s,t}(x) + \nabla\hat{X}_{s,t}(x)\, b_s(x)\big] + O(\delta^2) .
+\end{aligned}
+$$
+Therefore
+$$
+\frac{\hat{X}_{s,t}(x) - \hat{X}_{s+\delta,t}(x_\delta)}{\delta}
+ = -\big[\partial_s\hat{X}_{s,t}(x) + b_s(x)\cdot\nabla\hat{X}_{s,t}(x)\big] + O(\delta) .
+$$ {#eq-demd-residual}
+Taking the squared norm (the sign disappears), then the expectation over
+$I_s$ and over $(s,t)$ with weight $w_{s,t}$, and letting $\delta\to0$ gives
+$\delta^{-2}\mathcal{L}_{\mathrm{DEMD}}(\hat{X}) \to \mathcal{L}_{\mathrm{EMD}}(\hat{X})$.
+:::
+
+@eq-demd-residual shows what the discrete Eulerian loss does: it is a finite
+difference of the function $g(s) = \hat{X}_{s,t}(x_s)$ from the proof of
+@prp-suff along a teacher trajectory. The loss asks that moving the starting
+point a little along the teacher trajectory does not change where the student
+lands. Both convergence statements are checked numerically in @sec-worked.
+
+::: {.callout-note}
+## A question from the class: what if the loss is not the MSE?
+A student asked what happens when the squared norm in the discrete losses is
+replaced by another loss, as in @eq-naive where $d$ may be LPIPS. The following
+answer was not given in the lecture and is not from the slides. Let $d(u,v) \ge 0$ be a
+three times continuously differentiable loss with $d(u,v) = 0$ if and only if
+$u = v$. The *minimizer* does not change: the discrete Eulerian loss is still
+non-negative, and it is zero exactly when
+$\hat{X}_{s,t} = \hat{X}_{s+\delta,t}\circ\mathrm{ODESolve}_{s,s+\delta}$ on
+the support of $I_s$, the same condition as for the squared norm. What changes is the
+*limit*. Since $v \mapsto d(u,v)$ has a minimum at $v = u$, its first-order
+term vanishes and $d(u, u + \delta r) = \tfrac{1}{2}\delta^2\, r^\top H(u)\, r + O(\delta^3)$
+with $H(u) = \nabla_v^2 d(u,v)\vert_{v=u}$ positive semi-definite.
+By @eq-demd-residual, $\delta^{-2}$ times the discrete Eulerian loss then
+converges to the Eulerian residual measured in the local metric
+$\tfrac12 H$ instead of the Euclidean one. For the squared norm, $H = 2\,\mathrm{Id}$ and
+we recover @prp-eulerconv. So a different loss gives a re-weighted version of the
+same continuous objective. For the pseudo-Huber loss
+$d(u,v) = \sqrt{\|u-v\|^2 + c^2} - c$ used later in the lecture,
+$H = \mathrm{Id}/c$, so the limit is the Eulerian loss itself divided by $2c$.
+LPIPS, the other loss used by consistency models, is a distance between
+network features and does not satisfy these hypotheses exactly (it is not
+smooth, and it can vanish for $u \neq v$), so for it the statement is only a
+heuristic.
+:::
+
+### Intuitive picture
+
+The slides explain the two discrete losses with the same drawing, built up
+step by step and reproduced in @fig-schematic. Start from a point $x_s$. The
+green curve is the trajectory of the teacher's probability flow ODE (PF-ODE,
+the ODE @eq-pfode) through $x_s$; it reaches
+the correct answer $x_t$. The red curve is the *flow map trajectory*
+$t \mapsto \hat{X}_{s,t}(x_s)$ of the current student, which starts at the same
+point (boundary condition) and ends at the wrong place $\hat{X}_{s,t}(x_s)$.
+
+* **LMD** (panel a). Stop the student slightly early, at
+  $\hat{X}_{s,t-\delta}(x_s)$. From that point let the teacher advance for the
+  remaining time $\delta$: this gives
+  $\mathrm{ODESolve}_{t-\delta,t}(\hat{X}_{s,t-\delta}(x_s))$. Minimize the
+  distance between this point and the student's own prediction
+  $\hat{X}_{s,t}(x_s)$. The student is asked to extend its own trajectory in
+  the direction the teacher prescribes: the *end* of the jump is perturbed.
+* **EMD** (panel b). Let the teacher advance first, from $x_s$ to
+  $\mathrm{ODESolve}_{s,s+\delta}(x_s)$, which lies on the green curve. From
+  there let the student jump to time $t$:
+  $\hat{X}_{s+\delta,t}(\mathrm{ODESolve}_{s,s+\delta}(x_s))$. Minimize the
+  distance between this point and $\hat{X}_{s,t}(x_s)$. Two student jumps that
+  start on the same teacher trajectory are asked to land at the same place:
+  the *start* of the jump is perturbed.
+
+![The discrete distillation losses, redrawn from the slides. Red: flow map
+trajectories of the student. Green: PF-ODE trajectories of the teacher. (a)
+Discrete LMD compares the student's jump to $t$ with its jump to $t-\delta$
+followed by a teacher step. (b) Discrete EMD compares the student's jump from
+$x_s$ with its jump from the point one teacher step later on the same
+trajectory. (c) With a stop-gradient the second point is a fixed target and
+only $\hat{X}_{s,t}(x_s)$ is moved; this is the loss of consistency models and
+CTM.](figures/lec15/ChungEunho-distillation-schematic.pdf){#fig-schematic width=100%}
+
+## Flow Map Training in Practice
+
+The second part of the lecture reads the main few-step generators as flow map
+training: consistency models, CTM, MeanFlow and flow map matching. This
+lecture covered consistency models, latent consistency models and CTM;
+MeanFlow and flow map matching belong to the next one.
+
+### Timeline
+
+The lecture opened this part with the history of the FID (Frechet inception
+distance, a measure of sample quality; lower is better) on ImageNet
+$256\times256$, redrawn in @fig-timeline from the numbers on the slide.
+Many-step models improved steadily: ADM (1000 NFE, FID 4.59, 2021), DiT
+($250\times2$ NFE, FID 2.27, 2023), REPA ($250\times2$ NFE, FID 1.42, 2025) and
+RAE ($250\times2$ NFE, FID 1.13, 2026). One-step models started far behind,
+with iCT at 34.24 FID for 1 NFE in 2024, and then closed almost the whole gap
+in two years: MeanFlow (1 NFE, FID 3.43, 2025) and FreeFlow (1 NFE, FID 1.45,
+2026). The slide labels this the *big leap from CM to flow map*.
+
+![FID on ImageNet $256\times256$ over time, from the numbers on the lecture
+slide (the vertical axis is logarithmic here). One-step generators (red) went
+from 34.24 to 1.45 between 2024 and 2026 and are now close to many-step models
+(blue) that use $250\times2$ network evaluations. The change of slope
+coincides with the move from consistency models, which learn only jumps to the
+endpoint, to general flow maps.](figures/lec15/ChungEunho-timeline.pdf){#fig-timeline width=75%}
+
+Why did one-step generation improve so much once flow maps replaced
+consistency models? The explanation given in the lecture is that a flow map
+learns *all* transitions between two times, not only the transitions into the
+endpoint, and that learning every transition $s \to t$ makes the particular
+transition needed for one-step generation better. The CTM section makes this
+concrete: the extra destination time connects the model to flow matching,
+which grounds it in data.
+
+### Consistency models {#sec-cm}
+
+Consistency models (Song, Dhariwal, Chen and Sutskever, ICML 2023) were the
+first widely used one-step model of this kind. The slide shows their samples
+on ImageNet next to those of the teacher: the EDM teacher (the diffusion model
+of Karras et al., see the references) reaches FID 2.44 with many steps and consistency distillation (CD) reaches FID 6.20 with
+*single-step* generation, with visibly the same image content for the same
+noise. In the present language a consistency model is a flow map with the
+destination time frozen.
+
+::: {#def-cm}
+## Consistency model (slide Definition 3)
+A *consistency model* $X_s : \mathbb{R}^d \to \mathbb{R}^d$ is the unique map
+such that
+$$
+X_s(x_s) = X_{s,1}(x_s) = x_1 \qquad \forall s \in [0,1],
+$$ {#eq-cm}
+where $(x_t)_{t\in[0,1]}$ is any solution to the ODE $\dot{x}_t = b_t(x_t)$.
+*Consistency distillation* minimizes
+$$
+\mathcal{L}_{\mathrm{CD}}(\hat{X}) = \mathbb{E}_{s\in[0,1]}\Big[w_s\,\big\|\hat{X}_s(I_s) - \mathrm{sg}\big[\hat{X}_{s+\delta}(\mathrm{ODESolve}_{s,s+\delta}(I_s))\big]\big\|^2\Big]
+$$ {#eq-cd}
+subject to $\hat{X}_1(x) = x$ for all $x \in \mathbb{R}^d$.
+:::
+
+The *target point is fixed and the starting point is arbitrary*: every point
+of a trajectory is mapped to the same endpoint $x_1$, which is the
+"self-consistency" that gives the model its name. The figure on the slide
+(from the paper) shows three points of one PF-ODE trajectory between data and
+noise, all sent to the same data point by $f_\theta$.
+
+Compare @eq-cd with the discrete Eulerian loss @eq-demd. Setting $t = 1$ in
+@eq-demd and writing $\hat{X}_s = \hat{X}_{s,1}$ and $w_s = w_{s,1}$ gives
+$$
+\mathbb{E}_{s}\Big[w_s\,\mathbb{E}\big[\|\hat{X}_s(I_s) - \hat{X}_{s+\delta}(\mathrm{ODESolve}_{s,s+\delta}(I_s))\|^2\big]\Big],
+$$
+and the boundary condition $\hat{X}_{t,t} = \mathrm{id}$ at $t=1$ is
+$\hat{X}_1(x) = x$. So consistency distillation is *very similar to discrete
+Eulerian map distillation with $t = 1$, but with a stop-gradient*. Why the
+stop-gradient?
+
+**The role of the stop-gradient.** Without it, the loss @eq-demd is symmetric
+in its two points: the gradient moves both $\hat{X}_{s,t}(x_s)$ and
+$\hat{X}_{s+\delta,t}(\mathrm{ODESolve}_{s,s+\delta}(x_s))$, and the slide
+describes this as *pulling the points towards each other*. But the two points
+are not equally trustworthy. Take $s < t$, as in the pictures. The second one
+starts one teacher step closer to the destination, where the boundary condition pins the model to the identity,
+so it is the *more accurate* of the two. With the stop-gradient *the more
+accurate point is fixed* and only the less accurate one is pulled toward it,
+as in panel (c) of @fig-schematic. The loss becomes a regression onto a target
+produced by the model itself, with information flowing in one direction, from
+the boundary $s = t$ outward. This is the same direction in which the proof of
+the Eulerian case of @prp-suff propagates the boundary condition.
+
+The claim that the fixed point is still the right one can be made precise on
+a time grid. The statement and proof are not on the slides.
+
+::: {#prp-fixed}
+## Fixed point of the stop-gradient loss
+Let $s_k = k\delta$, $k = 0,\dots,K$, with $K\delta = 1$, and consider
+@eq-cd with $s$ restricted to the grid, $w_{s_k} > 0$, and $\rho_{s_k} > 0$
+everywhere. Suppose the model class can represent any function at each grid
+time, and that the functions at different grid times are parametrized
+independently of each other. Then the only $\hat{X}$ that is a fixed point of gradient descent
+on @eq-cd, and satisfies $\hat{X}_{s_K} = \mathrm{id}$, is
+$$
+\hat{X}_{s_k} = \mathrm{ODESolve}_{s_{K-1},s_K} \circ \cdots \circ \mathrm{ODESolve}_{s_{k+1},s_{k+2}} \circ \mathrm{ODESolve}_{s_k,s_{k+1}},
+$$
+the teacher's own multi-step solution from $s_k$ to $1$.
+:::
+
+::: {.proof}
+With the target held constant, the loss at grid time $s_k$ is an ordinary
+least-squares regression of $\hat{X}_{s_k}(I_{s_k})$ onto the value
+$T_k(I_{s_k})$, where $T_k = \hat{X}_{s_{k+1}}\circ\mathrm{ODESolve}_{s_k,s_{k+1}}$.
+Its gradient with respect to the function $\hat{X}_{s_k}$ is
+$2 w_{s_k}(\hat{X}_{s_k} - T_k)\rho_{s_k}$, which vanishes only if
+$\hat{X}_{s_k} = T_k$ wherever $\rho_{s_k} > 0$, that is everywhere. So a
+fixed point satisfies
+$\hat{X}_{s_k} = \hat{X}_{s_{k+1}}\circ\mathrm{ODESolve}_{s_k,s_{k+1}}$ for
+$k = 0,\dots,K-1$. Starting from $\hat{X}_{s_K} = \mathrm{id}$ and going
+backward in $k$ gives the stated composition by induction.
+:::
+
+Two lessons follow. First, with the stop-gradient the only fixed point is the
+teacher's discretized flow map, and the boundary condition is the only thing
+that selects it. (The proposition is about fixed points of an idealized model
+class; it does not prove that training a neural network converges to it.)
+Second, the student is exactly as accurate as the teacher run with step
+$\delta$: distillation inherits the teacher's discretization error. Both are
+visible in the worked example of @sec-worked, where the distilled one-step map
+agrees with the 16-step Euler teacher to three digits rather than with the
+exact flow map.
+
+**The two training algorithms.** The slide reproduces Algorithms 2 and 3 of
+the paper. The paper uses the EDM convention, in which the noisy point is
+$\mathbf{x}_t = \mathbf{x} + t\mathbf{z}$ for data $\mathbf{x}$, times are
+discretized as $t_1 < t_2 < \dots < t_N$, and the model
+$\mathbf{f}_\theta(\mathbf{x}_t, t)$ maps a point at noise level $t$ to the
+data end of its trajectory. The dictionary to the notation of the lecture is:
+
+| Paper (Song et al., 2023) | Lecture |
+|---|---|
+| noisier time $t_{n+1}$, cleaner time $t_n$ | $s$ and $s+\delta$ (one step closer to the destination) |
+| $\mathbf{x}_{t_{n+1}} \sim \mathcal{N}(\mathbf{x}; t_{n+1}^2 \mathbf{I})$ | $I_s$ |
+| $\hat{\mathbf{x}}^{\phi}_{t_n} = \mathbf{x}_{t_{n+1}} + (t_n - t_{n+1})\Phi(\mathbf{x}_{t_{n+1}}, t_{n+1}; \phi)$ | $\mathrm{ODESolve}_{s,s+\delta}(I_s)$, one step of the teacher $\phi$ |
+| $\mathbf{f}_\theta(\mathbf{x}_{t_{n+1}}, t_{n+1})$ | $\hat{X}_s(I_s)$ |
+| $\mathbf{f}_{\theta^-}(\hat{\mathbf{x}}^{\phi}_{t_n}, t_n)$ | $\mathrm{sg}[\hat{X}_{s+\delta}(\cdot)]$ |
+| $\lambda(t_n)$, $d(\cdot,\cdot)$ | $w_s$, $\Vert\cdot\Vert^2$ |
+
+*Algorithm 2, consistency distillation (CD).* Input: dataset $\mathcal{D}$,
+initial parameter $\theta$, learning rate $\eta$, ODE solver
+$\Phi(\cdot,\cdot;\phi)$ built on a pre-trained teacher $\phi$, metric $d$,
+weight $\lambda$, rate $\mu$ of the exponential moving average (EMA). Set
+$\theta^- \leftarrow \theta$ and repeat until convergence:
+
+1. sample $\mathbf{x} \sim \mathcal{D}$ and $n \sim \mathcal{U}[1, N-1]$;
+2. sample $\mathbf{x}_{t_{n+1}} \sim \mathcal{N}(\mathbf{x}; t_{n+1}^2\mathbf{I})$;
+3. $\hat{\mathbf{x}}^{\phi}_{t_n} \leftarrow \mathbf{x}_{t_{n+1}} + (t_n - t_{n+1})\,\Phi(\mathbf{x}_{t_{n+1}}, t_{n+1}; \phi)$;
+4. $\mathcal{L}(\theta,\theta^-;\phi) \leftarrow \lambda(t_n)\, d\big(\mathbf{f}_\theta(\mathbf{x}_{t_{n+1}}, t_{n+1}),\ \mathbf{f}_{\theta^-}(\hat{\mathbf{x}}^{\phi}_{t_n}, t_n)\big)$;
+5. $\theta \leftarrow \theta - \eta\nabla_\theta\mathcal{L}(\theta,\theta^-;\phi)$;
+6. $\theta^- \leftarrow \mathrm{stopgrad}(\mu\theta^- + (1-\mu)\theta)$.
+
+The stop-gradient of @eq-cd appears as a second copy $\theta^-$ of the
+parameters, an exponential moving average (EMA) of $\theta$ that receives no
+gradient.
+
+*Algorithm 3, consistency training (CT).* There is no teacher. Input: dataset
+$\mathcal{D}$, $\theta$, $\eta$, step schedule $N(\cdot)$, EMA decay schedule
+$\mu(\cdot)$, $d$, $\lambda$. Set $\theta^-\leftarrow\theta$, $k \leftarrow 0$
+and repeat until convergence:
+
+1. sample $\mathbf{x}\sim\mathcal{D}$ and $n \sim \mathcal{U}[1, N(k)-1]$;
+2. sample $\mathbf{z}\sim\mathcal{N}(\mathbf{0},\mathbf{I})$;
+3. $\mathcal{L}(\theta,\theta^-) \leftarrow \lambda(t_n)\, d\big(\mathbf{f}_\theta(\mathbf{x} + t_{n+1}\mathbf{z}, t_{n+1}),\ \mathbf{f}_{\theta^-}(\mathbf{x} + t_n\mathbf{z}, t_n)\big)$;
+4. $\theta\leftarrow\theta - \eta\nabla_\theta\mathcal{L}(\theta,\theta^-)$;
+5. $\theta^-\leftarrow\mathrm{stopgrad}(\mu(k)\theta^- + (1-\mu(k))\theta)$;
+6. $k \leftarrow k+1$.
+
+The only difference in the loss is the second argument:
+$\hat{\mathbf{x}}^\phi_{t_n}$ is replaced by $\mathbf{x} + t_n\mathbf{z}$ with
+the *same* $\mathbf{x}$ and $\mathbf{z}$ that produced
+$\mathbf{x}_{t_{n+1}}$. The slides do not say where this comes from; it is one
+Euler step in which the teacher is replaced by a one-sample estimate.
+
+::: {#prp-ct}
+## Consistency training is distillation with a one-sample teacher
+In the EDM convention the PF-ODE is
+$d\mathbf{x}_t/dt = -t\,\nabla\log p_t(\mathbf{x}_t)$. Replace the score in
+the Euler step of Algorithm 2 by its unbiased one-sample estimate given
+$(\mathbf{x},\mathbf{z})$. Then
+$\hat{\mathbf{x}}_{t_n} = \mathbf{x} + t_n\mathbf{z}$.
+:::
+
+::: {.proof}
+For $\mathbf{x}_t = \mathbf{x} + t\mathbf{z}$ the score satisfies
+$\nabla\log p_t(\mathbf{x}_t) = -\mathbb{E}[(\mathbf{x}_t - \mathbf{x})/t^2 \mid \mathbf{x}_t]$,
+so $-(\mathbf{x}_t - \mathbf{x})/t^2 = -\mathbf{z}/t$ is an unbiased estimate
+of it given $\mathbf{x}_t$. With this estimate the ODE drift is
+$\Phi = -t\cdot(-\mathbf{z}/t) = \mathbf{z}$, and the Euler step from
+$t_{n+1}$ to $t_n$ gives
+$$
+\hat{\mathbf{x}}_{t_n} = \mathbf{x}_{t_{n+1}} + (t_n - t_{n+1})\,\mathbf{z}
+ = \mathbf{x} + t_{n+1}\mathbf{z} + (t_n - t_{n+1})\mathbf{z} = \mathbf{x} + t_n\mathbf{z} .
+$$
+:::
+
+This resembles @prp-learn, where the intractable $b_t(I_t)$ was replaced by
+the sample $\dot{I}_t$, but there is an important difference. In
+@prp-learn the noisy target enters the squared loss linearly, so the minimizer
+is exactly unchanged. Here the one-sample velocity $\mathbf{z}$ is passed
+through the nonlinear map $\mathbf{f}_{\theta^-}(\cdot, t_n)$ and then through
+$d$, and an unbiased velocity does not give an unbiased target. The
+replacement is justified only to leading order in the step: linearizing
+$\mathbf{f}_{\theta^-}(\mathbf{x}_{t_{n+1}} + (t_n - t_{n+1})\mathbf{v}, t_n)$
+in the step size makes the target linear in the velocity $\mathbf{v}$ up to
+second-order terms, so the CT loss agrees with the CD loss up to an error that
+vanishes faster than the step size (this is the content of Theorem 2 of Song
+et al., 2023). The price of having no teacher is therefore a noisier target
+and a bias that disappears only as the grid is refined. The comment made in
+the lecture on this slide was that, in practice, *distillation is usually much
+better* than training from scratch.
+
+**Follow-up work.** The lecture listed the line of papers that made
+consistency models competitive without a teacher, without going into them:
+*Consistency Models* (ICML 2023), *Improved Techniques for Training
+Consistency Models* (ICLR 2024, oral) and *Simplifying, Stabilizing and
+Scaling Continuous-Time Consistency Models* (ICLR 2025, oral). The slide shows
+Table 1 of the second paper, which compares its design choices for CT with the
+original ones:
+
+| Design choice | Song et al. (2023) | Improved techniques (iCT) |
+|---|---|---|
+| EMA decay rate for the teacher network | $\mu(k) = \exp\big(\frac{s_0\log\mu_0}{N(k)}\big)$ | $\mu(k) = 0$ |
+| Metric in the consistency loss | $d(x,y) = \mathrm{LPIPS}(x,y)$ | $d(x,y) = \sqrt{\Vert x-y\Vert_2^2 + c^2} - c$ |
+| Discretization curriculum | $N(k) = \big\lceil\sqrt{\tfrac{k}{K}((s_1+1)^2 - s_0^2) + s_0^2} - 1\big\rceil + 1$ | $N(k) = \min(s_0 2^{\lfloor k/K'\rfloor}, s_1) + 1$, $K' = \big\lfloor\frac{K}{\log_2\lfloor s_1/s_0\rfloor + 1}\big\rfloor$ |
+| Noise schedule | $\sigma_i$ with $i\sim\mathcal{U}[1, N(k)-1]$ | $\sigma_i$ with $i \sim p(i)$, $p(i)\propto \mathrm{erf}\big(\frac{\log\sigma_{i+1} - P_{\mathrm{mean}}}{\sqrt2 P_{\mathrm{std}}}\big) - \mathrm{erf}\big(\frac{\log\sigma_i - P_{\mathrm{mean}}}{\sqrt2 P_{\mathrm{std}}}\big)$ |
+| Weighting function | $\lambda(\sigma_i) = 1$ | $\lambda(\sigma_i) = \frac{1}{\sigma_{i+1} - \sigma_i}$ |
+| Parameters | $s_0 = 2$, $s_1 = 150$, $\mu_0 = 0.9$ on CIFAR-10; $s_0 = 2$, $s_1 = 200$, $\mu_0 = 0.95$ on ImageNet $64\times64$ | $s_0 = 10$, $s_1 = 1280$, $c = 0.00054\sqrt{d}$ ($d$ the data dimension), $P_{\mathrm{mean}} = -1.1$, $P_{\mathrm{std}} = 2.0$ |
+
+In both columns $k \in [0,K]$ is the training iteration, $K$ the total number
+of iterations, and
+$\sigma_i = \big(\sigma_{\min}^{1/\rho} + \frac{i-1}{N(k)-1}(\sigma_{\max}^{1/\rho} - \sigma_{\min}^{1/\rho})\big)^{\rho}$
+for $i \in [1, N(k)]$ with $\rho = 7$, $\sigma_{\min} = 0.002$,
+$\sigma_{\max} = 80$. The
+following reading of the table through the flow map picture is an
+interpretation; it was not discussed in the lecture. $\mu(k) = 0$ means $\theta^- = \theta$,
+that is a pure stop-gradient with no EMA, exactly the $\mathrm{sg}$
+of @eq-cd. The number of grid points $N(k)$ grows during training, so the step
+$\delta$ shrinks and the fixed point of the loss, the teacher's discretized
+solution (@prp-fixed), approaches the true flow map. The weight
+$1/(\sigma_{i+1}-\sigma_i)$ is $1/\delta$ measured in noise levels. This is
+the natural normalization for a loss with a stop-gradient: its gradient is
+$2(\hat{X}_s - \mathrm{sg}[\cdot])^\top\nabla_\theta\hat{X}_s$, which is of
+order $\delta$ by @eq-demd-residual, so dividing by $\delta$ keeps the update
+of order one as the grid is refined (without the stop-gradient one would
+divide the loss by $\delta^2$, as in @prp-eulerconv). The paper's own
+motivation for this weight is that it puts more emphasis on small noise
+levels, where the non-uniform grid is finest. Finally, the pseudo-Huber
+metric replaces LPIPS; by the remark after @prp-eulerconv it rescales the
+Eulerian residual without changing where it vanishes.
+
+### Latent consistency models
+
+Latent consistency models (Luo, Tan, Huang, Li and Zhao, arXiv:2310.04378)
+apply consistency distillation to a pre-trained text-to-image latent diffusion
+model. The lecture went through these slides quickly. The headline, from the
+figure caption on the slide: LCMs can be distilled from any pre-trained Stable
+Diffusion model in only 4,000 training steps (about 32 A100 GPU hours) and
+generate $768\times768$ images in 2 to 4 steps or even one step. The samples
+on the slide at 4 steps and 2 steps are sharp; the 1-step sample is visibly
+blurrier.
+
+Three ingredients are added to consistency distillation, corresponding to the
+four formulas on the slide. Here $\mathbf{z}_t$ is a *latent* code (the image
+encoded by the autoencoder of the latent diffusion model, not the Gaussian
+variable $z$ of @def-interpolant), $\mathbf{c}$ is the text condition,
+$\varnothing$ the empty condition, $\omega$ the guidance scale, and
+$\alpha_t,\sigma_t$ the signal and noise scales of the diffusion model.
+
+1. **Classifier-free guidance is part of the teacher.** The guided noise
+   prediction is
+$$
+\tilde{\boldsymbol\epsilon}_\theta(\mathbf{z}_t,\omega,\mathbf{c},t) := (1+\omega)\,\boldsymbol\epsilon_\theta(\mathbf{z}_t,\mathbf{c},t) - \omega\,\boldsymbol\epsilon_\theta(\mathbf{z}_t,\varnothing,t),
+$$
+   and the ODE that is distilled is the *augmented* PF-ODE
+$$
+\frac{d\mathbf{z}_t}{dt} = f(t)\,\mathbf{z}_t + \frac{g^2(t)}{2\sigma_t}\,\tilde{\boldsymbol\epsilon}_\theta(\mathbf{z}_t,\omega,\mathbf{c},t), \qquad \mathbf{z}_T\sim\mathcal{N}(\mathbf{0},\tilde\sigma^2\mathbf{I}) .
+$$
+   In the language of this lecture, the velocity $b$ whose flow map is learned
+   is the guided velocity, so the student needs one evaluation where guided
+   sampling needs two.
+2. **The boundary condition is built in.** The consistency function is
+   parametrized on top of the noise prediction network
+   $\hat{\boldsymbol\epsilon}_\theta$ of the diffusion model as
+$$
+\mathbf{f}_\theta(\mathbf{z},\mathbf{c},t) = c_{\mathrm{skip}}(t)\,\mathbf{z} + c_{\mathrm{out}}(t)\Big(\frac{\mathbf{z} - \sigma_t\hat{\boldsymbol\epsilon}_\theta(\mathbf{z},\mathbf{c},t)}{\alpha_t}\Big) \qquad (\boldsymbol\epsilon\text{-prediction}),
+$$
+   where $c_{\mathrm{skip}}$ and $c_{\mathrm{out}}$ are chosen so that
+   $c_{\mathrm{skip}} = 1$ and $c_{\mathrm{out}} = 0$ at the data end. This
+   is the constraint $\hat{X}_1(x) = x$ of @def-cm. The term in parentheses
+   is the data prediction implied by $\hat{\boldsymbol\epsilon}_\theta$, so
+   the pre-trained network can be reused as initialization.
+3. **The guidance scale is an input.** The loss is the CD loss with $\omega$
+   sampled and fed to the model:
+$$
+\mathcal{L}_{\mathcal{CD}}(\theta,\theta^-;\Psi) = \mathbb{E}_{\mathbf{z},\mathbf{c},\omega,n}\Big[d\big(\mathbf{f}_\theta(\mathbf{z}_{t_{n+1}},\omega,\mathbf{c},t_{n+1}),\ \mathbf{f}_{\theta^-}(\hat{\mathbf{z}}^{\Psi,\omega}_{t_n},\omega,\mathbf{c},t_n)\big)\Big].
+$$
+
+*Algorithm 1, latent consistency distillation (LCD)*, as on the slide. Input:
+dataset $\mathcal{D}$, $\theta$, $\eta$, ODE solver $\Psi(\cdot,\cdot,\cdot,\cdot)$,
+metric $d$, EMA rate $\mu$, noise schedule $\alpha(t),\sigma(t)$, guidance
+scale range $[\omega_{\min},\omega_{\max}]$, skipping interval $k$, encoder
+$E$. Encode the data into latent space,
+$\mathcal{D}_z = \{(\mathbf{z},\mathbf{c}) \mid \mathbf{z} = E(\mathbf{x}),\ (\mathbf{x},\mathbf{c})\in\mathcal{D}\}$,
+set $\theta^-\leftarrow\theta$ and repeat until convergence:
+
+1. sample $(\mathbf{z},\mathbf{c})\sim\mathcal{D}_z$, $n\sim\mathcal{U}[1, N-k]$ and $\omega\sim[\omega_{\min},\omega_{\max}]$;
+2. sample $\mathbf{z}_{t_{n+k}}\sim\mathcal{N}(\alpha(t_{n+k})\mathbf{z};\ \sigma^2(t_{n+k})\mathbf{I})$;
+3. $\hat{\mathbf{z}}^{\Psi,\omega}_{t_n}\leftarrow\mathbf{z}_{t_{n+k}} + (1+\omega)\Psi(\mathbf{z}_{t_{n+k}}, t_{n+k}, t_n, \mathbf{c}) - \omega\Psi(\mathbf{z}_{t_{n+k}}, t_{n+k}, t_n, \varnothing)$;
+4. $\mathcal{L}(\theta,\theta^-;\Psi)\leftarrow d\big(\mathbf{f}_\theta(\mathbf{z}_{t_{n+k}},\omega,\mathbf{c},t_{n+k}),\ \mathbf{f}_{\theta^-}(\hat{\mathbf{z}}^{\Psi,\omega}_{t_n},\omega,\mathbf{c},t_n)\big)$;
+5. $\theta\leftarrow\theta-\eta\nabla_\theta\mathcal{L}(\theta,\theta^-)$;
+6. $\theta^-\leftarrow\mathrm{stopgrad}(\mu\theta^- + (1-\mu)\theta)$.
+
+The loss formula above is written for adjacent grid points, $t_{n+1}\to t_n$,
+while the algorithm uses $t_{n+k}\to t_n$; the formula is the case $k = 1$.
+Compared with Algorithm 2 of consistency models, step 3 is the teacher step
+with guidance, and the *skipping interval* $k$ means that the teacher step jumps $k$ grid points
+at once ($t_{n+k}\to t_n$). In the notation of @eq-cd this is a larger
+$\delta$. A plausible reading (not from the lecture) is that each update then
+propagates the boundary information further, which helps explain why so few
+training steps suffice, at the price of a larger discretization error in the
+target (@prp-fixed).
+
+### Consistency trajectory models {#sec-ctm}
+
+A consistency model can only jump to the endpoint. Consistency trajectory
+models (Kim, Lai, Liao, Murata, Takida, Uesaka, He, Mitsufuji and Ermon, ICLR
+2024) learn jumps between arbitrary times, that is, the full flow map.
+
+The slide motivates this with Figure 1 of the paper, which compares three
+families in training and in sampling:
+
+* *Score-based models* estimate the score, a local quantity. With NFE $= 1$
+  the single large solver step has a large discretization error; with more
+  steps the error shrinks but never vanishes.
+* *Distillation models* (such as consistency models) estimate the endpoint of
+  the PF-ODE. NFE $= 1$ works. With NFE $> 1$ they must alternate "jump to the
+  data end" and "add noise back", and the errors of the repeated long jumps
+  accumulate.
+* *CTM* estimates the entire PF-ODE trajectory, so it can jump to the endpoint
+  in one step or move along the trajectory in several short jumps without
+  re-noising.
+
+::: {#def-ctm}
+## Consistency trajectory model (slide Definition 4)
+A *consistency trajectory model* is the unique map $X_{s,t}$ such that
+$$
+X_{s,t}(x_s) = x_t \qquad \forall s,t\in[0,1]^2,
+$$
+where $(x_t)_{t\in[0,1]}$ is any solution to the ODE $\dot{x}_t = b_t(x_t)$.
+*CTM* minimizes
+$$
+\mathcal{L}_{\mathrm{CTM}}(\hat{X}) = \mathbb{E}_{s,t\in[0,1]}\Big[w_{s,t}\,\big\|\hat{X}_{s,t}(I_s) - \mathrm{sg}\big[\hat{X}_{s+\delta,t}(\mathrm{ODESolve}_{s,s+\delta}(I_s))\big]\big\|^2\Big]
+$$ {#eq-ctm}
+subject to $\hat{X}_{s,s}(x) = x$ for all $x\in\mathbb{R}^d$.
+:::
+
+(The slide prints the map as "$X_s$" and the defining identity as
+"$X_{s,t}(x_s) = X_{s,t}(x_s) = x_t$"; these are carried over from the
+consistency model slide, and the definition above is the intended one.) The
+object in @def-ctm is exactly the flow map of @def-flowmap, and the loss
+is *very similar to discrete Eulerian map distillation, but with a
+stop-gradient*: @eq-ctm is @eq-demd with the second point held fixed. For
+$t = 1$ it reduces to consistency distillation @eq-cd. The analysis of
+@sec-cm carries over with a general $t$.
+
+**The connection to flow matching.** CTM *revealed an interesting connection
+between flow maps and flow matching*. Suppose we use the parametrization
+$$
+X_{s,t}(x) = x + (t-s)\,F_{s,t}(x) .
+$$ {#eq-param}
+It satisfies the boundary condition $X_{s,s}(x) = x$ automatically. To see
+what $F$ is, integrate the ODE along a trajectory from $s$ to $t$:
+$$
+X_{s,t}(x_s) = x_s + (t-s)F_{s,t}(x_s) = x_s + \int_s^t b_\tau(x_\tau)\,d\tau ,
+$$
+so
+$$
+F_{s,t}(x_s) = \frac{1}{t-s}\int_s^t b_\tau(x_\tau)\,d\tau
+\quad\Longrightarrow\quad
+F_{s,s}(x_s) = b_s(x_s) .
+$$ {#eq-avgvel}
+The displacement $(t-s)F_{s,t}$ represents the integral of the velocity field
+along the trajectory, and $F_{s,t}$ itself is that integral normalized by the
+elapsed time: the *average velocity* over $[s,t]$. Letting $t\to s$, the
+average of a continuous function over a shrinking interval tends to its value
+at $s$, which gives $F_{s,s} = b_s$. On its diagonal, a flow map in this
+parametrization *is* the velocity field.
+
+The slide then leaves an exercise: in fact, $\mathcal{L}_{\mathrm{EMD}}$
+becomes flow matching in the limit $t = s$. Here is the solution.
+
+::: {#prp-fm-limit}
+## The Eulerian loss on the diagonal is flow matching (slide exercise)
+Let $\hat{X}_{s,t}(x) = x + (t-s)\hat{F}_{s,t}(x)$ with $\hat{F}$ continuously
+differentiable. Then the Eulerian residual is
+$$
+\partial_s\hat{X}_{s,t}(x) + b_s(x)\cdot\nabla\hat{X}_{s,t}(x)
+ = \big(b_s(x) - \hat{F}_{s,t}(x)\big) + (t-s)\big(\partial_s\hat{F}_{s,t}(x) + b_s(x)\cdot\nabla\hat{F}_{s,t}(x)\big),
+$$ {#eq-residual-F}
+and in the limit $t\to s$ the integrand of $\mathcal{L}_{\mathrm{EMD}}$ becomes
+$$
+w_{s,s}\,\mathbb{E}\big[\|\hat{F}_{s,s}(I_s) - b_s(I_s)\|^2\big]
+ = w_{s,s}\Big(\mathbb{E}\big[\|\hat{F}_{s,s}(I_s) - \dot{I}_s\|^2\big] - \mathbb{E}\big[\|b_s(I_s) - \dot{I}_s\|^2\big]\Big),
+$$ {#eq-fm-limit}
+which is the flow matching regression @eq-regression for the velocity model
+$\hat{b}_s = \hat{F}_{s,s}$, up to a constant that does not depend on
+$\hat{F}$.
+:::
+
+::: {.proof}
+Differentiate the parametrization. In $s$, the product rule gives
+$\partial_s\hat{X}_{s,t}(x) = -\hat{F}_{s,t}(x) + (t-s)\,\partial_s\hat{F}_{s,t}(x)$.
+In $x$, $\nabla\hat{X}_{s,t}(x) = \mathrm{Id} + (t-s)\nabla\hat{F}_{s,t}(x)$ (with $\mathrm{Id}$ the identity matrix), hence
+$b_s(x)\cdot\nabla\hat{X}_{s,t}(x) = b_s(x) + (t-s)\,b_s(x)\cdot\nabla\hat{F}_{s,t}(x)$.
+Adding the two gives @eq-residual-F. At $t = s$ the second bracket is
+multiplied by zero and the residual is $b_s(x) - \hat{F}_{s,s}(x)$; inserting
+it into @eq-emd gives the left-hand side of @eq-fm-limit. The right-hand side
+is the decomposition @eq-decomp from the proof of @prp-learn applied to
+$\hat{b}_s = \hat{F}_{s,s}$.
+:::
+
+Two things are worth noticing. The limit loss can be evaluated *without the
+teacher*: by @eq-fm-limit, regressing $\hat{F}_{s,s}(I_s)$ on the sample
+$\dot{I}_s$ has the same minimizer. And @eq-residual-F shows the structure of
+the whole Eulerian loss in this parametrization: a flow matching error plus
+$(t-s)$ times a transport term for the average velocity.
+
+**Stabilizing training.** *This connection plays a great role in stabilizing
+flow map training.* Observe that the CTM loss @eq-ctm is a *bootstrapping*
+type of loss, where the target also moves: the regression target
+$\mathrm{sg}[\hat{X}_{s+\delta,t}(\cdot)]$ is produced by the network that is
+being trained. Nothing in the loss itself refers to data; the correct solution
+is selected only by the boundary condition, from which information has to
+propagate step by step (@prp-fixed). As a result *there is a tendency for flow
+maps to collapse to a constant function*. The slide only states this
+tendency. One way to see why it is possible (an interpretation, not from the lecture) is
+that the two sides of @eq-ctm agree whenever the model's output hardly
+depends on its input, in the same way that a constant has zero Eulerian
+residual; only the boundary condition rules such solutions out, and it acts
+on the loss only indirectly. With the
+parametrization $\hat{X}_{s,t}(x) = x + (t-s)F_{s,t}(x)$, adding the flow
+matching loss
+$$
+\mathcal{L}_{\mathrm{FM}}(\hat{X}) = \mathbb{E}_{s\in[0,1]}\big[w_s\,\|F_{s,s}(I_s) - b_s(I_s)\|^2\big]
+$$ {#eq-lfm}
+*provides a stable target which grounds the model to data*. By
+@prp-fm-limit this is not an unrelated regularizer but the diagonal part of
+the Eulerian loss itself, and its target is not bootstrapped: it is the fixed
+velocity $b_s$, or its data sample $\dot{I}_s$.
+
+**Significance of this work.** The lecture summarized CTM in three points.
+
+1. *Introduction of a secondary, "destination time" parameter $t$ to CMs.*
+   The model is a function of $(x, s, t)$ and not only of $(x,s)$.
+2. *Connection to flow matching, and thus stabler training*, as just shown.
+3. *Enabled multi-step sampling*, for example
+$$
+x_1 = (X_{t_2,1}\circ X_{t_1,t_2}\circ X_{0,t_1})(x_0), \qquad 0 < t_1 < t_2 < 1 ,
+$$ {#eq-multistep}
+   which for the exact flow map equals $X_{0,1}(x_0)$ by the composition
+   property (@prp-semigroup). For a learned flow map the two differ, and
+   three short jumps are usually more accurate than one long jump.
+
+The plot on the slide shows FID against NFE for the samplers of the paper.
+The paper calls its family $\gamma$-*sampling*. In the paper's convention
+(noise level $t$, data at $t = 0$), a step from the current noise level to the
+next grid level $t_{n+1}$ is made in two parts: the model jumps *past*
+$t_{n+1}$, down to the lower noise level $\sqrt{1-\gamma^2}\,t_{n+1}$, and
+then Gaussian noise of scale $\gamma\,t_{n+1}$ is added to come back up to
+$t_{n+1}$. The parameter $\gamma\in[0,1]$ controls how much noise is
+re-injected. $\gamma = 1$ is the multistep sampler of consistency models
+(jump all the way to the data end, then re-noise), and $\gamma = 0$ is the
+deterministic composition @eq-multistep. On the slide, the three
+$\gamma$-curves start together at an FID of about 5 for NFE 1 and improve to
+about 4 within the first few steps. After that $\gamma = 1$ gets *worse* with
+more steps, rising to above 10 at NFE 35, which is the error accumulation of
+the repeated long jumps; $\gamma = 0.9$ degrades more slowly, to between 5 and
+6; and $\gamma = 0$ keeps improving, to a little above 2. The fourth curve is
+a classical second-order ODE solver (Heun) applied to the same network: it is
+far worse at small NFE, crosses below FID 4 at about NFE 20, and meets the
+$\gamma = 0$ curve only at about NFE 25.
+
+**The loss used in the paper.** The full training objective of CTM, boxed on
+the slide, has three terms:
+$$
+\mathcal{L}(\theta,\eta) := \mathcal{L}_{\mathrm{CTM}}(\theta;\phi) + \lambda_{\mathrm{DSM}}\mathcal{L}_{\mathrm{DSM}}(\theta) + \lambda_{\mathrm{GAN}}\mathcal{L}_{\mathrm{GAN}}(\theta,\eta),
+$$
+$$
+\mathcal{L}_{\mathrm{DSM}}(\theta) = \mathbb{E}_{t,\mathbf{x}_0}\mathbb{E}_{\mathbf{x}_t\mid\mathbf{x}_0}\big[\|\mathbf{x}_0 - g_\theta(\mathbf{x}_t,t,t)\|_2^2\big],
+$$
+$$
+\mathcal{L}_{\mathrm{GAN}}(\theta,\eta) = \mathbb{E}_{\mathbf{x}_0}\big[\log d_\eta(\mathbf{x}_0)\big] + \mathbb{E}_{t\in[0,T]}\mathbb{E}_{s\in[0,t]}\mathbb{E}_{\mathbf{x}_0}\mathbb{E}_{\mathbf{x}_t\mid\mathbf{x}_0}\big[\log\big(1 - d_\eta(\mathbf{x}_{\mathrm{est}}(\mathbf{x}_t,t,s))\big)\big].
+$$
+The paper writes time the other way round from the lecture: $\mathbf{x}_0$ is
+data, $t\in[0,T]$ is the noise level, and the model jumps from time $t$ to an
+earlier time $s \le t$. Here $\phi$ is the teacher, $g_\theta(\mathbf{x}_t,t,s)$
+is the network of the paper's parametrization of the jump from $t$ to $s$,
+$d_\eta$ is a discriminator with parameters $\eta$, and
+$\mathbf{x}_{\mathrm{est}}(\mathbf{x}_t,t,s)$ is the model's estimate of the
+clean sample obtained through the jump from $t$ to $s$. The three terms map
+onto this lecture as follows.
+
+* $\mathcal{L}_{\mathrm{CTM}}$ is @eq-ctm. Figure 3 of the paper, on the
+  slide, shows its two sides as *CTM's two predictions at time $s$ with an
+  initial value $\mathbf{x}_t$*: a direct jump $t\to s$, and a teacher ODE
+  solve $t\to u$ followed by a jump $u\to s$. This is panel (c)
+  of @fig-schematic, with a multi-step solver in place of the single step
+  $s\to s+\delta$.
+* $\mathcal{L}_{\mathrm{DSM}}$ (denoising score matching) evaluates the
+  network on the diagonal, $g_\theta(\mathbf{x}_t,t,t)$, and regresses it on
+  data. It is the counterpart of $\mathcal{L}_{\mathrm{FM}}$ in @eq-lfm: the
+  diagonal of the flow map is a denoiser (equivalently a velocity) and is
+  trained with a non-bootstrapped target.
+* $\mathcal{L}_{\mathrm{GAN}}$ is an adversarial loss on the model's outputs.
+  It is not part of the flow map theory; it sharpens samples and allows the
+  student to exceed the teacher.
+
+The last slide shows Figure 4 of the paper (AFHQ-cat, $256\times256$), which
+summarizes the section in one image. With score-based sampling, both EDM and
+CTM give a sharp cat at NFE 40, an artifact-ridden one at NFE 4 and a blurry
+average at NFE 1. With distillation sampling, CM and CTM give a sharp sample
+already at NFE 1; for CTM the NFE-1 sample is the same for every $\gamma$
+(the figure draws it once, with arrows to the other columns), since a single
+jump involves no re-noising. At larger NFE, the samples of CM and of CTM with
+$\gamma = 1$ and $\gamma = 0.5$ change identity from one NFE to the next,
+because of the re-noising, while CTM with $\gamma = 0$ keeps the same cat and
+only refines it.
+
+## Worked Example {#sec-worked}
+
+We carry one example through every object of the lecture, in closed form and
+with code. Take $d = 1$,
+$$
+x_0\sim p_0 = \mathcal{N}(0, 1), \qquad x_1\sim p_1 = \mathcal{N}(2, 0.25),
+$$
+drawn independently, and the flow model interpolant $I_t = (1-t)x_0 + t x_1$.
+
+**The velocity.** $I_t$ is Gaussian with mean $m_t = 2t$ and variance
+$\sigma_t^2 = (1-t)^2 + 0.25\,t^2$. (In this section only, $\sigma_t$ denotes
+the standard deviation of $I_t$; it is unrelated to the noise scales
+$\sigma_t$ and $\sigma_i$ of the previous section.) The pair $(\dot{I}_t, I_t)$ with
+$\dot{I}_t = x_1 - x_0$ is jointly Gaussian, with $\mathbb{E}[\dot{I}_t] = 2$
+and
+$$
+\mathrm{Cov}(\dot{I}_t, I_t) = \mathrm{Cov}\big(x_1 - x_0,\ (1-t)x_0 + t x_1\big) = 0.25\,t - (1-t) = \tfrac12\tfrac{d}{dt}\sigma_t^2 = \sigma_t\dot\sigma_t .
+$$
+The conditional mean of a jointly Gaussian pair is linear, so by @eq-velocity
+$$
+b_t(x) = \mathbb{E}[\dot{I}_t\mid I_t = x] = 2 + \frac{\mathrm{Cov}(\dot{I}_t, I_t)}{\sigma_t^2}(x - m_t) = 2 + \frac{\dot\sigma_t}{\sigma_t}\,(x - 2t) .
+$$
+
+**The flow map.** The ODE $\dot{x}_t = 2 + (\dot\sigma_t/\sigma_t)(x_t - 2t)$
+is linear. With $u_t = x_t - 2t$ it reads $\dot{u}_t = (\dot\sigma_t/\sigma_t)u_t$,
+so $u_t/\sigma_t$ is constant along trajectories and
+$$
+X_{s,t}(x) = 2t + \frac{\sigma_t}{\sigma_s}\,(x - 2s) .
+$$ {#eq-ex-flowmap}
+In particular $X_{0,1}(x) = 2 + 0.5\,x$, which indeed maps
+$\mathcal{N}(0,1)$ to $\mathcal{N}(2, 0.25)$, as @prp-semigroup requires. One
+can check the two equations of @prp-suff by hand:
+$\partial_t X_{s,t}(x) = 2 + (\dot\sigma_t/\sigma_s)(x-2s) = b_t(X_{s,t}(x))$,
+and
+$\partial_s X_{s,t}(x) + b_s(x)\,\partial_x X_{s,t}(x) = -\tfrac{\sigma_t\dot\sigma_s}{\sigma_s^2}(x-2s) - \tfrac{2\sigma_t}{\sigma_s} + \tfrac{\sigma_t}{\sigma_s}\big(2 + \tfrac{\dot\sigma_s}{\sigma_s}(x-2s)\big) = 0$.
+The average velocity of @eq-avgvel is
+$F_{s,t}(x) = (X_{s,t}(x) - x)/(t-s)$, and one verifies $F_{s,t}(x)\to b_s(x)$
+as $t\to s$.
+
+**One Euler step collapses.** At $t = 0$, $\sigma_0 = 1$ and
+$\dot\sigma_0 = -1$, so $b_0(x) = 2 - x$. A one-step Euler sampler therefore
+outputs $x + b_0(x) = 2$ for *every* input: all samples collapse onto the mean
+of $p_1$. This is general for independent endpoints,
+$b_0(x) = \mathbb{E}[x_1 - x_0\mid x_0 = x] = \mathbb{E}[x_1] - x$, and it is
+the one-dimensional version of the blurry NFE-1 images of score-based
+sampling in the CTM figure. A one-step *flow map* does not have this problem.
+
+**Code.** The script below (i) checks the Lagrangian and Eulerian equations
+for @eq-ex-flowmap by finite differences, (ii) samples with $K$ Euler steps
+of the teacher, (iii) distills a consistency model on a grid with the
+stop-gradient loss @eq-cd, and (iv) checks the convergence of the discrete
+losses (@cor-discrete, @prp-eulerconv) for a deliberately wrong map. It needs only
+NumPy and runs in a few seconds.
+
+```{.python}
+import numpy as np
+
+# Interpolant I_t = (1 - t) x0 + t x1 with x0 ~ N(m0, v0), x1 ~ N(m1, v1) independent.
+m0, v0, m1, v1 = 0.0, 1.0, 2.0, 0.25
+
+def mu(t):    return (1 - t) * m0 + t * m1
+def sig(t):   return np.sqrt((1 - t) ** 2 * v0 + t ** 2 * v1)
+def dsig(t):  return (t * v1 - (1 - t) * v0) / sig(t)
+
+def b(t, x):                      # velocity b_t(x) = E[x1 - x0 | I_t = x]
+    return (m1 - m0) + dsig(t) / sig(t) * (x - mu(t))
+
+def X(s, t, x):                   # exact flow map X_{s,t}(x)
+    return mu(t) + sig(t) / sig(s) * (x - mu(s))
+
+def sample_I(s, n, rng):          # n samples of I_s (s may be an array of length n)
+    return (1 - s) * rng.normal(m0, np.sqrt(v0), n) + s * rng.normal(m1, np.sqrt(v1), n)
+
+# (i) Lagrangian and Eulerian equations, by central finite differences.
+s, t, x, h = 0.3, 0.8, -0.7, 1e-5
+dt_X = (X(s, t + h, x) - X(s, t - h, x)) / (2 * h)
+ds_X = (X(s + h, t, x) - X(s - h, t, x)) / (2 * h)
+dx_X = (X(s, t, x + h) - X(s, t, x - h)) / (2 * h)
+print("X_{0.3,0.8}(-0.7)   =", round(X(s, t, x), 6))
+print("Lagrangian residual =", abs(dt_X - b(t, X(s, t, x))))
+print("Eulerian residual   =", abs(ds_X + b(s, x) * dx_X))
+
+# (ii) Sampling with the teacher: K Euler steps from t = 0 to t = 1.
+def euler(x, K):
+    for k in range(K):
+        x = x + b(k / K, x) / K
+    return x
+
+x0 = np.array([-1.0, 0.0, 1.0])
+print("exact X_{0,1}       =", X(0.0, 1.0, x0))
+for K in (1, 2, 4, 16, 64):
+    print(f"Euler, K = {K:2d}       =", np.round(euler(x0, K), 4))
+
+# (iii) Consistency distillation: X_hat_k(x) = A[k] + B[k] x approximates X_{s_k,1}
+#       on the grid s_k = k / K, with the boundary condition X_hat_K(x) = x.
+rng = np.random.default_rng(0)
+K, lr, batch = 16, 0.05, 256
+A, B = np.zeros(K + 1), np.ones(K + 1)
+for it in range(40000):
+    k = rng.integers(0, K)                       # s = s_k, delta = 1 / K
+    Is = sample_I(k / K, batch, rng)
+    y = Is + b(k / K, Is) / K                    # ODESolve_{s,s+delta}(I_s): one Euler step
+    target = A[k + 1] + B[k + 1] * y             # sg[...]: treated as a constant
+    r = A[k] + B[k] * Is - target
+    A[k] -= lr * 2 * r.mean()                    # gradient of mean(r^2) w.r.t. A[k]
+    B[k] -= lr * 2 * (r * Is).mean()             # gradient of mean(r^2) w.r.t. B[k]
+print("distilled one-step map: x -> %.4f + %.4f x" % (A[0], B[0]))
+print("16-step Euler teacher : x -> %.4f + %.4f x"
+      % (euler(0.0, 16), euler(1.0, 16) - euler(0.0, 16)))
+print("exact flow map        : x -> %.4f + %.4f x"
+      % (X(0, 1, 0.0), X(0, 1, 1.0) - X(0, 1, 0.0)))
+
+# (iv) Discrete losses for a wrong map X_hat = X + 0.5 (t - s) sin(x), which
+#      satisfies X_hat_{s,s} = id. The teacher step is one Euler step.
+def Xh(s, t, x): return X(s, t, x) + 0.5 * (t - s) * np.sin(x)
+n = 400000
+s = rng.uniform(0.05, 0.70, n); t = rng.uniform(0.75, 0.95, n); Is = sample_I(s, n, rng)
+emd = (Xh(s + h, t, Is) - Xh(s - h, t, Is)) / (2 * h) \
+      + b(s, Is) * (Xh(s, t, Is + h) - Xh(s, t, Is - h)) / (2 * h)
+lmd = (Xh(s, t + h, Is) - Xh(s, t - h, Is)) / (2 * h) - b(t, Xh(s, t, Is))
+print("L_EMD = %.4f   L_LMD = %.4f" % (np.mean(emd ** 2), np.mean(lmd ** 2)))
+for d in (0.2, 0.1, 0.05, 0.0125, 0.003125):
+    demd = Xh(s, t, Is) - Xh(s + d, t, Is + d * b(s, Is))
+    y = Xh(s, t - d, Is)
+    dlmd = Xh(s, t, Is) - (y + d * b(t - d, y))
+    print("delta = %.6f   DEMD/delta^2 = %.4f   DLMD/delta^2 = %.4f"
+          % (d, np.mean(demd ** 2) / d ** 2, np.mean(dlmd ** 2) / d ** 2))
+```
+
+**Output and reading.** The script prints (values rounded):
+
+| Quantity | Value |
+|---|---|
+| $X_{0.3,0.8}(-0.7)$ | $0.787896$ |
+| Lagrangian residual, Eulerian residual | about $10^{-11}$, $10^{-10}$ (finite-difference error) |
+| exact $X_{0,1}$ at $x_0 = -1, 0, 1$ | $1.5,\ 2.0,\ 2.5$ |
+| Euler, $K=1$ | $2.0,\ 2.0,\ 2.0$ |
+| Euler, $K=2$ | $1.8,\ 2.0,\ 2.2$ |
+| Euler, $K=4$ | $1.6595,\ 2.0,\ 2.3405$ |
+| Euler, $K=16$ | $1.5443,\ 2.0,\ 2.4557$ |
+| Euler, $K=64$ | $1.5114,\ 2.0,\ 2.4886$ |
+| distilled one-step map | $x\mapsto 2.000 + 0.456\,x$ |
+| 16-step Euler teacher | $x\mapsto 2.000 + 0.4557\,x$ |
+| exact flow map | $x\mapsto 2.000 + 0.5000\,x$ |
+| $\mathcal{L}_{\mathrm{EMD}}$, $\mathcal{L}_{\mathrm{LMD}}$ of the wrong map | $0.281$, $0.103$ |
+| $\delta^{-2}\mathcal{L}_{\mathrm{DEMD}}$ at $\delta = 0.2,\ 0.1,\ 0.05,\ 0.0125,\ 0.003125$ | $0.297,\ 0.282,\ 0.280,\ 0.280,\ 0.280$ |
+| $\delta^{-2}\mathcal{L}_{\mathrm{DLMD}}$ at the same $\delta$ | $0.369,\ 0.232,\ 0.162,\ 0.116,\ 0.106$ |
+
+The last digits of the stochastic entries (the distilled map and the losses
+of the wrong map) are Monte Carlo estimates: they depend on the random seed
+and on the NumPy version in the third digit (the right panel of @fig-worked
+was computed with a different seed). The
+conclusions are:
+
+* The closed-form flow map satisfies both equations of @prp-suff.
+* The Euler sampler needs many steps: one step collapses to the mean, and
+  even 16 steps give a slope of $0.456$ instead of $0.5$ (the samples are too
+  concentrated). The teacher's error decays only like $1/K$.
+* The distilled student reproduces in **one** evaluation what the teacher does
+  in 16, and it matches the 16-step teacher, not the exact flow map, exactly
+  as @prp-fixed predicts. A one-step student is cheap, but it cannot be more
+  faithful to the true distribution than the teacher steps it was trained on,
+  unless something else (a finer $\delta$, or the extra losses of CTM) is
+  added.
+* $\delta^{-2}\mathcal{L}_{\mathrm{DEMD}}\to\mathcal{L}_{\mathrm{EMD}}$ and
+  $\delta^{-2}\mathcal{L}_{\mathrm{DLMD}}\to\mathcal{L}_{\mathrm{LMD}}$ as
+  $\delta\to0$, with an error of order $\delta$, as in
+  @cor-discrete and @prp-eulerconv.
+
+@fig-worked shows the same results graphically.
+
+![Worked example. Left: output at $t=1$ as a function of the input $x_0$. The
+Euler teacher approaches the exact flow map $X_{0,1}(x) = 2+0.5x$ only slowly
+as the number of steps grows, and with one step it is constant. The distilled
+one-step map (circles) lies on the 16-step teacher it was distilled from, not
+on the exact map. Right: the rescaled discrete losses of a deliberately wrong
+map converge to the continuous Eulerian and Lagrangian losses (dotted lines)
+as $\delta\to0$.](figures/lec15/ChungEunho-worked-example.pdf){#fig-worked width=100%}
+
+## Summary
+
+* A stochastic interpolant $I_t = \alpha_t x_0 + \beta_t x_1 + \gamma_t z$
+  covers flow models and diffusion models. Its marginals are transported by
+  the ODE $\dot{x}_t = b_t(x_t)$ with $b_t(x) = \mathbb{E}[\dot{I}_t\mid I_t = x]$,
+  and $b$ is learned by regression on $\dot{I}_t$.
+* The flow map $X_{s,t}$ is the solution operator of that ODE. Learning it
+  from its definition requires full ODE solves; its first-order
+  characterizations do not.
+* $X$ is a flow map if and only if it satisfies the Lagrangian equation
+  $\partial_t X_{s,t} = b_t(X_{s,t})$ or the Eulerian equation
+  $\partial_s X_{s,t} + b_s\cdot\nabla X_{s,t} = 0$, with $X_{s,s} = \mathrm{id}$.
+  The squared residuals are the LMD and EMD losses, and their finite-difference
+  versions DLMD and DEMD converge to them after division by $\delta^2$.
+* Consistency distillation is DEMD with $t = 1$ and a stop-gradient; latent
+  consistency models apply it to the guided ODE of a latent diffusion model;
+  CTM is DEMD with a general destination time and a stop-gradient.
+* The stop-gradient fixes the more accurate point and makes the loss a
+  bootstrapped regression whose fixed point is the teacher's multi-step
+  solution.
+* In the parametrization $X_{s,t}(x) = x + (t-s)F_{s,t}(x)$, $F$ is the
+  average velocity, $F_{s,s} = b_s$, and the Eulerian loss on the diagonal is
+  flow matching. Adding that term gives the bootstrapped loss a stable target
+  grounded in data.
+
+## Connections and Further Reading
+
+**Within the course.** @prp-learn and @cor-fm are the flow matching objective
+of the earlier lectures on flow models, and the linear interpolant
+$I_t = (1-t)x_0 + tx_1$ is the path used by rectified flow. Part I of this
+slide deck (progressive distillation, denoising diffusion GAN) is the
+pre-history of the methods here: progressive distillation also trains a
+student to reproduce several teacher steps in one, but for one fixed pair of
+times per stage. The next part of the deck continues with MeanFlow, which
+trains the average velocity $F_{s,t}$ of @eq-avgvel directly from an identity
+closely related to @eq-residual-F, and with flow map matching, which also
+trains flow maps directly from the interpolant, without a pre-trained
+teacher.
+
+The FID values in @fig-timeline are those shown on the lecture slide. All
+figures in this note were drawn for it; @fig-schematic redraws the
+schematic of the slides, and the figures of the papers that the slides show
+are described in the text rather than reproduced.
+
+## References
+
+The theory part follows the slides, which are adapted from Beomsu Kim (BISPL,
+KAIST). The underlying papers are the following.
+
+* M. S. Albergo and E. Vanden-Eijnden, "Building Normalizing Flows with
+  Stochastic Interpolants", ICLR 2023, arXiv:2209.15571.
+* M. S. Albergo, N. M. Boffi and E. Vanden-Eijnden, "Stochastic Interpolants:
+  A Unifying Framework for Flows and Diffusions", 2023, arXiv:2303.08797.
+  Source of @def-interpolant, @prp-pf and @prp-learn and of the four example
+  interpolants.
+* N. M. Boffi, M. S. Albergo and E. Vanden-Eijnden, "Flow Map Matching", 2024,
+  arXiv:2406.07507. Source of the flow map formalism, the Lagrangian and
+  Eulerian equations and the names LMD and EMD (@prp-suff, @cor-fmd).
+* Y. Lipman, R. T. Q. Chen, H. Ben-Hamu, M. Nickel and M. Le, "Flow Matching
+  for Generative Modeling", ICLR 2023, arXiv:2210.02747.
+* X. Liu, C. Gong and Q. Liu, "Flow Straight and Fast: Learning to Generate
+  and Transfer Data with Rectified Flow", ICLR 2023, arXiv:2209.03003.
+* J. Ho, A. Jain and P. Abbeel, "Denoising Diffusion Probabilistic Models",
+  NeurIPS 2020, arXiv:2006.11239.
+* Y. Song, J. Sohl-Dickstein, D. P. Kingma, A. Kumar, S. Ermon and B. Poole,
+  "Score-Based Generative Modeling through Stochastic Differential Equations",
+  ICLR 2021, arXiv:2011.13456. Source of the probability flow ODE.
+* T. Karras, M. Aittala, T. Aila and S. Laine, "Elucidating the Design Space
+  of Diffusion-Based Generative Models" (EDM), NeurIPS 2022, arXiv:2206.00364.
+* Y. Song, P. Dhariwal, M. Chen and I. Sutskever, "Consistency Models", ICML
+  2023, arXiv:2303.01469. Source of @def-cm and of Algorithms 2 and 3.
+* Y. Song and P. Dhariwal, "Improved Techniques for Training Consistency
+  Models", ICLR 2024, arXiv:2310.14189. Source of the design-choice table.
+* C. Lu and Y. Song, "Simplifying, Stabilizing and Scaling Continuous-Time
+  Consistency Models", ICLR 2025, arXiv:2410.11081.
+* S. Luo, Y. Tan, L. Huang, J. Li and H. Zhao, "Latent Consistency Models:
+  Synthesizing High-Resolution Images with Few-Step Inference", 2023,
+  arXiv:2310.04378.
+* D. Kim, C.-H. Lai, W.-H. Liao, N. Murata, Y. Takida, T. Uesaka, Y. He,
+  Y. Mitsufuji and S. Ermon, "Consistency Trajectory Models: Learning
+  Probability Flow ODE Trajectory of Diffusion", ICLR 2024, arXiv:2310.02279.
+  Source of @def-ctm, $\gamma$-sampling and the three-term loss.
+* Z. Geng, M. Deng, X. Bai, J. Z. Kolter and K. He, "Mean Flows for One-step
+  Generative Modeling", 2025, arXiv:2505.13447.
+* J. C. Ye, *Geometry of Deep Learning: A Signal Processing Perspective*,
+  Springer, 2022. Course textbook.
+
+::: {#refs}
+:::
+
+---
+
+*Scribe notes for this lecture: ChungEunho, Lee-Gyubin.*

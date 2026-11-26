@@ -151,7 +151,11 @@ def worksheet(lec: str, records: list[dict], scribe_repo: Path) -> str:
          "## Candidates\n",
          "| rank | scribe | score | criterion medians | flags |",
          "|---|---|---|---|---|"]
-    for i, r in enumerate(records, start=1):
+    # Ranked by score, always. records[0] is the base, which --base may
+    # have put there against the ranking -- so the base is marked rather
+    # than moved to the top, where it would read as the highest score.
+    for i, r in enumerate(sorted(records, key=lambda x: -x["aggregate"]["score"]),
+                          start=1):
         crit = r["aggregate"]["criteria"]
         medians = " / ".join(f"{crit[c]['median']:.0f}" for c in crit)
         flags = []
@@ -160,8 +164,9 @@ def worksheet(lec: str, records: list[dict], scribe_repo: Path) -> str:
         fluency = {f["level"] for f in r.get("english_fluency_flag", [])}
         if fluency & {"significant"}:
             flags.append("needs copy pass")
-        L.append(f"| {i} | `{r['github']}` | {r['aggregate']['score']:.1f} | {medians} | "
-                 f"{', '.join(flags) or '-'} |")
+        base = " **<- base**" if r is records[0] else ""
+        L.append(f"| {i} | `{r['github']}`{base} | {r['aggregate']['score']:.1f} | "
+                 f"{medians} | {', '.join(flags) or '-'} |")
     L.append("\nCriterion order: coverage / correctness / exposition / figures / derivations.\n")
 
     L.append("## Gaps to fill in the base note\n")
@@ -353,6 +358,12 @@ def main() -> int:
                          "and fork (default: ../ai618-grades-2026f)")
     ap.add_argument("--worksheet-only", action="store_true",
                     help="do not touch chapters/, only write the merge worksheet")
+    ap.add_argument("--base", metavar="LOGIN",
+                    help="seed from this scribe's note instead of the "
+                         "highest-scoring one. The ranking is a score, and the "
+                         "editor's reason for overriding it -- a narrower note "
+                         "that is better organised, usually -- is not something "
+                         "the score can hold.")
     ap.add_argument("--force", action="store_true",
                     help="overwrite a chapter that is no longer a stub")
     args = ap.parse_args()
@@ -382,6 +393,18 @@ def main() -> int:
               "(scripts/grade_submissions.py --lecture "
               f"{args.lecture.zfill(2)}).", file=sys.stderr)
         return 1
+
+    if args.base:
+        chosen = [r for r in records if r["github"].lower() == args.base.lower()]
+        if not chosen:
+            print(f"no graded note by `{args.base}` for {lec}. Candidates: "
+                  + ", ".join(f"`{r['github']}`" for r in records), file=sys.stderr)
+            return 1
+        # First is the base everywhere below, in the worksheet's gap table
+        # as well as in the chapter; the rest keep their ranking.
+        records = chosen + [r for r in records if r is not chosen[0]]
+        print(f"base: `{records[0]['github']}` "
+              f"({records[0]['aggregate']['score']:.1f}/100), chosen, not ranked")
 
     (REPO / "drafts").mkdir(exist_ok=True)
     ws = REPO / "drafts" / f"{lec}-merge.md"

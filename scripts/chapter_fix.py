@@ -12,6 +12,10 @@ judgement and every time cost an editor a dozen turns:
   copied because it only copies the base note's;
 * the `::: {#refs}` div every submission carries, which in a book with one
   bibliography puts a second reference list in the middle of the chapter;
+* a byline the note wrote for itself above its first heading --
+  `**Scribe:** jungwook (GitHub: ...)` -- which the chapter printed under its
+  title as if it were an author line. The book credits people once, at the
+  end, from the roster;
 * `promote.py`'s own Draft callout and its placeholder credit line of GitHub
   logins, which is not what the book credits people by;
 * crossref labels that collide with a chapter already in the book. This is
@@ -62,6 +66,13 @@ DRAFT_CALLOUT = re.compile(
 # `template.qmd` writes the div over two lines and every submission copies it,
 # so the closing `:::` is on its own line; the one-line form also occurs.
 REFS_DIV = re.compile(r"\n*(?:#+ *References *\n+)?::: *\{#refs\}\s*:::[ \t]*\n", re.I)
+# A note's own byline: a line that names a scribe or an author, or gives a
+# GitHub handle. Only above the first `## ` heading, where a byline sits;
+# further down, "GitHub" may be part of the text.
+BYLINE = re.compile(
+    r"(?im)^[ \t]*(?:\*\*|__)?(?:scribes?|scribed by|authors?|written by|"
+    r"note by)(?:\*\*|__)?\s*:?(?:\*\*|__)?\s*.*$\n?"
+    r"|^[^\n]*\(GitHub:[^\n]*\)[^\n]*$\n?")
 PLACEHOLDER_CREDIT = re.compile(
     r"\n*---\s*\n+\*Scribe notes for this lecture:[^\n]*\*\s*\n*\Z")
 CREDIT = re.compile(r"\*Based on the scribe note of (.+?)\. Edited by [^*]+\*", re.S)
@@ -177,6 +188,16 @@ def main() -> int:  # noqa: C901  (a checklist; splitting it hides the order)
             "merge sources and tells the editor what to do, and it ships in "
             "the page source -- replace it with the chapter's provenance "
             "comment before publishing.")
+
+    # a note's own byline, above the first heading --------------------------
+    head_at = re.search(r"(?m)^##\s", text)
+    cut = head_at.start() if head_at else 0
+    if cut:
+        top, k = BYLINE.subn("", text[:cut])
+        if k:
+            text = top + text[cut:]
+            fixed.append(f"removed the note's own byline ({k} line(s)); the "
+                         "chapter credits people once, at the end")
 
     # 2. the submission's own reference list --------------------------------
     text, k = REFS_DIV.subn("\n", text)

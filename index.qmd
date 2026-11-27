@@ -1,6 +1,6 @@
 # Preface {.unnumbered}
 
-This book is the lecture notes of **AI618, Generative Models and Unsupervised
+This book is made from the lecture notes of **AI618, Generative Models and Unsupervised
 Learning**, a graduate course taught by Jong Chul Ye at KAIST. Every chapter
 began as a scribe note written by a student who attended the lecture, and was
 then merged, corrected, and edited into the chapter you are reading.

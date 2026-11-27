@@ -18,6 +18,10 @@ judgement and every time cost an editor a dozen turns:
   the one that does not announce itself: Quarto resolves a duplicate `@eq-dsm`
   to one of the two definitions, silently, and the chapter that loses is
   usually the earlier one. Chapter 14 arrived with thirteen such labels.
+* citation keys the notes defined for themselves (`@cm`, `@slides`), which
+  this book does not -- Quarto renders each as `[?]` and exits 0. They are
+  pointed at the book's own key for the same work, or added to
+  references.bib from the note's entry (scripts/cites.py).
 * non-ASCII characters, which the lualatex build fails on. Every chapter in
   the book is pure ASCII today and this keeps it that way.
 
@@ -43,6 +47,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from promote import chapter_for  # noqa: E402  (same directory, by design)
+from cites import reconcile  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
 
@@ -272,7 +277,14 @@ def main() -> int:  # noqa: C901  (a checklist; splitting it hides the order)
                 "resolves a duplicate silently, so one of the two chapters "
                 "loses its reference. Pass --prefix to rename this chapter's.")
 
-    # 6. non-ASCII -----------------------------------------------------------
+    # 6. citation keys ------------------------------------------------------
+    bib_at = REPO / "references.bib"
+    bib = bib_at.read_text(encoding="utf-8") if bib_at.exists() else ""
+    text, bib_add, cfixed, cblock = reconcile(text, lec, scribe_repo, bib)
+    fixed += cfixed
+    blocking += cblock
+
+    # 7. non-ASCII -----------------------------------------------------------
     for i, line in enumerate(text.splitlines(), 1):
         for j, ch in enumerate(line, 1):
             if ord(ch) > 127:
@@ -289,6 +301,9 @@ def main() -> int:  # noqa: C901  (a checklist; splitting it hides the order)
     if not fixed and not blocking:
         print("  nothing to do.")
 
+    if bib_add and args.apply:
+        bib_at.write_text(bib.rstrip() + "\n" + bib_add, encoding="utf-8")
+        print(f"appended {bib_add.count(chr(10) + '@')} entr(ies) to references.bib")
     if text != original:
         if args.apply:
             chapter.write_text(text, encoding="utf-8")

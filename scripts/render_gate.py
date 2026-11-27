@@ -27,6 +27,14 @@ Usage:
     python scripts/render_gate.py                  # render, then gate
     python scripts/render_gate.py --skip-render    # gate the build already in _book/
     python scripts/render_gate.py --log saved.log  # gate a saved render log
+    python scripts/render_gate.py --chapter ch16   # publishing ch16 only
+
+With --chapter, a problem in a *different* chapter whose only changes are
+uncommitted is reported but does not block: that file is not in the push,
+and Actions builds what is committed. On 2026-11-27 lecture 15's publish was
+refused for 22 missing citations in ch17 -- lecture 16's chapter, mid-edit in
+the same working tree. A problem in a committed chapter still blocks, since
+that one is what goes live.
 """
 
 from __future__ import annotations
@@ -151,12 +159,38 @@ def gate_build() -> list[str]:
     return bad
 
 
+def uncommitted() -> set[str]:
+    """Chapter stems with changes that are not committed."""
+    proc = subprocess.run(["git", "status", "--porcelain", "--", "chapters"],
+                          cwd=REPO, capture_output=True, text=True)
+    out = set()
+    for line in proc.stdout.splitlines():
+        name = line[3:].strip()
+        if name.endswith(".qmd"):
+            out.add(Path(name).stem)
+    return out
+
+
+def not_this_push(items: list[str], chapter: str | None) -> tuple[list[str], list[str]]:
+    """Split blocking items into this push's and other unpushed chapters'."""
+    if not chapter:
+        return items, []
+    others = uncommitted() - {chapter}
+    keep, aside = [], []
+    for b in items:
+        m = re.match(r"(?:chapters/)?(ch\d+)\.(?:qmd|html)\b", b)
+        (aside if m and m.group(1) in others else keep).append(b)
+    return keep, aside
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--skip-render", action="store_true",
                     help="gate the build already in _book/")
     ap.add_argument("--log", help="gate this render log instead of rendering")
+    ap.add_argument("--chapter", help="the chapter being published, e.g. ch16; "
+                    "problems in other chapters' uncommitted edits do not block")
     ap.add_argument("--log-out", default="render.log",
                     help="where to write the render log (default: render.log)")
     args = ap.parse_args()
@@ -170,7 +204,7 @@ def main() -> int:
 
     failures: list[str] = []
     print("\n--- render log ---")
-    log_bad = gate_log(log_path)
+    log_bad, aside = not_this_push(gate_log(log_path), args.chapter)
     for b in log_bad:
         print(f"  BLOCKING {b}")
     if not log_bad:
@@ -179,6 +213,8 @@ def main() -> int:
 
     print("--- built output ---")
     build_bad = [] if args.log and not BOOK.exists() else gate_build()
+    build_bad, aside2 = not_this_push(build_bad, args.chapter)
+    aside += aside2
     for b in build_bad:
         print(f"  BLOCKING {b}")
     if not build_bad:
@@ -194,6 +230,13 @@ def main() -> int:
         print(f"  {line}")
     if proc.returncode != 0:
         failures.append("check_publishable.py refused the output")
+
+    if aside:
+        print(f"--- not in this push: uncommitted edits to other chapters ---")
+        for b in aside:
+            print(f"  (later) {b}")
+        print(f"  {len(aside)} item(s). They do not ship with {args.chapter}; "
+              "they block that chapter's own publish.")
 
     print()
     if failures:

@@ -19,7 +19,6 @@ editor made that is not in those three files is not in here either: add it.
 -->
 
 
-**Scribe:** jungwook (GitHub: `jungwook235`).
 
 ## Overview
 

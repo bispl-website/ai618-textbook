@@ -7,6 +7,8 @@ project:
   # own browser. Nothing it does reaches this server.
   resources:
     - preview.html
+    # pdf.js, which preview.html loads to draw a PDF figure (2026-11-28)
+    - vendor/pdfjs-4.10.38/*
 
 book:
   title: "Generative Models and Unsupervised Learning"

@@ -121,6 +121,7 @@ button:disabled{opacity:.45;cursor:default;border-color:var(--line);color:var(--
   background:var(--panel);border:1px solid var(--line)}
 #out .xref{color:var(--accent);text-decoration:none}
 #out .xref:hover{text-decoration:underline}
+#out .xwait{color:var(--ink-2,#666);font-style:italic;padding:.5em 0}
 #out .xbad{color:var(--bad);background:var(--badbg);padding:0 .25em;border-radius:3px;
   font-family:var(--sans);font-size:.85em}
 #out .cite{color:var(--accent)}
@@ -515,8 +516,10 @@ function render(text){
       const name = (attrs.match(/#(fig-[\w-]+)/) || [])[1];
       const w = (attrs.match(/width\s*=\s*"?([\d.]+%?)"?/) || [])[1];
       const got = figures.get(src.split("/").pop());
-      const img = got ? `<img src="${got.url}"${w ? ` style="width:${w}"` : ""}>`
-                      : `<div class="xbad">figure not added: ${esc(src)}</div>`;
+      const img = got && got.url ? `<img src="${got.url}"${w ? ` style="width:${w}"` : ""}>`
+                : got && got.failed ? `<div class="xbad">PDF figure could not be drawn here: ${esc(src)} (${esc(got.failed)})</div>`
+                : got ? `<div class="xwait">drawing ${esc(src)}\u2026</div>`
+                : `<div class="xbad">figure not added: ${esc(src)}</div>`;
       let num = null;
       if (parent !== null) num = `${parent}(${String.fromCharCode(97 + sub++)})`;
       else if (name) num = String(next("fig"));
@@ -889,8 +892,45 @@ async function addFile(f){
     return;
   }
   const old = figures.get(f.name);
-  if (old) URL.revokeObjectURL(old.url);
+  if (old && old.url) URL.revokeObjectURL(old.url);
+  if (/\.pdf$/i.test(f.name)) {
+    // A browser's <img> cannot show a PDF, so its first page is drawn once
+    // with pdf.js, here in the browser, and kept as a PNG (2026-11-28).
+    const entry = {file: f, url: null};
+    figures.set(f.name, entry);
+    pdfToPng(f).then(u => { entry.url = u; }, e => { entry.failed = e.message || "unreadable"; })
+               .then(() => { if (figures.get(f.name) === entry) update(); });
+    return;
+  }
   figures.set(f.name, {file: f, url: URL.createObjectURL(f)});
+}
+
+// pdf.js 4.10.38 (Apache-2.0), vendored beside this page in
+// vendor/pdfjs-4.10.38/ (the book site carries it as a resource); loaded only
+// when a PDF figure is added. Nothing leaves the browser.
+let PDFJS = null;
+function pdfjs(){
+  const base = new URL("vendor/pdfjs-4.10.38/", location.href);
+  if (!PDFJS) PDFJS = import(new URL("pdf.min.mjs", base).href).then(m => {
+    m.GlobalWorkerOptions.workerSrc = new URL("pdf.worker.min.mjs", base).href;
+    return m;
+  }, e => { PDFJS = null; throw e; });
+  return PDFJS;
+}
+async function pdfToPng(file){
+  const lib = await pdfjs();
+  const doc = await lib.getDocument({data: new Uint8Array(await file.arrayBuffer()),
+                                     isEvalSupported: false}).promise;
+  try {
+    const page = await doc.getPage(1);
+    const base = page.getViewport({scale: 1});
+    const vp = page.getViewport({scale: Math.min(3, 2400 / Math.max(base.width, 1))});
+    const c = document.createElement("canvas");
+    c.width = Math.ceil(vp.width); c.height = Math.ceil(vp.height);
+    await page.render({canvasContext: c.getContext("2d"), viewport: vp, background: "white"}).promise;
+    const blob = await new Promise((ok, no) => c.toBlob(b => b ? ok(b) : no(new Error("no image")), "image/png"));
+    return URL.createObjectURL(blob);
+  } finally { doc.destroy(); }
 }
 
 // Two buttons, one handler. addFile() already sorts a .bib from a figure by
